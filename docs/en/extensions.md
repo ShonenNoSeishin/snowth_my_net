@@ -14,7 +14,7 @@ create one:
    this vendor, this type, every device). It is read at the next collect.
 2. **In YAML:** files `*.yml` in `general.extensions_dir` (default: `extensions/` next to the
    configuration file; `config/extensions/` with Docker). A broken file is a configuration error
-   (exit 2) naming the file. Start from [`examples/extensions/examples.yml`](../examples/extensions/examples.yml).
+   (exit 2) naming the file. Start from [`examples/extensions/examples.yml`](../../examples/extensions/examples.yml).
 
 ```yaml
 version: 1
@@ -79,7 +79,7 @@ Two ways to create one:
    state), `ctrl+e` writes the file now. `x` on the list exports a report, `del` deletes one
    created in the interface.
 2. **In YAML:** a `reports:` list in the same `extensions/*.yml` files as collectors. Start from
-   [`examples/extensions/reports.yml`](../examples/extensions/reports.yml).
+   [`examples/extensions/reports.yml`](../../examples/extensions/reports.yml).
 
 ```yaml
 version: 1
@@ -241,7 +241,7 @@ def prometheus(snapshot):
     return f"snowth_devices {len(snapshot['devices'])}\n".encode()
 ```
 
-A complete, tested example: [`examples/extensions/host_storage.py`](../examples/extensions/host_storage.py)
+A complete, tested example: [`examples/extensions/host_storage.py`](../../examples/extensions/host_storage.py)
 (disk usage of net-snmp hosts, a typed dataset, a Prometheus textfile exporter).
 
 ### Extension points

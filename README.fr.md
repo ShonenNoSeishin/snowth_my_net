@@ -62,8 +62,7 @@ docker compose up -d
 docker compose logs -f snowth
 ```
 
-Détails, unités systemd, durcissement et réseau : [docs/deployment.md](docs/deployment.md) (en
-anglais).
+Détails, unités systemd, durcissement et réseau : [docs/fr/deployment.md](docs/fr/deployment.md).
 
 ## Interface en terminal
 
@@ -120,7 +119,7 @@ configuration, **3** état verrouillé par une autre exécution.
 | `snapshot.json` | Tout, avec un schéma versionné, pour les scripts |
 | `map.dot`, `map.mmd`, `map.html` | Graphviz, Mermaid, et une page interactive hors ligne |
 
-Colonne par colonne : [docs/formats.md](docs/formats.md). Toutes les heures sont en UTC ; un CSV
+Colonne par colonne : [docs/fr/formats.md](docs/fr/formats.md). Toutes les heures sont en UTC ; un CSV
 vide n'écrase jamais le précédent et n'est jamais poussé.
 
 ## Personnaliser
@@ -141,19 +140,19 @@ AireOS), sans jamais remplacer la collecte standard.
 Pour le reste, les extensions Python ajoutent des collecteurs, des jeux de données, des exports
 et des drivers via une petite API en lecture seule (avec un harnais de test), et les hooks lancent vos
 propres programmes après une collecte, un export, un push ou un rapport. Voir
-[docs/extensions.md](docs/extensions.md) et
+[docs/fr/extensions.md](docs/fr/extensions.md) et
 [examples/extensions](examples/extensions/).
 
 ## Documentation
 
-La documentation détaillée est en anglais :
+La documentation détaillée existe en français (`docs/fr/`) et en anglais (`docs/en/`) :
 
-* [Référence de configuration](docs/config.md), avec chaque clé et sa valeur par défaut
-* [Formats de sortie et push HTTP](docs/formats.md)
-* [Déploiement : pipx + cron/systemd, Docker Compose](docs/deployment.md)
-* [Dépannage et notes par constructeur](docs/troubleshooting.md)
-* [Drivers constructeur](docs/drivers.md)
-* [Extensions](docs/extensions.md)
+* [Référence de configuration](docs/fr/config.md), avec chaque clé et sa valeur par défaut
+* [Formats de sortie et push HTTP](docs/fr/formats.md)
+* [Déploiement : pipx + cron/systemd, Docker Compose](docs/fr/deployment.md)
+* [Dépannage et notes par constructeur](docs/fr/troubleshooting.md)
+* [Drivers constructeur](docs/fr/drivers.md)
+* [Extensions](docs/fr/extensions.md)
 * [Notes de conception](DESIGN.md) (en français)
 
 ## Sécurité

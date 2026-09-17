@@ -54,7 +54,7 @@ docker compose up -d
 docker compose logs -f snowth
 ```
 
-Details, systemd units, hardening and networking: [docs/deployment.md](docs/deployment.md).
+Details, systemd units, hardening and networking: [docs/en/deployment.md](docs/en/deployment.md).
 
 ## Terminal interface
 
@@ -108,7 +108,7 @@ locked by another run.
 | `snapshot.json` | Everything, versioned schema, for scripts |
 | `map.dot`, `map.mmd`, `map.html` | Graphviz, Mermaid, and an offline interactive page |
 
-Column by column: [docs/formats.md](docs/formats.md). Every time is UTC; empty CSV files are never
+Column by column: [docs/en/formats.md](docs/en/formats.md). Every time is UTC; empty CSV files are never
 written over previous ones nor pushed.
 
 ## Extending it
@@ -127,16 +127,18 @@ replacing the standard collection.
 For the rest, Python extensions add collectors, report datasets, exporters and drivers through a small
 read-only API (with a test harness), and hooks run your own programs after a collect, an export,
 a push or a report.
-See [docs/extensions.md](docs/extensions.md) and [examples/extensions](examples/extensions/).
+See [docs/en/extensions.md](docs/en/extensions.md) and [examples/extensions](examples/extensions/).
 
 ## Documentation
 
-* [Configuration reference](docs/config.md), with every key and its default
-* [Output formats and HTTP push](docs/formats.md)
-* [Deployment: pipx + cron/systemd, Docker Compose](docs/deployment.md)
-* [Troubleshooting and vendor notes](docs/troubleshooting.md)
-* [Vendor drivers](docs/drivers.md)
-* [Extensions](docs/extensions.md)
+Detailed documentation exists in English (`docs/en/`) and French (`docs/fr/`):
+
+* [Configuration reference](docs/en/config.md), with every key and its default
+* [Output formats and HTTP push](docs/en/formats.md)
+* [Deployment: pipx + cron/systemd, Docker Compose](docs/en/deployment.md)
+* [Troubleshooting and vendor notes](docs/en/troubleshooting.md)
+* [Vendor drivers](docs/en/drivers.md)
+* [Extensions](docs/en/extensions.md)
 * [Design notes](DESIGN.md) (in French)
 
 ## Security

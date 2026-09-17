@@ -1,7 +1,7 @@
 """Configuration schema — the single source of truth for every key of the YAML file.
 
 Defaults are generic (never tuned for a particular site); the reasoning behind each default is
-documented in ``docs/config.md``.
+documented in ``docs/en/config.md`` and ``docs/fr/config.md``.
 """
 
 from __future__ import annotations

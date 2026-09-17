@@ -7,7 +7,7 @@ from pathlib import Path
 
 from snowth_my_net.config.schema import Config
 
-DOC = Path(__file__).resolve().parents[2] / "docs" / "config.md"
+DOC = Path(__file__).resolve().parents[2] / "docs" / "en" / "config.md"
 
 
 def keys(cls, prefix=""):

@@ -5,7 +5,7 @@
 #   relative to general.secrets_dir when not absolute) or `*_env` (an environment variable).
 # * Every default is generic. Anything specific to your site belongs here, not in the code.
 # * Run `snowth_my_net check` after every change: it validates this file and tests each device.
-# * Reference of every key: docs/config.md.
+# * Reference of every key: docs/en/config.md (docs/fr/config.md in French).
 version: 1
 
 general:
