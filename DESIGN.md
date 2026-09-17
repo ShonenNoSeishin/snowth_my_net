@@ -1519,6 +1519,20 @@ permet de transformer tes captures réelles en tests de régression.
 
 ## 18. Phases d'implémentation
 
+> **Avancement (2026-09-17)** : phases 1, 1b, 2, 3 et 4 livrées ainsi que l'étape E1
+> (collecteurs personnalisés). Restent E2 (rapports), la phase 5 (drivers) et E3 (extensions
+> Python, hooks).
+>
+> Écarts de la phase 4 par rapport au texte :
+> - L'image fait environ 200 Mo décompressée : la base Python pèse 126 Mo, Textual et
+>   cryptography le reste.
+> - Les commandes planifiées tournent en `-q` avec cron (qui envoie la sortie par mail), mais
+>   sans `-q` avec supercronic, dont les journaux vont dans `docker compose logs`.
+> - Le profil de test lance deux simulateurs en conteneur (UDP 1161, port non privilégié) et un
+>   faux serveur HTTPS dont le certificat est créé au démarrage. Le service `tests` exécute
+>   toute la suite, plus un test de bout en bout à travers ces conteneurs.
+> - Un test vérifie que `docs/config.md` documente chaque clé du schéma.
+
 | Phase | Contenu | Démonstration |
 |---|---|---|
 | 1 | Squelette, config + secrets + validation, `init`, verrou, SQLite + migrations, client SNMP (et benchmark), identifiants, `system`/`entity`/`interfaces`/`ipaddr`, identification, dédoublonnage, `check`, `discover` (sans voisins), `collect`, `export devices`, `show devices`, harnais snmpsim | `check` et `collect` contre snmpsim, puis `devices.csv` conforme au golden file ; équipement muet géré |

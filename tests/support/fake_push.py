@@ -48,7 +48,8 @@ def self_signed(directory: Path, host: str = "127.0.0.1") -> tuple[Path, Path]:
 
 
 class FakeImportServer:
-    def __init__(self, token: str | None = None, tls_dir: Path | None = None) -> None:
+    def __init__(self, token: str | None = None, tls_dir: Path | None = None,
+                 host: str = "127.0.0.1", port: int = 0) -> None:
         self.token = token
         self.received: list[Received] = []
         self.counters: dict[str, int] = {}
@@ -74,6 +75,11 @@ class FakeImportServer:
                 return server.counters[key]
 
             def do_GET(self):
+                if self.path == "/_received":
+                    return self.reply(200, {"received": [
+                        {"method": r.method, "path": r.path,
+                         "files": [p["filename"] for p in r.parts if p["filename"]]}
+                        for r in server.received]})
                 server.received.append(Received("GET", self.path, dict(self.headers.items())))
                 if self.path.startswith("/jobs/job-1"):
                     n = self.count("job-1")
@@ -122,10 +128,11 @@ class FakeImportServer:
                     return self.reply(201, {"imported": 1})
                 return self.reply(404)
 
-        self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.host = host
+        self.httpd = ThreadingHTTPServer((host, port), Handler)
         self.scheme = "http"
         if tls_dir is not None:
-            self.cert, key = self_signed(tls_dir)
+            self.cert, key = self_signed(tls_dir, host)
             context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             context.load_cert_chain(self.cert, key)
             self.httpd.socket = context.wrap_socket(self.httpd.socket, server_side=True)
@@ -134,7 +141,7 @@ class FakeImportServer:
 
     @property
     def base_url(self) -> str:
-        return f"{self.scheme}://127.0.0.1:{self.httpd.server_address[1]}"
+        return f"{self.scheme}://{self.host}:{self.httpd.server_address[1]}"
 
     def __enter__(self) -> FakeImportServer:
         self.thread.start()
@@ -146,3 +153,25 @@ class FakeImportServer:
 
     def posts(self, path: str) -> list[Received]:
         return [r for r in self.received if r.method == "POST" and r.path.split("?")[0] == path]
+
+
+def main() -> int:
+    import argparse
+    import time
+
+    parser = argparse.ArgumentParser(description="Fake HTTPS import server (tests only).")
+    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--port", type=int, default=8443)
+    parser.add_argument("--cert-dir", required=True)
+    parser.add_argument("--token")
+    args = parser.parse_args()
+    cert_dir = Path(args.cert_dir)
+    cert_dir.mkdir(parents=True, exist_ok=True)
+    with FakeImportServer(args.token, cert_dir, args.host, args.port) as server:
+        print(f"fake import server on {server.base_url}", flush=True)
+        while True:
+            time.sleep(3600)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

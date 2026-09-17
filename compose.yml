@@ -1,0 +1,107 @@
+# snowth_my_net — Docker Compose
+#
+#   cp .env.example .env               # adjust SNOWTH_UID/GID, TZ
+#   mkdir -p config data output secrets
+#   docker compose run --rm snowth init --output /tmp/example.yml   (or copy the example)
+#   docker compose run --rm snowth check
+#   docker compose up -d
+#
+# Tests: docker compose --profile test run --rm tests
+name: snowth_my_net
+
+x-hardening: &hardening
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop: [ALL]
+  security_opt:
+    - "no-new-privileges:true"
+  init: true
+
+services:
+  snowth:
+    <<: *hardening
+    build:
+      context: .
+      target: runtime
+    image: snowth_my_net:${SNOWTH_VERSION:-latest}
+    user: "${SNOWTH_UID:-10001}:${SNOWTH_GID:-10001}"
+    command: ["scheduler"]
+    environment:
+      TZ: ${TZ:-UTC}
+      SNOWTH_COLLECT_ON_START: ${SNOWTH_COLLECT_ON_START:-true}
+    volumes:
+      - ./config/snowth_my_net.yml:/etc/snowth_my_net/config.yml:ro
+      - ./config/extensions:/etc/snowth_my_net/extensions:ro
+      - ./data:/var/lib/snowth_my_net
+      - ./output:/output
+    secrets:
+      - snmp_v3_auth
+      - snmp_v3_priv
+      - cmdb_token
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "snowth_my_net", "-q", "health"]
+      interval: 5m
+      timeout: 30s
+      retries: 2
+      start_period: 30m
+    # No "ports:": nothing is exposed. SNMP (UDP/161) and HTTPS are outgoing only and leave
+    # through the host's address (allow it in the SNMP ACLs of the devices).
+
+  # ------------------------------------------------------------------ test profile
+  sim-access:
+    profiles: [test]
+    build: {context: ., target: test}
+    command: ["python", "-m", "tests.support.sim_container", "sw-access"]
+    networks:
+      testnet: {ipv4_address: 172.31.250.11}
+
+  sim-cisco:
+    profiles: [test]
+    build: {context: ., target: test}
+    command: ["python", "-m", "tests.support.sim_container", "sw-cisco"]
+    networks:
+      testnet: {ipv4_address: 172.31.250.21}
+
+  fakepush:
+    profiles: [test]
+    build: {context: ., target: test}
+    command: ["python", "-m", "tests.support.fake_push", "--host", "172.31.250.30",
+              "--port", "8443", "--cert-dir", "/certs", "--token", "compose-test-token"]
+    volumes:
+      - certs:/certs
+    networks:
+      testnet: {ipv4_address: 172.31.250.30}
+
+  tests:
+    profiles: [test]
+    build: {context: ., target: test}
+    depends_on: [sim-access, sim-cisco, fakepush]
+    environment:
+      SNOWTH_COMPOSE_TEST: "1"
+    volumes:
+      - certs:/certs:ro
+    networks: [testnet]
+
+secrets:
+  snmp_v3_auth:
+    file: ./secrets/snmp_v3_auth
+  snmp_v3_priv:
+    file: ./secrets/snmp_v3_priv
+  cmdb_token:
+    file: ./secrets/cmdb_token
+
+volumes:
+  certs: {}
+
+networks:
+  testnet:
+    ipam:
+      config:
+        - subnet: 172.31.250.0/24

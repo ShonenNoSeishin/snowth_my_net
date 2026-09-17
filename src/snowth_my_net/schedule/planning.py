@@ -35,10 +35,12 @@ class CronLine:
 
 
 def cron_lines(loaded: LoadedConfig, binary: str | None = None,
-               config_path: str | None = None) -> list[CronLine]:
+               config_path: str | None = None, quiet: bool = True) -> list[CronLine]:
     cfg = loaded.cfg.schedule
     base = [executable(binary), "--config",
-            config_path or str(loaded.paths.config_file.resolve()), "-q"]
+            config_path or str(loaded.paths.config_file.resolve())]
+    if quiet:
+        base.append("-q")      # cron mails any output; supercronic forwards logs instead
     lines = []
     if cfg.collect:
         lines.append(CronLine(cfg.collect, [*base, "collect"],
@@ -61,7 +63,7 @@ def render_crontab(loaded: LoadedConfig, fmt: str = "crontab", user: str = "snow
     timezone = loaded.cfg.schedule.timezone
     if timezone:
         out.append(f"CRON_TZ={timezone}")
-    for line in cron_lines(loaded, binary, config_path):
+    for line in cron_lines(loaded, binary, config_path, quiet=fmt != "supercronic"):
         out.append(f"# {line.comment}")
         command = shlex.join(line.command)
         who = f" {user}" if fmt == "cron.d" else ""

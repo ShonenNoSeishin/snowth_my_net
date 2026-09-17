@@ -13,3 +13,4 @@ dist/
 /secrets/
 /config/snowth_my_net.yml
 .env
+/config/extensions/

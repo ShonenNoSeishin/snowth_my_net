@@ -49,6 +49,13 @@ testpaths = ["tests"]
 addopts = "-ra"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+    # third-party noise (pysmi API renames used by snmpsim, CFB location in cryptography)
+    "ignore::DeprecationWarning:pysnmp.*",
+    "ignore::DeprecationWarning:snmpsim.*",
+    "ignore:CFB has been moved:UserWarning",
+    "ignore:CFB has been moved",
+]
 markers = [
     "integration: needs snmpsim (skipped when it is not installed)",
 ]

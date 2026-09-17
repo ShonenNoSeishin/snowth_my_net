@@ -1,31 +1,145 @@
 # snowth_my_net
 
-Lightweight, **read-only** SNMP network mapper. It discovers switches, access points, firewalls
-and routers, merges their ARP and MAC tables, and tells you which devices exist, who is plugged
-where, and how the devices are connected. Output: fixed-format CSV, JSON and maps, optionally
-pushed over HTTP on a schedule.
+*[Français](README.fr.md)*
 
-> Status: under development. Phases 1-3 (inventory, MAC/ARP merge, LLDP/CDP topology,
-> `devices.csv`, `nodes.csv`, `links.csv`, `snapshot.json`, maps, `explain`) and the terminal
-> management interface are available. See [DESIGN.md](DESIGN.md) (in French) for the architecture and the
-> decisions. Full documentation comes with phase 4.
+A lightweight, **read-only** SNMP network mapper. snowth_my_net polls your switches, routers,
+firewalls and access points, merges their MAC and ARP tables, follows LLDP/CDP, and answers three
+questions:
 
-## Quick look
+* **Which devices exist?** Model, serial number, OS and version, management IP, type.
+* **Who is plugged where?** MAC, IP, DNS name, switch, port, VLAN, last seen, roaming history.
+* **How are the devices connected?** Links from LLDP and CDP, as CSV and as maps.
+
+Everything is exported as fixed-format CSV, JSON and maps, and can be pushed over HTTP on a
+schedule to any tool. A terminal interface lets you browse, set things by hand and test OIDs.
+
+## Why another tool
+
+* **Strictly read-only.** Only SNMP GET, GETNEXT and GETBULK exist in the code; a test proves it
+  on the wire.
+* **It never trusts what a device announces.** A firewall that does not advertise layer 3 still
+  gets its ARP table read: every standard MIB is attempted on every device, and you can force or
+  disable each function per device. The device **type is only a label**, never a gate.
+* **Positions you can trust.** A MAC is placed on an access port, never on an uplink (LLDP/CDP
+  neighbour, declared port, too many MACs, optional LAG), IP phones and access points are handled,
+  simultaneous sightings are resolved, and `explain` tells you why a MAC is where it is.
+* **Light.** One process per run, a SQLite file, four runtime dependencies (plus Textual for the
+  interface), no web server, no database server.
+
+## Quick start
+
+### With pipx (host cron or systemd)
 
 ```bash
-snowth_my_net init            # commented example configuration
-snowth_my_net check           # diagnose credentials and MIB support, device by device
-snowth_my_net collect         # poll the devices
-snowth_my_net export          # devices.csv, nodes.csv, links.csv, snapshot.json, map.*
-snowth_my_net explain 00:00:5e:00:53:a0      # why is this MAC on that port?
-snowth_my_net show nodes --filter 192.0.2.
-snowth_my_net                 # open the terminal interface (or: snowth_my_net tui)
-snowth_my_net probe 192.0.2.254 arp-media    # test OIDs by hand
-snowth_my_net device set 192.0.2.254 type=firewall features.arp=force
+pipx install git+ssh://git@github.com/ShonenNoSeishin/snowth_my_net.git
+snowth_my_net init --output snowth_my_net.yml     # commented example, then edit it
+mkdir -p secrets && printf '%s' 'the-v3-auth-key' > secrets/snmp_v3_auth && chmod 600 secrets/*
+snowth_my_net check                               # the first diagnostic to run
+snowth_my_net collect
+snowth_my_net export                              # ./output or general.output_dir
+snowth_my_net                                     # terminal interface
+snowth_my_net cron print                          # crontab lines from schedule:
 ```
 
-The device type is only a label: it never prevents a collection. ARP tables, MAC tables, LLDP
-and CDP are attempted on every device unless you switch a function `off`.
+### With Docker Compose
+
+```bash
+cp .env.example .env && mkdir -p config/extensions data output secrets
+docker compose build
+docker run --rm -u "$(id -u):$(id -g)" -v "$PWD/config:/work" snowth_my_net:latest \
+  init --output /work/snowth_my_net.yml
+# put the secrets in ./secrets (chmod 600), edit config/snowth_my_net.yml
+docker compose run --rm snowth check
+docker compose up -d
+docker compose logs -f snowth
+```
+
+Details, systemd units, hardening and networking: [docs/deployment.md](docs/deployment.md).
+
+## Terminal interface
+
+`snowth_my_net` (or `snowth_my_net tui`, `docker compose run --rm snowth tui`):
+
+* **Devices**: filterable list, type set by hand marked ✎. A device sheet shows its identity and
+  **why it has this type**. The *Settings* tab uses guided lists for the type, the functions
+  (`auto` / `force` / `off`) and SNMP tuning, and the source of every value is shown. The sheet
+  also has an *OID tester* (presets suggested for the type, or any OID), *Neighbors*, *Custom*
+  values and *Last collect*.
+* **Nodes**: search a MAC, IP, DNS name, port… Enter explains the position.
+* **Links**, **Extensions** (custom collectors), **Runs**.
+* Collect a device or everything with a live log. Nothing ever shows a secret.
+
+## Commands
+
+| Command | Purpose |
+|---|---|
+| `init` | Write a commented example configuration |
+| `check [ADDR…] [--quick]` | Per device: reachable, credential, MIBs answering, identity and type, warnings |
+| `discover [--dry-run]` | Identify seeds and explore LLDP/CDP neighbours without collecting tables |
+| `collect [--device ADDR]` | Poll devices and update the state |
+| `export [--only …]` | Write `devices.csv`, `nodes.csv`, `links.csv`, `snapshot.json`, maps |
+| `push [--target] [--file] [--wait] [--dry-run]` | Send the exported files |
+| `run [--no-collect] [--no-push] [--wait]` | Collect, export and push in one go |
+| `show devices\|nodes\|links\|runs [--filter]` | Browse the state |
+| `explain <mac\|ip>` | Why a MAC is on a port (sightings, discarded uplinks, transit, ARP) |
+| `probe ADDR [PRESET\|OID…]` | Test OIDs by hand (presets suggested for the device type) |
+| `device show\|set\|unset\|add\|remove\|export-settings\|import-settings` | Manual settings |
+| `custom list\|show\|test\|export\|import\|delete` | Custom collectors (extra OIDs) |
+| `oui-update [--from-file DIR]` | Refresh the IEEE vendor database |
+| `cron print [--format crontab\|cron.d\|supercronic]` | Scheduler lines from `schedule:` |
+| `health [--max-age]` | Exit 1 when the last successful collect is too old |
+| `tui` | Terminal interface |
+
+Every command accepts `--json` (scripts), `--config`, `--log-level`, `--log-file`, `-q`. Logs go
+to stderr. Exit codes: **0** OK, **1** partial failure, **2** configuration error, **3** state
+locked by another run.
+
+## Outputs
+
+| File | Content |
+|---|---|
+| `devices.csv` | One device per line; `Device Name` is the join key |
+| `nodes.csv` | One line per (MAC, position), most recent first; `Switch` = a `Device Name` |
+| `links.csv` | One line per physical link (`LLDP`, `CDP`, `LLDP+CDP`) |
+| `snapshot.json` | Everything, versioned schema, for scripts |
+| `map.dot`, `map.mmd`, `map.html` | Graphviz, Mermaid, and an offline interactive page |
+
+Column by column: [docs/formats.md](docs/formats.md). Every time is UTC; empty CSV files are never
+written over previous ones nor pushed.
+
+## Extending it
+
+Read more OIDs without writing code: create a custom collector from the OID tester, or in
+`extensions/*.yml`. Values can fill standard fields such as the OS version.
+See [docs/extensions.md](docs/extensions.md) and [examples/extensions](examples/extensions/).
+
+## Documentation
+
+* [Configuration reference](docs/config.md), with every key and its default
+* [Output formats and HTTP push](docs/formats.md)
+* [Deployment: pipx + cron/systemd, Docker Compose](docs/deployment.md)
+* [Troubleshooting and vendor notes](docs/troubleshooting.md)
+* [Extensions](docs/extensions.md)
+* [Design notes](DESIGN.md) (in French)
+
+## Security
+
+* Read-only by construction: no SNMP SET code path, no shell, no subprocess.
+* Secrets only from files or environment variables. The YAML refuses them, logs mask them, and
+  the state stores credential names only.
+* SNMPv3 authPriv recommended (`check` warns about v2c); TLS verified by default for pushes, no
+  redirects followed.
+* Timeouts everywhere; the container runs non-root on a read-only file system with no capability.
+
+## Development
+
+```bash
+uv venv --python 3.13 && uv pip install -e ".[dev]"
+.venv/bin/python -m pytest          # unit + integration (SNMP simulators on 127.0.0.x)
+.venv/bin/ruff check src tests
+docker compose --profile test run --rm tests
+python -m tests.support.lab         # a local lab of simulated devices, prints a configuration
+```
 
 ## License
 
