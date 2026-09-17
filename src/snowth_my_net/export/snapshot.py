@@ -83,6 +83,11 @@ def build_snapshot(loaded, repo, view, devices: list[dict], now: int) -> dict:
             "interfaces": interfaces,
             "vlans": [{"id": v["vlan_id"], "name": v["name"]} for v in by_device["vlans"][d["id"]]],
             "neighbors": neighbors[d["id"]],
+            "custom": {name: {"status": entry["status"], "run_at": iso_z(entry["run_at"]),
+                              "detail": entry["detail"], "values": entry["values"],
+                              "table": [{"index": i, "column": c, "value": v}
+                                        for i, c, v in entry["table"]]}
+                       for name, entry in sorted(repo.custom_current(d["id"]).items())},
             "collection": functions,
         })
 

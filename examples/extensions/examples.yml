@@ -1,0 +1,42 @@
+# Custom collectors — copy this file into the "extensions" directory next to your configuration
+# (or set general.extensions_dir) and keep only what you need. Every collector is read-only:
+# GET or walk, with the same timeouts and pacing as the standard collection.
+#
+# Test one on a device without touching the state:
+#   snowth_my_net custom test ups-battery 192.0.2.50
+# See what was read at the last collect:
+#   snowth_my_net custom show 192.0.2.50
+version: 1
+collectors:
+  # Scalars (get:), with conversions, and a fill of a standard field.
+  - name: ups-battery
+    description: Battery state of any RFC 1628 UPS
+    applies_to: {types: [facility]}
+    get:
+      battery_status: {oid: 1.3.6.1.2.1.33.1.2.1.0, type: enum,
+                       values: {1: unknown, 2: normal, 3: low, 4: depleted}}
+      minutes_left: {oid: 1.3.6.1.2.1.33.1.2.3.0, type: integer, unit: min}
+      temperature: {oid: 1.3.6.1.2.1.33.1.2.7.0, type: integer, unit: °C}
+      firmware: {oid: 1.3.6.1.2.1.33.1.1.3.0, type: text}
+    fills: {os_version: firmware}     # only when the standard collection found no version
+    every: 1h                         # not at every collect
+
+  # A table (walk:) indexed by interface: the index is shown as a port name.
+  - name: poe-ports
+    description: PoE state per port (POWER-ETHERNET-MIB)
+    applies_to: {types: [switch]}
+    walk:
+      index: raw                      # this MIB is indexed group.port, not by ifIndex
+      columns:
+        detection: {oid: 1.3.6.1.2.1.105.1.1.1.6, type: enum,
+                    values: {1: disabled, 2: searching, 3: delivering, 4: fault, 5: test,
+                             6: otherFault}}
+        class: {oid: 1.3.6.1.2.1.105.1.1.1.10, type: integer}
+    every: 6h
+
+  # A vendor-scoped private OID (scope by vendor, sysObjectID prefix, type or address).
+  - name: fortigate-version
+    applies_to: {sys_object_ids: [1.3.6.1.4.1.12356.101.1]}
+    get:
+      version: {oid: 1.3.6.1.4.1.12356.101.4.1.1.0, type: text}
+    fills: {os_version: version}

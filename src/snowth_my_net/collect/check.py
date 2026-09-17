@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 
-from snowth_my_net.collect import functions, identify
+from snowth_my_net.collect import custom, functions, identify
 from snowth_my_net.collect.discovery import PlannedTarget
 from snowth_my_net.collect.engine import run_function, snmp_params
 from snowth_my_net.collect.model import DeviceResult, Identification
@@ -70,8 +70,10 @@ class DeviceCheck:
 
 async def check_devices(loaded: LoadedConfig, credentials: list[ResolvedCredential],
                         targets: list[PlannedTarget], quick: bool,
-                        manual: dict | None = None) -> list[DeviceCheck]:
+                        manual: dict | None = None,
+                        collectors: list | None = None) -> list[DeviceCheck]:
     cfg = loaded.cfg
+    collectors = collectors if collectors is not None else loaded.collectors
     pool = EnginePool()
     gate = asyncio.Semaphore(cfg.general.snmp.concurrency)
     loop = asyncio.get_running_loop()
@@ -127,6 +129,24 @@ async def check_devices(loaded: LoadedConfig, credentials: list[ResolvedCredenti
                             if f == feature and dc.mibs.get(lbl, "").startswith("ok")]
                 if not answered:
                     dc.warnings.append(f"forced function '{feature}' has no data")
+            facts = custom.DeviceFacts(p.target.host, dc.ident.vendor, dc.ident.device_type,
+                                       system.object_id)
+            for loaded_collector in collectors:
+                collector = loaded_collector.cfg
+                if not custom.applies(collector, facts):
+                    continue
+                result = custom.CustomResult()
+                label = f"custom:{collector.name}"
+                try:
+                    async with asyncio.timeout(settings.snmp.table_timeout):
+                        await custom.run_collector(client, collector, result)
+                    dc.mibs[label] = f"ok({len(result.rows)})" if result.rows else "absent"
+                    if not result.rows and collector.mode == "force":
+                        dc.warnings.append(f"forced collector '{collector.name}' has no data")
+                except TimeoutError:
+                    dc.mibs[label] = "timeout"
+                except SnmpError as exc:
+                    dc.mibs[label] = "timeout" if exc.kind == "timeout" else f"error: {exc}"
             reason = identify.factory_name_reason(system.name, dc.ident.model, system.descr)
             if reason:
                 dc.warnings.append(f"{reason}; set a real hostname on the device")

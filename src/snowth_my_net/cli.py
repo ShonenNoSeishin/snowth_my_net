@@ -337,7 +337,14 @@ def cmd_check(args: argparse.Namespace) -> int:
             target = parse_target(address)
             if str(target) not in listed:
                 planned.append(PlannedTarget(target, "cli"))
-    results = asyncio.run(check_devices(loaded, creds, planned, args.quick))
+    state_repo = _state_readonly(loaded)
+    try:
+        collectors = _collectors(loaded, state_repo)
+    finally:
+        if state_repo:
+            state_repo.conn.close()
+    results = asyncio.run(check_devices(loaded, creds, planned, args.quick,
+                                        collectors=collectors))
 
     if args.save:
         with Locked(loaded, "check", cfg.general.lock_wait.default):
@@ -718,6 +725,170 @@ def cmd_oui_update(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _collectors(loaded: LoadedConfig, repo: Repo | None):
+    from snowth_my_net.collect.custom import all_collectors
+
+    collectors, warnings = all_collectors(loaded.collectors, repo.custom_stored() if repo else {})
+    for warning in warnings:
+        log.warning("%s", warning)
+    return collectors
+
+
+def _scope_text(collector) -> str:
+    scope = collector.applies_to
+    parts = [f"vendors={','.join(scope.vendors)}" if scope.vendors else "",
+             f"types={','.join(scope.types)}" if scope.types else "",
+             f"addresses={','.join(map(str, scope.addresses))}" if scope.addresses else "",
+             f"sys_object_ids={','.join(scope.sys_object_ids)}" if scope.sys_object_ids else ""]
+    return " ".join(p for p in parts if p) or "all devices"
+
+
+def cmd_custom_list(args: argparse.Namespace) -> int:
+    loaded = load(args)
+    repo = _state_readonly(loaded)
+    collectors = _collectors(loaded, repo)
+    if repo:
+        repo.conn.close()
+    rows = [[c.cfg.name, c.cfg.kind, _scope_text(c.cfg), c.origin, c.cfg.description]
+            for c in collectors]
+    if args.json:
+        out_json([dict(zip(("name", "kind", "applies_to", "origin", "description"), r,
+                           strict=True)) for r in rows])
+    else:
+        out(table(["NAME", "KIND", "APPLIES TO", "ORIGIN", "DESCRIPTION"], rows)
+            if rows else "no custom collector (see extensions/*.yml or the TUI OID tester)")
+    return EXIT_OK
+
+
+def cmd_custom_show(args: argparse.Namespace) -> int:
+    loaded = load(args)
+    repo = _state_readonly(loaded)
+    if repo is None:
+        raise StateError("no state yet (run collect first)")
+    try:
+        device = repo.find_device(args.address)
+        if device is None:
+            raise ManualError(f"{args.address}: unknown device")
+        current = repo.custom_current(device["id"])
+    finally:
+        repo.conn.close()
+    if args.json:
+        out_json({"device": device["sys_name"], "collectors": {
+            name: {**{k: v for k, v in entry.items() if k != "table"},
+                   "run_at": iso_z(entry["run_at"]),
+                   "table": [list(row) for row in entry["table"]]}
+            for name, entry in current.items()}})
+        return EXIT_OK
+    if not current:
+        out(f"{args.address}: no custom value yet")
+    for name, entry in sorted(current.items()):
+        out(f"{name} — {entry['status']} at {iso_z(entry['run_at'])}"
+            + (f" — {entry['detail']}" if entry["detail"] else ""))
+        rows = [["", k, v] for k, v in entry["values"].items()] + [list(r) for r in entry["table"]]
+        if rows:
+            out(table(["INDEX", "COLUMN", "VALUE"], rows))
+    return EXIT_OK
+
+
+def cmd_custom_test(args: argparse.Namespace) -> int:
+    from snowth_my_net.collect.custom import CustomResult, run_collector
+    from snowth_my_net.collect.probe import connect
+    from snowth_my_net.snmp.client import EnginePool, SnmpError
+
+    loaded = load(args)
+    creds = resolved_credentials(loaded)
+    repo = _state_readonly(loaded)
+    collectors = {c.cfg.name: c.cfg for c in _collectors(loaded, repo)}
+    target = parse_target(args.address)
+    manual, remembered, _stored = _state_facts(repo, target)
+    if repo:
+        repo.conn.close()
+    if args.name not in collectors:
+        raise ManualError(f"unknown collector {args.name!r} ({', '.join(collectors) or 'none'})")
+    collector = collectors[args.name]
+
+    async def go():
+        pool = EnginePool()
+        try:
+            conn = await connect(loaded, creds, target, pool, manual, remembered)
+            if not conn.ok:
+                return conn, None, None
+            result = CustomResult()
+            try:
+                await run_collector(conn.client, collector, result)
+            except SnmpError as exc:
+                return conn, result, str(exc)
+            return conn, result, None
+        finally:
+            pool.close()
+
+    conn, result, error = asyncio.run(go())
+    if not conn.ok:
+        out(f"{target}: UNREACHABLE — {conn.error}")
+        return EXIT_PARTIAL
+    rows = [list(r[:3]) for r in result.rows]
+    if args.json:
+        out_json({"collector": collector.name, "address": str(target), "error": error,
+                  "rows": rows, "truncated": result.truncated})
+    else:
+        out(f"{collector.name} on {target}: {len(rows)} value(s)"
+            + (f" — {error}" if error else "") + (" (truncated)" if result.truncated else ""))
+        if rows:
+            out(table(["INDEX", "COLUMN", "VALUE"], rows))
+    return EXIT_PARTIAL if error or not rows else EXIT_OK
+
+
+def cmd_custom_export(args: argparse.Namespace) -> int:
+    import yaml
+
+    loaded = load(args)
+    repo = _state_readonly(loaded)
+    stored = repo.custom_stored() if repo else {}
+    if repo:
+        repo.conn.close()
+    out("# Custom collectors created in the TUI; can be saved as extensions/<name>.yml")
+    out(yaml.safe_dump({"version": 1, "collectors": list(stored.values())}, sort_keys=False,
+                       allow_unicode=True).rstrip())
+    return EXIT_OK
+
+
+def cmd_custom_import(args: argparse.Namespace) -> int:
+    import yaml
+
+    from snowth_my_net.config.extensions import parse_collector
+
+    loaded = load(args)
+    try:
+        data = yaml.safe_load(Path(args.file).read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError) as exc:
+        raise ManualError(f"cannot read {args.file}: {exc}") from None
+    items = data.get("collectors", []) if isinstance(data, dict) else data
+    if not isinstance(items, list):
+        raise ManualError("expected a collectors: list")
+    parsed = [(parse_collector(item), item) for item in items]
+    repo = _state_rw(loaded)
+    try:
+        for collector, item in parsed:
+            repo.save_custom_collector(collector.name, item, Clock().now())
+    finally:
+        repo.conn.close()
+    out(f"imported {len(parsed)} collector(s)")
+    return EXIT_OK
+
+
+def cmd_custom_delete(args: argparse.Namespace) -> int:
+    loaded = load(args)
+    if any(c.cfg.name == args.name for c in loaded.collectors):
+        raise ManualError(f"{args.name!r} comes from an extension file; delete it there")
+    repo = _state_rw(loaded)
+    try:
+        deleted = repo.delete_custom_collector(args.name)
+    finally:
+        repo.conn.close()
+    out(f"{args.name}: {'deleted' if deleted else 'not found'}")
+    return EXIT_OK if deleted else EXIT_PARTIAL
+
+
 def cmd_tui(args: argparse.Namespace) -> int:
     loaded = load(args)
     general = loaded.cfg.general
@@ -841,6 +1012,28 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--replace", action="store_true",
                    help="drop existing manual values of the listed addresses first")
     d.set_defaults(func=cmd_device_import)
+
+    p = sub.add_parser("custom", parents=[common],
+                       help="custom collectors: extra OIDs from extensions/*.yml or the TUI")
+    csub = p.add_subparsers(title="custom commands", metavar="ACTION", required=True)
+    c = csub.add_parser("list", parents=[common], help="collectors and where they come from")
+    c.set_defaults(func=cmd_custom_list)
+    c = csub.add_parser("show", parents=[common], help="values read on a device")
+    c.add_argument("address")
+    c.set_defaults(func=cmd_custom_show)
+    c = csub.add_parser("test", parents=[common], help="run one collector on one device now")
+    c.add_argument("name")
+    c.add_argument("address")
+    c.set_defaults(func=cmd_custom_test)
+    c = csub.add_parser("export", parents=[common],
+                        help="print the collectors created in the TUI as YAML")
+    c.set_defaults(func=cmd_custom_export)
+    c = csub.add_parser("import", parents=[common], help="store collectors from a YAML file")
+    c.add_argument("file")
+    c.set_defaults(func=cmd_custom_import)
+    c = csub.add_parser("delete", parents=[common], help="delete a collector created in the TUI")
+    c.add_argument("name")
+    c.set_defaults(func=cmd_custom_delete)
 
     p = sub.add_parser("tui", parents=[common], help="open the terminal management interface")
     p.set_defaults(func=cmd_tui)

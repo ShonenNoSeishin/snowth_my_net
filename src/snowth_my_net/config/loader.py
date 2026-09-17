@@ -30,6 +30,7 @@ class Paths:
     state_dir: Path
     output_dir: Path
     secrets_dir: Path
+    extensions_dir: Path | None = None
 
     @property
     def state_file(self) -> Path:
@@ -61,6 +62,7 @@ class LoadedConfig:
     cfg: Config
     paths: Paths
     warnings: list[str] = field(default_factory=list)
+    collectors: list = field(default_factory=list)       # LoadedCollector from extension files
 
     def resolve_credentials(self) -> tuple[list[ResolvedCredential], list[str]]:
         """Read every SNMP secret. Raises :class:`ConfigError` listing all unreadable ones."""
@@ -153,5 +155,8 @@ def load_config(
         state_dir=state,
         output_dir=pick(output_dir, "SNOWTH_OUTPUT_DIR", g.output_dir, state / "output"),
         secrets_dir=pick(None, "SNOWTH_SECRETS_DIR", g.secrets_dir, DEFAULT_SECRETS_DIR),
+        extensions_dir=pick(None, "SNOWTH_EXTENSIONS_DIR", g.extensions_dir, base / "extensions"),
     )
-    return LoadedConfig(cfg=cfg, paths=paths)
+    from snowth_my_net.config.extensions import load_extension_dir
+
+    return LoadedConfig(cfg=cfg, paths=paths, collectors=load_extension_dir(paths.extensions_dir))

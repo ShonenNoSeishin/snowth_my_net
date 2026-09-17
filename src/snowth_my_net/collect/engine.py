@@ -18,7 +18,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 from snowth_my_net.clock import Clock
-from snowth_my_net.collect import functions, identify
+from snowth_my_net.collect import custom, functions, identify
 from snowth_my_net.collect.discovery import (
     PlannedTarget,
     neighbor_targets,
@@ -48,6 +48,9 @@ from snowth_my_net.state.repo import Repo
 
 log = get_logger("collect")
 
+DEVICE_TYPES = ("switch", "router", "firewall", "wireless", "server", "printer", "facility",
+                "other")
+
 Function = Callable[[SnmpClient, DeviceResult, Rows], Awaitable[None]]
 
 
@@ -61,9 +64,10 @@ def snmp_params(settings: DeviceSettings) -> SnmpParams:
 
 
 async def run_function(r: DeviceResult, name: str, client: SnmpClient, deadline: float,
-                       func: Function) -> None:
+                       func: Function, mode: str | None = None) -> None:
     """Run one collection function under its time budget and record its outcome."""
-    mode = r.settings.feature(name) if name in FEATURES else "auto"
+    if mode is None:
+        mode = r.settings.feature(name) if name in FEATURES else "auto"
     if mode == "off":
         r.outcomes[name] = Outcome(name, SKIPPED, detail="off in configuration")
         return
@@ -183,6 +187,10 @@ class Collector:
         self.manual = manual if manual is not None else (repo.manual_settings() if repo else {})
         self.pool = EnginePool()
         self.registry = IdentityRegistry()
+        self.collectors, warnings = custom.all_collectors(
+            loaded.collectors, repo.custom_stored() if repo else {})
+        for warning in warnings:
+            log.warning("%s", warning)
         self._run_deadline = 0.0
 
     # ------------------------------------------------------------------ orchestration
@@ -399,3 +407,55 @@ class Collector:
             if r.superseded:
                 return
             await run_function(r, name, client, deadline, func)
+        if self.mode == "collect" and not r.superseded:
+            await self._custom(r, client, deadline)
+
+    async def _custom(self, r: DeviceResult, client: SnmpClient, deadline: float) -> None:
+        """Custom collectors applicable to this device, then their fills of standard fields."""
+        if not self.collectors or r.ident is None or r.system is None:
+            return
+        declared = r.settings.type
+        facts = custom.DeviceFacts(r.target.host, r.ident.vendor,
+                                   declared or r.ident.device_type, r.system.object_id)
+        previous = (self.repo.custom_current(r.device_id)
+                    if self.repo is not None and r.device_id is not None else {})
+        now = self.clock.now()
+        for loaded in self.collectors:
+            collector = loaded.cfg
+            if not custom.applies(collector, facts):
+                continue
+            last = previous.get(collector.name)
+            if collector.every and last and now - last["run_at"] < collector.every:
+                self._apply_fills(r, collector, last["values"])
+                continue
+            result = custom.CustomResult()
+
+            async def func(client, r, rows, collector=collector, result=result):
+                rows.key = "entries"
+                try:
+                    await custom.run_collector(client, collector, result)
+                finally:
+                    rows.columns["entries"] = {(i,): row for i, row in enumerate(result.rows)}
+
+            name = f"custom:{collector.name}"
+            await run_function(r, name, client, deadline, func, mode=collector.mode)
+            outcome = r.outcomes.pop(name)
+            r.custom[collector.name] = (outcome, result)
+            self._apply_fills(r, collector, result.values())
+
+    @staticmethod
+    def _apply_fills(r: DeviceResult, collector, values: dict[str, str]) -> None:
+        assert r.ident is not None and r.system is not None
+        for target, value in custom.fills_for(collector, values).items():
+            if target == "location":
+                if collector.fill_override or not r.system.location:
+                    r.system.location = value
+                continue
+            if target == "device_type" and value not in DEVICE_TYPES:
+                r.warnings.append(f"collector {collector.name}: {value!r} is not a device type")
+                continue
+            if collector.fill_override or not getattr(r.ident, target):
+                setattr(r.ident, target, value)
+                if target == "device_type":
+                    r.ident.type_rule = "custom"
+                    r.ident.type_reason = f"custom collector {collector.name}"

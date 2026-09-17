@@ -109,6 +109,7 @@ class GeneralCfg:
     state_dir: str | None = None
     output_dir: str | None = None
     secrets_dir: str | None = None
+    extensions_dir: str | None = None       # default: <config directory>/extensions
     log_file: str | None = None
     log_level: Literal["debug", "info", "warning", "error"] = "info"
     language: Literal["auto", "en", "fr"] = "auto"     # terminal interface only

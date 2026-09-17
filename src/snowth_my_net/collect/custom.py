@@ -1,0 +1,149 @@
+"""Running custom collectors: applicability, reading, value conversion, standard-field fills."""
+
+from __future__ import annotations
+
+import ipaddress
+from dataclasses import dataclass, field
+
+from snowth_my_net.collect.probe import format_value
+from snowth_my_net.collect.tables.system import caps_names, decode_lldp_caps
+from snowth_my_net.config.extensions import (
+    CollectorCfg,
+    LoadedCollector,
+    ValueSpec,
+    parse_collector,
+)
+from snowth_my_net.snmp.client import SnmpClient, Value
+from snowth_my_net.snmp.values import normalize_mac, oid_str, parse_oid
+
+
+@dataclass
+class DeviceFacts:
+    """What a collector may be scoped on."""
+
+    address: str
+    vendor: str
+    device_type: str
+    object_id: str
+
+
+def applies(collector: CollectorCfg, facts: DeviceFacts) -> bool:
+    scope = collector.applies_to
+    if scope.empty:
+        return True
+    checks = []
+    if scope.vendors:
+        checks.append(facts.vendor.casefold() in {v.casefold() for v in scope.vendors})
+    if scope.types:
+        checks.append(facts.device_type in scope.types)
+    if scope.addresses:
+        try:
+            ip = ipaddress.ip_address(facts.address)
+            checks.append(any(n and ip.version == n.version and ip in n
+                              for n in scope.addresses))
+        except ValueError:
+            checks.append(False)
+    if scope.sys_object_ids:
+        oid = facts.object_id + "."
+        checks.append(any(oid.startswith(p.strip().lstrip(".").rstrip(".") + ".")
+                          for p in scope.sys_object_ids))
+    return all(checks)
+
+
+def convert(value: Value, spec: ValueSpec) -> tuple[str | None, str | None]:
+    """``(display value, raw value)``; ``(None, None)`` when the object does not exist."""
+    if value is None:
+        return None, None
+    raw = value.hex() if isinstance(value, bytes) else (
+        oid_str(value) if isinstance(value, tuple) else str(value))
+    kind = spec.type
+    names = {int(k): v for k, v in spec.values.items()}
+    if kind in ("integer", "timeticks", "enum") and isinstance(value, int):
+        if kind == "enum":
+            return names.get(value, str(value)), raw
+        if kind == "timeticks":
+            seconds = value // 100
+            days, rest = divmod(seconds, 86400)
+            return f"{days}d {rest // 3600:02d}:{rest % 3600 // 60:02d}:{rest % 60:02d}", raw
+        number = value * spec.scale if spec.scale is not None else value
+        text = f"{number:g}" if isinstance(number, float) else str(number)
+        return (f"{text} {spec.unit}".strip()), raw
+    if kind == "mac" and isinstance(value, bytes | str):
+        return normalize_mac(value) or raw, raw
+    if kind == "hex" and isinstance(value, bytes):
+        return value.hex(":"), raw
+    if kind == "ip" and isinstance(value, bytes) and len(value) in (4, 16):
+        return str(ipaddress.ip_address(value)), raw
+    if kind == "oid" and isinstance(value, tuple):
+        return oid_str(value), raw
+    if kind == "lldp_caps" and isinstance(value, bytes):
+        return ", ".join(sorted(caps_names(decode_lldp_caps(value)))), raw
+    if kind == "bits" and isinstance(value, bytes):
+        bits = [n for n in range(len(value) * 8) if value[n // 8] & (0x80 >> (n % 8))]
+        return ", ".join(names.get(n, str(n)) for n in bits), raw
+    if kind == "text" and isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace").strip("\x00").strip(), raw
+    display = format_value(value)
+    if spec.unit and isinstance(value, int):
+        display = f"{display} {spec.unit}"
+    return display, raw
+
+
+@dataclass
+class CustomResult:
+    rows: list[tuple[str, str, str | None, str | None]] = field(default_factory=list)
+    truncated: bool = False
+
+    def values(self) -> dict[str, str]:
+        """get: collectors -> {column: value}."""
+        return {column: value for idx, column, value, _raw in self.rows
+                if idx == "" and value is not None}
+
+
+async def run_collector(client: SnmpClient, collector: CollectorCfg,
+                        result: CustomResult) -> None:
+    """Fill ``result`` progressively (rows read before a timeout are kept)."""
+    specs = collector.value_specs()
+    if collector.walk is None:
+        oids = {name: parse_oid(spec.oid) for name, spec in specs.items()}
+        values = await client.get(list(oids.values()))
+        for name, oid in oids.items():
+            display, raw = convert(values.get(oid), specs[name])
+            if display is not None:
+                result.rows.append(("", name, display, raw))
+        return
+    for name, spec in specs.items():
+        base = parse_oid(spec.oid)
+        count = 0
+        async for oid, value in client.walk(base):
+            if count >= collector.limit:
+                result.truncated = True
+                break
+            display, raw = convert(value, spec)
+            result.rows.append((oid_str(oid[len(base):]), name, display, raw))
+            count += 1
+
+
+def fills_for(collector: CollectorCfg, values: dict[str, str]) -> dict[str, str]:
+    return {target: values[source] for target, source in collector.fills.items()
+            if values.get(source)}
+
+
+def all_collectors(file_collectors: list[LoadedCollector], stored: dict[str, dict]
+                   ) -> tuple[list[LoadedCollector], list[str]]:
+    """Collectors from extension files, plus the valid ones created in the TUI.
+
+    A stored collector whose name is also defined in a file is ignored (the file wins).
+    """
+    result = list(file_collectors)
+    names = {c.cfg.name for c in result}
+    warnings = []
+    for name, definition in sorted(stored.items()):
+        if name in names:
+            warnings.append(f"collector {name!r} from the state is shadowed by an extension file")
+            continue
+        try:
+            result.append(LoadedCollector(parse_collector(definition), "tui"))
+        except Exception as exc:  # a broken stored definition must not stop the collect
+            warnings.append(f"collector {name!r} from the state is invalid: {exc}")
+    return result, warnings

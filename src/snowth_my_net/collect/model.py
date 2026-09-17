@@ -70,6 +70,7 @@ class DeviceResult:
     pvid: dict[int, int] = field(default_factory=dict)           # ifIndex -> access/PVID vlan
     bridge_ports: dict[int, int] = field(default_factory=dict)   # bridge port -> ifIndex
     neighbors: list[Neighbor] = field(default_factory=list)
+    custom: dict[str, tuple[Outcome, object]] = field(default_factory=dict)  # name -> result
     ident: Identification | None = None
     outcomes: dict[str, Outcome] = field(default_factory=dict)
     error: str | None = None
@@ -90,6 +91,8 @@ class DeviceResult:
         if not self.reachable:
             return "failed"
         if any(o.status in FAILURE_STATUSES for o in self.outcomes.values()):
+            return "partial"
+        if any(o.status in FAILURE_STATUSES for o, _r in self.custom.values()):
             return "partial"
         return "ok"
 

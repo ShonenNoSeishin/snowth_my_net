@@ -1699,6 +1699,22 @@ collectors:
   collecteurs créés dans le TUI, stockés dans l'état, exportables en YAML (comme les réglages
   manuels).
 
+> **Implémenté (E1)** :
+> - Définitions : `extensions/*.yml` (répertoire `general.extensions_dir`, par défaut à côté de
+>   la config) et collecteurs créés dans le TUI (table `custom_collectors`, schéma v3). Un
+>   fichier invalide est une erreur de configuration (code 2) qui cite le fichier.
+> - Un collecteur contient soit `get:` soit `walk:` ; `every`, `mode: force`, `limit`,
+>   `fills` avec `fill_override`.
+> - Stockage : `custom_runs` (dernier passage par équipement) et `custom_values` ; les valeurs
+>   « actuelles » sont celles du dernier passage ; si `every` saute un passage, les `fills`
+>   utilisent les valeurs stockées.
+> - CLI : `custom list | show ADDR | test NAME ADDR | export | import FILE | delete NAME` ;
+>   `check` exécute les collecteurs applicables ; `snapshot.json` expose `devices[].custom`.
+> - TUI : onglet « Personnalisé » de la fiche, bouton « Enregistrer comme OID personnalisé »
+>   du testeur (portée : cet équipement, le constructeur, le type ou tous), onglet
+>   « Extensions » (détail YAML, suppression des collecteurs créés dans l'interface).
+> - Exemples commentés : `examples/extensions/examples.yml` (validés par les tests).
+
 ### 21.2 Niveau 2 — Rapports personnalisés (sans code, depuis le TUI)
 
 Un rapport = un jeu de données + des colonnes + des filtres + un tri + un format :

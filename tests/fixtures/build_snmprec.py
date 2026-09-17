@@ -322,6 +322,10 @@ def agents() -> dict[str, list[Record]]:
                     *[(m, 2) for m in filler_macs("00:00:5e:00:55", 3)]]),
         *dot1d_fdb([("00:00:00:00:00:00", 3)]),        # garbage entry, dropped
         *lldp_local_ports({n: (5, str(n), f"Port {n}") for n in range(1, 5)}),
+        # Vendor-private objects for the custom collector tests.
+        text("1.3.6.1.4.1.99999.1.7.1.1.0", "2.4.1-build77"),
+        integer("1.3.6.1.4.1.99999.1.7.1.2.0", 452),
+        *[integer(f"1.3.6.1.2.1.105.1.1.1.6.1.{n}", 3 if n % 2 else 2) for n in range(1, 5)],
         *lldp_remote([{"port": 3, "chassis": "00:00:5e:00:53:20", "port_subtype": 5,
                        "port_id": "eth0", "sys_name": "ap-lobby", "caps": CAP_AP,
                        "address": "127.0.0.20"}]),

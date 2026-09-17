@@ -13,6 +13,7 @@ general:
   # state_dir: /var/lib/snowth_my_net           # $SNOWTH_STATE_DIR   (state.sqlite, lock, OUI)
   # output_dir: /var/lib/snowth_my_net/output   # $SNOWTH_OUTPUT_DIR  (CSV, JSON, maps)
   # secrets_dir: /etc/snowth_my_net/secrets     # $SNOWTH_SECRETS_DIR (base of relative *_file)
+  # extensions_dir: ./extensions                # custom collectors (*.yml), see examples/
   # log_file: /var/log/snowth_my_net.log        # in addition to stderr; rotated 10 MB x 5
   log_level: info
   language: auto                   # terminal interface: auto (from LANG) | fr | en

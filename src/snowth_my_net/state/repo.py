@@ -260,6 +260,7 @@ class Repo:
                     [*fields.values(), device_id])
             self._save_details(device_id, r, now)
             self._save_observations(device_id, r, now, run_id)
+            self._save_custom(device_id, r, now)
             self._save_outcomes(run_id, device_id, r.outcomes.values())
             self._target_ok(str(r.target), now, device_id, r.credential, is_alias=False)
         return device_id
@@ -360,6 +361,62 @@ class Repo:
                 [(e.mac, e.ip, e.family, device_id, e.ifindex, e.table, now, now, run_id)
                  for e in r.arp])
 
+    def _save_custom(self, device_id: int, r: DeviceResult, now: int) -> None:
+        for name, (outcome, result) in r.custom.items():
+            self.conn.execute(
+                "INSERT INTO custom_runs(device_id, collector, run_at, status, rows, detail) "
+                "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(device_id, collector) DO UPDATE SET "
+                "run_at = excluded.run_at, status = excluded.status, rows = excluded.rows, "
+                "detail = excluded.detail",
+                (device_id, name, now, outcome.status, outcome.rows, outcome.detail))
+            if outcome.status not in (OK, PARTIAL):
+                continue
+            self.conn.executemany(
+                "INSERT INTO custom_values(device_id, collector, idx, column, value, raw, "
+                "first_seen, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(device_id, collector, idx, column) DO UPDATE SET "
+                "value = excluded.value, raw = excluded.raw, last_seen = excluded.last_seen",
+                [(device_id, name, idx, column, value, raw, now, now)
+                 for idx, column, value, raw in result.rows])
+
+    def custom_current(self, device_id: int) -> dict[str, dict]:
+        """Last pass of each collector on a device, with the values read at that pass."""
+        runs = {row["collector"]: {"run_at": row["run_at"], "status": row["status"],
+                                   "rows": row["rows"], "detail": row["detail"], "values": {},
+                                   "table": []}
+                for row in self.conn.execute("SELECT * FROM custom_runs WHERE device_id = ?",
+                                             (device_id,))}
+        for row in self.conn.execute(
+                "SELECT v.* FROM custom_values v JOIN custom_runs r ON r.device_id = v.device_id "
+                "AND r.collector = v.collector AND r.run_at = v.last_seen "
+                "WHERE v.device_id = ? ORDER BY v.collector, v.idx, v.column", (device_id,)):
+            entry = runs[row["collector"]]
+            if row["idx"] == "":
+                entry["values"][row["column"]] = row["value"]
+            else:
+                entry["table"].append((row["idx"], row["column"], row["value"]))
+        return runs
+
+    def custom_stored(self) -> dict[str, dict]:
+        return {row[0]: json.loads(row[1]) for row in self.conn.execute(
+            "SELECT name, definition FROM custom_collectors ORDER BY name")}
+
+    def save_custom_collector(self, name: str, definition: dict, now: int) -> None:
+        with self.conn:
+            self.conn.execute(
+                "INSERT INTO custom_collectors(name, definition, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?) ON CONFLICT(name) DO UPDATE SET "
+                "definition = excluded.definition, updated_at = excluded.updated_at",
+                (name, json.dumps(definition, sort_keys=True), now, now))
+
+    def delete_custom_collector(self, name: str) -> bool:
+        with self.conn:
+            deleted = self.conn.execute("DELETE FROM custom_collectors WHERE name = ?",
+                                        (name,)).rowcount
+            self.conn.execute("DELETE FROM custom_values WHERE collector = ?", (name,))
+            self.conn.execute("DELETE FROM custom_runs WHERE collector = ?", (name,))
+        return bool(deleted)
+
     def _save_outcomes(self, run_id: int, device_id: int, outcomes) -> None:
         self.conn.executemany(
             "INSERT OR REPLACE INTO collect_status(run_id, device_id, function, status, rows, "
@@ -419,6 +476,8 @@ class Repo:
                 "DELETE FROM neighbors WHERE last_seen < ?",
                 (now - retention_days * DAY,)).rowcount
             c.execute("DELETE FROM dns_cache WHERE expires_at < ?", (now - 30 * DAY,))
+            c.execute("DELETE FROM custom_values WHERE last_seen < ?",
+                      (now - retention_days * DAY,))
             counts["devices"] = c.execute(
                 "DELETE FROM devices WHERE last_seen < ?", (now - retention_days * DAY,)).rowcount
             counts["targets"] = c.execute(

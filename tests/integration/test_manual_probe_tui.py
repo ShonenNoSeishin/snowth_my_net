@@ -261,3 +261,63 @@ async def test_tui_links_tab_and_device_neighbors(lab, collected):
         phone = next(r for r in rows if r[0] == "1/1/7")
         assert "telephone" in phone[4] and phone[5] in ("access", "accès")
     ctx.close()
+
+
+async def test_tui_save_tested_oid_as_custom_collector(lab, collected):
+    from snowth_my_net.tui.app import SaveCollectorModal
+
+    ctx = TuiContext(load_config(collected))
+    app = SnowthApp(ctx)
+    async with app.run_test(size=(160, 45)) as pilot:
+        await wait(app, pilot)
+        select_row(devices_table(app), "fw-edge")
+        devices_table(app).focus()
+        await pilot.press("enter")
+        await wait(app, pilot)
+        screen = app.screen
+        screen.query_one("#device-tabs", TabbedContent).active = "tab-tester"
+        await pilot.pause()
+        screen.query_one("#oid", Input).value = "1.3.6.1.2.1.1.6.0"
+        screen.oid_submitted()
+        await wait(app, pilot)
+        screen.save_oid_pressed()
+        await wait(app, pilot)
+        assert isinstance(app.screen, SaveCollectorModal)
+        modal = app.screen
+        modal.query_one("#c-name", Input).value = "fw-location"
+        modal.query_one("#c-column", Input).value = "location"
+        modal.query_one("#c-scope", Select).value = "vendor"
+        await pilot.pause()
+        modal.save()
+        await wait(app, pilot)
+        stored = ctx.repo.custom_stored()["fw-location"]
+        assert stored == {"name": "fw-location", "applies_to": {"vendors": ["Sophos"]},
+                          "get": {"location": "1.3.6.1.2.1.1.6.0"}}
+
+        await pilot.press("c")                          # collect this device now
+        await wait(app, pilot)
+        await pilot.press("escape")
+        await wait(app, pilot)
+        screen.query_one("#device-tabs", TabbedContent).active = "tab-custom"
+        await wait(app, pilot)
+        rows = [[str(c) for c in screen.query_one("#custom", DataTable).get_row_at(i)]
+                for i in range(screen.query_one("#custom", DataTable).row_count)]
+        assert rows[1][:4] == ["", "", "location", "Server room"]
+
+        await pilot.press("escape")
+        await wait(app, pilot)
+        app.screen.query_one("#main-tabs", TabbedContent).active = "tab-extensions"
+        await wait(app, pilot)
+        extensions = app.screen.query_one("#extensions", DataTable)
+        assert extensions.row_count == 1
+        extensions.focus()
+        await pilot.press("delete")
+        for _ in range(5):                              # the confirmation is awaited by a worker
+            await pilot.pause()
+        from snowth_my_net.tui.app import ConfirmModal
+
+        assert isinstance(app.screen, ConfirmModal)
+        await pilot.click("#yes")
+        await wait(app, pilot)
+        assert "fw-location" not in ctx.repo.custom_stored()
+    ctx.close()

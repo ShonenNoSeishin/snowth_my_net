@@ -274,6 +274,166 @@ class ExplainModal(ModalScreen[None]):
         self.dismiss(None)
 
 
+def scope_text(collector, t) -> str:
+    scope = collector.applies_to
+    parts = []
+    if scope.vendors:
+        parts.append(", ".join(scope.vendors))
+    if scope.types:
+        parts.append(", ".join(t(f"type.{x}") for x in scope.types))
+    if scope.addresses:
+        parts.append(", ".join(str(a) for a in scope.addresses))
+    if scope.sys_object_ids:
+        parts.append(", ".join(scope.sys_object_ids))
+    return " · ".join(parts) or t("ext.all")
+
+
+class CollectorModal(ModalScreen[None]):
+    BINDINGS: ClassVar = [Binding("escape,q", "close", show=False)]
+
+    def __init__(self, ctx: TuiContext, loaded) -> None:
+        super().__init__()
+        self.ctx, self.loaded = ctx, loaded
+
+    def compose(self) -> ComposeResult:
+        import dataclasses
+
+        import yaml
+
+        definition = _definition(dataclasses.asdict(self.loaded.cfg))
+        text = yaml.safe_dump(definition, sort_keys=False, allow_unicode=True)
+        with Vertical(classes="dialog wide tall"):
+            yield Label(self.loaded.cfg.name, classes="dialog-title")
+            with VerticalScroll(id="explain-body"):
+                yield Static(escape(text), id="collector-yaml")
+            with Horizontal(classes="dialog-buttons"):
+                yield Button(self.ctx.t("collect.close"), id="close", variant="primary")
+
+    def on_mount(self) -> None:
+        self.query_one("#close", Button).focus()
+
+    @on(Button.Pressed, "#close")
+    def action_close(self) -> None:
+        self.dismiss(None)
+
+
+def _definition(data):
+    """Drop empty values so that a collector reads like hand-written YAML."""
+    if isinstance(data, dict):
+        cleaned = {k: _definition(v) for k, v in data.items()}
+        return {k: v for k, v in cleaned.items()
+                if v not in (None, "", [], {}) and not (k == "every" and v == 0)
+                and not (k == "mode" and v == "auto") and not (k == "limit" and v == 10_000)
+                and not (k == "fill_override" and v is False)
+                and not (k == "type" and v == "auto") and not (k == "index" and v == "raw")}
+    if isinstance(data, list):
+        return [_definition(v) for v in data]
+    return str(data) if hasattr(data, "compressed") else data
+
+
+class SaveCollectorModal(ModalScreen[str | None]):
+    """Turn the last successful OID test into a custom collector."""
+
+    BINDINGS: ClassVar = [Binding("escape", "cancel", show=False)]
+    VALUE_TYPES = ("auto", "text", "integer", "mac", "ip", "hex", "timeticks", "oid")
+
+    def __init__(self, ctx: TuiContext, row: DeviceRow, columns: dict[str, str], kind: str,
+                 default_name: str, vendor: str, device_type: str) -> None:
+        super().__init__()
+        self.ctx, self.row, self.columns, self.kind = ctx, row, columns, kind
+        self.default_name, self.vendor, self.device_type = default_name, vendor, device_type
+
+    def compose(self) -> ComposeResult:
+        t = self.ctx.t
+        scopes = [(t("save.scope_device", address=self.row.host), "device")]
+        if self.vendor:
+            scopes.append((t("save.scope_vendor", vendor=self.vendor), "vendor"))
+        if self.device_type:
+            scopes.append((t("save.scope_type", type=self.ctx.type_label(self.device_type)),
+                           "type"))
+        scopes.append((t("save.scope_all"), "all"))
+        with Vertical(classes="dialog wide"):
+            yield Label(t("save.title"), classes="dialog-title")
+            yield Static(t("save.what", kind=self.kind, count=len(self.columns),
+                           oids=", ".join(self.columns.values())), classes="hint")
+            with Grid(classes="form"):
+                yield Label(t("save.name"))
+                yield Input(self.default_name, id="c-name", compact=True)
+                yield Static("")
+                if len(self.columns) == 1:
+                    yield Label(t("save.column"))
+                    yield Input(next(iter(self.columns)), id="c-column", compact=True)
+                    yield Static("")
+                    yield Label(t("save.type"))
+                    yield Select([(v, v) for v in self.VALUE_TYPES], value="auto",
+                                 allow_blank=False, id="c-type", compact=True)
+                    yield Static("")
+                yield Label(t("save.scope"))
+                yield Select(scopes, value="device", allow_blank=False, id="c-scope",
+                             compact=True)
+                yield Static("")
+                yield Label(t("save.description"))
+                yield Input(id="c-description", compact=True)
+                yield Static("")
+            yield Static("", id="c-message", classes="hint")
+            with Horizontal(classes="dialog-buttons"):
+                yield Button(t("no"), id="cancel")
+                yield Button(t("set.save"), id="save", variant="primary")
+
+    def on_mount(self) -> None:
+        self.query_one("#c-name", Input).focus()
+
+    def definition(self) -> dict:
+        columns = dict(self.columns)
+        specs: dict = {}
+        if len(columns) == 1:
+            column = self.query_one("#c-column", Input).value.strip() or "value"
+            value_type = str(self.query_one("#c-type", Select).value)
+            oid = next(iter(columns.values()))
+            specs[column] = oid if value_type == "auto" else {"oid": oid, "type": value_type}
+        else:
+            specs = columns
+        scope = str(self.query_one("#c-scope", Select).value)
+        applies_to = {"device": {"addresses": [self.row.host]},
+                      "vendor": {"vendors": [self.vendor]},
+                      "type": {"types": [self.device_type]}, "all": {}}[scope]
+        definition: dict = {"name": self.query_one("#c-name", Input).value.strip()}
+        description = self.query_one("#c-description", Input).value.strip()
+        if description:
+            definition["description"] = description
+        if applies_to:
+            definition["applies_to"] = applies_to
+        if self.kind == "walk":
+            definition["walk"] = {"columns": specs}
+        else:
+            definition["get"] = specs
+        return definition
+
+    @on(Button.Pressed, "#save")
+    def save(self) -> None:
+        from snowth_my_net.collect.custom import all_collectors
+        from snowth_my_net.config.extensions import parse_collector
+
+        t = self.ctx.t
+        message = self.query_one("#c-message", Static)
+        definition = self.definition()
+        try:
+            collector = parse_collector(definition)
+        except ConfigError as exc:
+            message.update(f"[$error]{escape('; '.join(exc.errors))}[/]")
+            return
+        existing = all_collectors(self.ctx.loaded.collectors, self.ctx.repo.custom_stored())[0]
+        if any(c.cfg.name == collector.name for c in existing):
+            message.update(f"[$error]{escape(t('save.exists', name=collector.name))}[/]")
+            return
+        self.ctx.repo.save_custom_collector(collector.name, definition, self.ctx.clock.now())
+        self.dismiss(collector.name)
+
+    @on(Button.Pressed, "#cancel")
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
 class TuiLogHandler(logging.Handler):
     STYLES: ClassVar = {logging.WARNING: "yellow", logging.ERROR: "bold red",
                         logging.CRITICAL: "bold red"}
@@ -397,6 +557,9 @@ class MainScreen(Screen):
             with TabPane(t("tab.links"), id="tab-links"):
                 yield DataTable(id="links", cursor_type="row", zebra_stripes=True)
                 yield Static("", id="links-count", classes="legend")
+            with TabPane(t("tab.extensions"), id="tab-extensions"):
+                yield DataTable(id="extensions", cursor_type="row", zebra_stripes=True)
+                yield Static("", id="extensions-count", classes="legend")
             with TabPane(t("tab.runs"), id="tab-runs"):
                 yield DataTable(id="runs", cursor_type="row", zebra_stripes=True)
         yield Footer()
@@ -413,6 +576,10 @@ class MainScreen(Screen):
                            ("dns", "col.dns"), ("switch", "col.switch"), ("port", "col.port"),
                            ("vlan", "col.vlan"), ("seen", "col.seen")):
             nodes.add_column(t(label), key=key)
+        extensions = self.query_one("#extensions", DataTable)
+        for key, label in (("name", "col.name"), ("kind", "col.kind"), ("scope", "col.scope"),
+                           ("origin", "col.origin"), ("description", "col.description")):
+            extensions.add_column(t(label), key=key)
         links = self.query_one("#links", DataTable)
         for key, label in (("a", "col.local_device"), ("ap", "col.local_port"),
                            ("b", "col.remote_device"), ("bp", "col.remote_port"),
@@ -440,6 +607,8 @@ class MainScreen(Screen):
             self.fill_nodes()
         elif active == "tab-links":
             self.fill_links()
+        elif active == "tab-extensions":
+            self.fill_extensions()
         self.query_one(TopBar).refresh_status()
 
     NODE_LIMIT: ClassVar[int] = 2000
@@ -469,6 +638,36 @@ class MainScreen(Screen):
             text += " · " + self.ctx.t("nodes.truncated", limit=self.NODE_LIMIT)
         self.query_one("#nodes-count", Static).update(text)
 
+    def collectors(self):
+        from snowth_my_net.collect.custom import all_collectors
+
+        return all_collectors(self.ctx.loaded.collectors, self.ctx.repo.custom_stored())[0]
+
+    def fill_extensions(self) -> None:
+        t = self.ctx.t
+        table = self.query_one("#extensions", DataTable)
+        table.clear()
+        items = self.collectors()
+        for loaded in items:
+            c = loaded.cfg
+            origin = t("ext.origin_tui") if loaded.origin == "tui" else loaded.origin
+            table.add_row(Text(c.name, style="bold"), c.kind, scope_text(c, t), origin,
+                          c.description or "", key=c.name)
+        self.query_one("#extensions-count", Static).update(t("ext.count", count=len(items)))
+
+    def selected_collector(self):
+        table = self.query_one("#extensions", DataTable)
+        if table.row_count == 0:
+            return None
+        key = table.coordinate_to_cell_key(table.cursor_coordinate).row_key.value
+        return next((c for c in self.collectors() if c.cfg.name == key), None)
+
+    @on(DataTable.RowSelected, "#extensions")
+    def extension_selected(self) -> None:
+        loaded = self.selected_collector()
+        if loaded is not None:
+            self.app.push_screen(CollectorModal(self.ctx, loaded))
+
     def fill_links(self) -> None:
         view = self.ensure_view()
         table = self.query_one("#links", DataTable)
@@ -485,6 +684,8 @@ class MainScreen(Screen):
             self.fill_nodes()
         elif event.pane.id == "tab-links":
             self.fill_links()
+        elif event.pane.id == "tab-extensions":
+            self.fill_extensions()
 
     @on(Input.Changed, "#node-filter")
     def node_filter_changed(self) -> None:
@@ -579,6 +780,21 @@ class MainScreen(Screen):
 
     @work(group="remove")
     async def action_remove(self) -> None:
+        t = self.ctx.t
+        if self.query_one("#main-tabs", TabbedContent).active == "tab-extensions":
+            loaded = self.selected_collector()
+            if loaded is None:
+                return
+            if loaded.origin != "tui":
+                self.notify(t("ext.file_delete", name=loaded.cfg.name, origin=loaded.origin),
+                            severity="warning", timeout=8)
+                return
+            if await self.app.push_screen_wait(
+                    ConfirmModal(self.ctx, t("ext.confirm_delete", name=loaded.cfg.name))):
+                self.ctx.repo.delete_custom_collector(loaded.cfg.name)
+                self.notify(t("ext.deleted", name=loaded.cfg.name))
+                self.fill_extensions()
+            return
         row = self.selected_row()
         if row is None:
             return
@@ -644,11 +860,16 @@ class DeviceScreen(Screen):
                                     tooltip=t("tester.limit"))
                         yield Button(t("tester.run"), id="run-oid", variant="primary",
                                      compact=True)
+                        yield Button(t("save.button"), id="save-oid", compact=True,
+                                     disabled=True)
                     yield Static(t("tester.hint"), id="tester-status")
                     yield DataTable(id="results", zebra_stripes=True)
             with TabPane(t("tab.neighbors"), id="tab-neighbors"), Vertical():
                 yield Static("", id="neighbors-empty", classes="empty")
                 yield DataTable(id="neighbors", zebra_stripes=True)
+            with TabPane(t("tab.custom"), id="tab-custom"), Vertical():
+                yield Static("", id="custom-empty", classes="empty")
+                yield DataTable(id="custom", zebra_stripes=True)
             with TabPane(t("tab.last"), id="tab-last"), Vertical():
                 yield Static(id="last-when")
                 yield DataTable(id="last", zebra_stripes=True)
@@ -729,6 +950,7 @@ class DeviceScreen(Screen):
         self.load_presets()
         self.load_last()
         self.load_neighbors()
+        self.load_custom()
 
     async def on_unmount(self) -> None:
         if self.pool is not None:
@@ -877,6 +1099,30 @@ class DeviceScreen(Screen):
             table.add_row(o["function"], Text(o["status"], style=styles.get(o["status"], "")),
                           str(o["rows"] or 0), f"{o['duration_ms'] or 0} ms", o["detail"] or "")
 
+    def load_custom(self) -> None:
+        t = self.ctx.t
+        table = self.query_one("#custom", DataTable)
+        table.clear(columns=True)
+        empty = self.query_one("#custom-empty", Static)
+        current = (self.ctx.repo.custom_current(self.row.device_id)
+                   if self.row.device_id is not None else {})
+        empty.update("" if current else t("custom.none"))
+        empty.display = not current
+        if not current:
+            return
+        for label in ("col.collector", "col.index", "col.column", "col.value", "col.seen"):
+            table.add_column(t(label))
+        for name, entry in sorted(current.items()):
+            header = Text(name, style="bold")
+            last = t("ext.last_pass", when=self.ctx.local_time(entry["run_at"]),
+                     status=entry["status"])
+            header.append(f"  {last}", style="dim")
+            table.add_row(header, "", "", "", "")
+            for column, value in entry["values"].items():
+                table.add_row("", "", column, value or "", self.ctx.local_time(entry["run_at"]))
+            for index, column, value in entry["table"]:
+                table.add_row("", index, column, value or "", self.ctx.local_time(entry["run_at"]))
+
     def load_neighbors(self) -> None:
         from snowth_my_net.merge.view import build_view
 
@@ -907,6 +1153,7 @@ class DeviceScreen(Screen):
                           self.ctx.local_time(rn.obs.last_seen))
 
     def refresh_all(self) -> None:
+        self.load_custom()
         self.load_neighbors()
         self.load_identity()
         self.load_form()
@@ -1025,6 +1272,41 @@ class DeviceScreen(Screen):
         if result.truncated:
             markup += f" [$text-muted]({escape(t('tester.truncated', limit=limit))})[/]"
         status.update(markup)
+        self.last_probe = (item, preset, oid, result)
+        self.query_one("#save-oid", Button).disabled = result.status != "ok"
+
+    @on(Button.Pressed, "#save-oid")
+    def save_oid_pressed(self) -> None:
+        from snowth_my_net.snmp.values import oid_str
+
+        t = self.ctx.t
+        probe = getattr(self, "last_probe", None)
+        if probe is None or probe[3].status != "ok":
+            self.notify(t("save.nothing"), severity="warning")
+            return
+        _item, preset, oid, result = probe
+        if preset is not None:
+            if preset.mode == "enterprise":
+                self.notify(t("save.enterprise"), severity="warning")
+                return
+            columns = {c.label: oid_str(c.oid) for c in preset.columns}
+            kind = "get" if preset.mode == "get" else "walk"
+            default = preset.name
+        else:
+            columns = {"value": oid_str(oid)}
+            single_get = len(result.rows) == 1 and result.rows[0][0] == oid_str(oid)
+            kind = "get" if single_get else "walk"
+            default = "oid-" + oid_str(oid).replace("1.3.6.1.4.1.", "e").replace(".", "-")[:40]
+        device = self.device()
+        device_type, _rule, _reason = self.effective_type()
+
+        def saved(name: str | None) -> None:
+            if name:
+                self.notify(t("save.done", name=name), timeout=8)
+
+        self.app.push_screen(SaveCollectorModal(
+            self.ctx, self.row, columns, kind, default, (device or {}).get("vendor") or "",
+            device_type), saved)
 
     # ------------------------------------------------------------------ other actions
 

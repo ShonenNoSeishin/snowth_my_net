@@ -119,11 +119,22 @@ def _convert(tp: Any, value: Any, path: str, errors: list[str]) -> Any:
         candidates = [a for a in args if a is not type(None)]
         if len(candidates) == 1:
             return _convert(candidates[0], value, path, errors)
+        attempts: list[tuple[Any, list[str]]] = []
         for candidate in candidates:
             attempt: list[str] = []
             result = _convert(candidate, value, path, attempt)
             if not attempt:
                 return result
+            attempts.append((candidate, attempt))
+        # Report the errors of the alternative that has the shape of the value (a mapping for
+        # a dataclass, a list for a list…), which is what the author meant.
+        for candidate, attempt in attempts:
+            shaped = ((isinstance(value, dict) and (dataclasses.is_dataclass(candidate)
+                                                    or get_origin(candidate) is dict))
+                      or (isinstance(value, list) and get_origin(candidate) is list))
+            if shaped:
+                errors.extend(attempt)
+                return None
         errors.append(f"{_where(path)}: unexpected value {_describe(value)}")
         return None
 
@@ -153,13 +164,20 @@ def _convert(tp: Any, value: Any, path: str, errors: list[str]) -> Any:
         return [_convert(item_type, v, f"{path}[{i}]", errors) for i, v in enumerate(value)]
 
     if origin is dict:
-        _, value_type = get_args(tp)
+        key_type, value_type = get_args(tp)
         if value is None:
             return {}
         if not isinstance(value, dict):
             errors.append(f"{_where(path)}: expected a mapping, got {_describe(value)}")
             return {}
-        return {str(k): _convert(value_type, v, f"{path}.{k}", errors) for k, v in value.items()}
+        result = {}
+        for k, v in value.items():
+            if get_origin(key_type) is Literal and str(k) not in get_args(key_type):
+                choices = "|".join(get_args(key_type))
+                errors.append(f"{path}.{k}: unknown key, expected one of {choices}")
+                continue
+            result[str(k)] = _convert(value_type, v, f"{path}.{k}", errors)
+        return result
 
     if dataclasses.is_dataclass(tp):
         return _build_dataclass(tp, value, path, errors)
