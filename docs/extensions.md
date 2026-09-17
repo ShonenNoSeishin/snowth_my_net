@@ -202,7 +202,150 @@ parser takes `-field` for an option.
   `--no-push` skips it, `--dry-run` shows what would be sent.
 * `check` warns about reports naming an unknown push target.
 
-## Coming next
+## Python extensions
 
-Python extensions (a small read-only API for collectors that need code) and hooks after collect,
-export and push — see DESIGN.md §21.
+For what a declaration cannot express: combine several OIDs, compute values, read an external
+inventory, produce a file in another format. An extension is a Python file in the extensions
+directory, or an installed package, and is loaded **only when its name is listed**:
+
+```yaml
+general:
+  python_extensions: [host_storage]      # extensions/host_storage.py, or an entry point
+```
+
+An extension runs inside snowth_my_net with its rights: enable only code you trust. It gets the
+same read-only SNMP access as everything else (`get` and `walk`), with the device's credentials,
+timeouts and pacing, but nothing technically prevents Python code from doing other things.
+
+```python
+from snowth_my_net.api import Extension, Field, number, text
+
+extension = Extension("host_storage")              # module-level, required
+
+@extension.collector("host-storage", table=True,
+                     columns=["kind", "description", "used_pct"],
+                     applies_to={"sys_object_ids": ["1.3.6.1.4.1.8072.3.2"]}, every="1h")
+async def host_storage(device, snmp):
+    rows = []
+    for index, descr in await snmp.walk("1.3.6.1.2.1.25.2.3.1.3"):
+        rows.append({"index": index, "description": text(descr)})
+    return rows
+
+@extension.report_dataset("disk-usage", fields=[Field("device"), Field("used_pct", "integer")])
+def disk_usage(ctx):
+    return [{"device": r["device"], "used_pct": int(r["used_pct"] or 0)}
+            for r in ctx.dataset_rows("custom:host-storage")]
+
+@extension.exporter("metrics/snowth_my_net.prom")
+def prometheus(snapshot):
+    return f"snowth_devices {len(snapshot['devices'])}\n".encode()
+```
+
+A complete, tested example: [`examples/extensions/host_storage.py`](../examples/extensions/host_storage.py)
+(disk usage of net-snmp hosts, a typed dataset, a Prometheus textfile exporter).
+
+### Extension points
+
+| Decorator | Function | Result |
+|---|---|---|
+| `collector(name, columns=[…], table=False, index="raw", applies_to={…}, every=0, mode="auto", fills={…}, description="", limit=10000)` | `async def f(device, snmp)` returning a dict of `columns`, or with `table=True` a list of dicts with an `index` key (`index="port"` when it is an ifIndex) | Stored like a YAML collector: device sheet, `custom show`, `snapshot.json`, dataset `custom:<name>`, `fills` of standard fields. |
+| `report_dataset(name, fields=[Field(…)], description="")` | `def f(ctx)` returning a list of dicts | Dataset `py:<name>` for reports (SQL table `py_<name>`). `ctx.now` is the current time, `ctx.dataset_rows("devices")` gives another dataset, `ctx.config_dir` the configuration directory. |
+| `exporter(filename, description="")` | `def f(snapshot)` returning bytes (or text) | Written atomically under the output directory by `export` (not with `--only`). |
+
+`device` is a `DeviceView` (`address`, `name`, `vendor`, `model`, `os_name`, `os_version`,
+`device_type`, `object_id`). `snmp.get("oid", …)` returns `{oid: value}`; `snmp.walk("oid")`
+returns `[(index, value)]` with the index relative to the walked OID. Values are `bytes`
+(OCTET STRING), `int` (integers, counters, timeticks), `str` (OIDs, addresses) or `None` (no
+such object); `text()`, `number()`, `mac()` and `ip()` convert them.
+
+A collector that raises, or returns something else than declared, is recorded as an error for
+that device (exit code 1 when `mode="force"` or when the collect fails otherwise), like an SNMP
+error; it never stops the collect. A dataset that raises makes the report fail; an exporter that
+raises is reported by `export` (exit code 1) and the other files are still written.
+
+**Loading:** `<extensions_dir>/<name>.py` first, then an installed distribution declaring the
+entry point `snowth_my_net.extensions`, for example in its `pyproject.toml`:
+
+```toml
+[project.entry-points."snowth_my_net.extensions"]
+acme = "acme_snowth.extension:extension"
+```
+
+An import error, a missing module-level `extension`, a name already used by another collector,
+or an extension written for another API version is a configuration error (exit 2) naming the
+extension. The API is versioned (`snowth_my_net.api.API_VERSION`, currently 1).
+
+### Testing an extension
+
+`snowth_my_net.testing` runs extension code without devices or state:
+
+```python
+from snowth_my_net import testing
+
+ext = testing.load("extensions/host_storage.py")
+snmp = testing.FakeSnmp({"1.3.6.1.2.1.25.2.3.1.3.31": b"/", "1.3.6.1.2.1.25.2.3.1.6.31": 42})
+rows = testing.run_collector(ext, "host-storage", snmp, vendor="Linux")   # stored values
+usage = testing.run_dataset(ext, "disk-usage", {"custom:host-storage": rows})
+data = testing.export(ext, "metrics/snowth_my_net.prom", {"devices": [], "nodes": []})
+```
+
+Then, on a real device and without storing anything: `snowth_my_net custom test host-storage
+192.0.2.16`.
+
+## Hooks
+
+Hooks run external programs after `collect`, `export`, `push` or a report, in any language:
+
+```yaml
+hooks:
+  after_export:
+    - name: publish
+      command: [/usr/local/bin/publish-inventory, --devices, "{devices}", --nodes, "{nodes}"]
+      timeout: 120
+  after_collect:
+    - name: alert
+      when: failed                      # only when the collect was partial or failed
+      command: [/usr/local/bin/notify, "collect {status}", "{summary}"]
+      pass_env: [HTTPS_PROXY]
+  after_report:
+    - name: mail-report
+      command: [/usr/local/bin/mail-file, "{report_file}"]
+```
+
+How they run, by design:
+
+* **No shell.** `command` is a list; placeholders are replaced inside each argument, so a value
+  can never add arguments or shell syntax. Pipes or redirections need a script of your own.
+* **A timeout** (default 60 s), after which the whole process group is terminated.
+* **A clean environment:** `PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`,
+  `LANG=C.UTF-8`, `HOME` = the state directory, `TZ` when set, the `env:` values, the variables
+  named in `pass_env:`, and:
+
+  | Variable | Content |
+  |---|---|
+  | `SNOWTH_EVENT` | `after_collect`, `after_export`, `after_push` or `after_report` |
+  | `SNOWTH_STATUS` | `ok`, `partial` or `failed` |
+  | `SNOWTH_RUN_ID` | the collect run id (empty otherwise) |
+  | `SNOWTH_OUTPUT_DIR` | the output directory (also the working directory) |
+  | `SNOWTH_SUMMARY` | a JSON file describing the stage: the collect report, files written and failed, push results, or the report name, path and row count |
+
+  Secrets read by snowth_my_net (communities, keys, tokens) are never passed.
+* **After the state lock is released**, so a hook may call snowth_my_net itself. In `run`, the
+  hooks of the three stages run at the end, in order.
+* **Failures are reported, never fatal:** a hook that exits non-zero or times out makes the
+  command exit with code 1 (its stderr tail is logged and in `--json`); the other hooks still
+  run, files already written stay.
+* Hooks do not run for collects started from the terminal interface, for `--dry-run`, for
+  reports sent to stdout, nor with `--no-hooks`.
+
+```bash
+snowth_my_net hooks list
+snowth_my_net hooks test after_export              # run them now with a test summary
+snowth_my_net hooks test after_export publish --dry-run   # print the command only
+```
+
+`check` warns about programs that cannot be found (use absolute paths: cron's PATH is short) and
+about `pass_env` variables that hold a secret of the configuration.
+
+In the container, hooks run as the unprivileged `snowth` user on a read-only file system: mount
+the scripts (read-only) and make sure they only need the output directory or `/tmp`.

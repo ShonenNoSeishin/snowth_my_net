@@ -88,6 +88,7 @@ Details, systemd units, hardening and networking: [docs/deployment.md](docs/depl
 | `device show\|set\|unset\|add\|remove\|export-settings\|import-settings` | Manual settings |
 | `custom list\|show\|test\|export\|import\|delete` | Custom collectors (extra OIDs) |
 | `report list\|fields\|show\|preview\|run\|export\|import\|delete` | Custom reports (CSV, JSON, Markdown, HTML; read-only SQL) |
+| `hooks list\|test` | External programs run after collect, export, push, report |
 | `oui-update [--from-file DIR]` | Refresh the IEEE vendor database |
 | `cron print [--format crontab\|cron.d\|supercronic]` | Scheduler lines from `schedule:` |
 | `health [--max-age]` | Exit 1 when the last successful collect is too old |
@@ -118,6 +119,10 @@ Read more OIDs without writing code: create a custom collector from the OID test
 Build your own reports: pick a dataset (devices, interfaces, nodes, IP history, VLANs, links,
 neighbours, runs, custom values), columns, filters and sort, or write a read-only SQL query; get
 CSV, JSON, Markdown or a standalone HTML page, on demand, on a schedule, or pushed to a target.
+
+For the rest, Python extensions add collectors, report datasets and exporters through a small
+read-only API (with a test harness), and hooks run your own programs after a collect, an export,
+a push or a report.
 See [docs/extensions.md](docs/extensions.md) and [examples/extensions](examples/extensions/).
 
 ## Documentation
@@ -131,7 +136,9 @@ See [docs/extensions.md](docs/extensions.md) and [examples/extensions](examples/
 
 ## Security
 
-* Read-only by construction: no SNMP SET code path, no shell, no subprocess.
+* Read-only by construction: no SNMP SET code path and no shell. The only process ever started
+  is a hook you configure (argument list, timeout, clean environment); Python extensions run
+  only when listed by name.
 * Secrets only from files or environment variables. The YAML refuses them, logs mask them, and
   the state stores credential names only.
 * SNMPv3 authPriv recommended (`check` warns about v2c); TLS verified by default for pushes, no

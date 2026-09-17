@@ -176,6 +176,18 @@ def sort_rows(rows: list[dict], sort: list[str], dataset: Dataset) -> list[dict]
     return rows
 
 
+def dataset_rows(ctx: ReportContext, dataset: Dataset) -> list[dict]:
+    """Rows of a dataset; an exception in a Python dataset becomes a report error."""
+    if not dataset.name.startswith("py:"):
+        return ctx.rows(dataset)
+    try:
+        return ctx.rows(dataset)
+    except ReportError:
+        raise
+    except Exception as exc:  # extension code
+        raise ReportError(f"dataset {dataset.name} failed: {type(exc).__name__}: {exc}") from exc
+
+
 def resolve_columns(columns: list[ColumnCfg], dataset: Dataset) -> list[tuple[Field, str]]:
     if not columns:
         return [(f, f.name) for f in dataset.fields if f.default]
@@ -192,12 +204,12 @@ def resolve_columns(columns: list[ColumnCfg], dataset: Dataset) -> list[tuple[Fi
 
 def run_dataset_report(cfg: ReportCfg, ctx: ReportContext) -> ReportTable:
     try:
-        dataset = get_dataset(cfg.dataset or "", ctx.collectors)
+        dataset = get_dataset(cfg.dataset or "", ctx.collectors, ctx.extra)
     except DatasetError as exc:
         raise ReportError(str(exc)) from None
     columns = resolve_columns(cfg.column_specs(), dataset)
     predicates = [compile_filter(f, dataset, ctx.now) for f in cfg.filters]
-    rows = [r for r in ctx.rows(dataset) if all(p(r) for p in predicates)]
+    rows = [r for r in dataset_rows(ctx, dataset) if all(p(r) for p in predicates)]
     rows = sort_rows(rows, cfg.sort, dataset)
     table = ReportTable([(label, spec.type) for spec, label in columns], total=len(rows))
     if cfg.limit is not None:
@@ -227,8 +239,8 @@ def _authorizer(action, arg1, arg2, _db, _trigger):
     return sqlite3.SQLITE_OK
 
 
-def sql_tables(collectors: list) -> dict[str, Dataset]:
-    return {sql_table_name(name): ds for name, ds in all_datasets(collectors).items()}
+def sql_tables(collectors: list, extra: list = ()) -> dict[str, Dataset]:
+    return {sql_table_name(name): ds for name, ds in all_datasets(collectors, extra).items()}
 
 
 def run_sql_report(cfg: ReportCfg, ctx: ReportContext, timeout_s: float = SQL_TIMEOUT_S
@@ -242,7 +254,7 @@ def run_sql_report(cfg: ReportCfg, ctx: ReportContext, timeout_s: float = SQL_TI
     query = (cfg.sql or "").strip().rstrip(";")
     if not re.match(r"^(select|with)\b", query, re.IGNORECASE):
         raise ReportError("sql must be a SELECT query")
-    tables = sql_tables(ctx.collectors)
+    tables = sql_tables(ctx.collectors, ctx.extra)
     words = set(re.findall(r"[a-z0-9_]+", query.lower()))
     wanted = {name: ds for name, ds in tables.items() if name in words}
     if not wanted:
@@ -257,7 +269,7 @@ def run_sql_report(cfg: ReportCfg, ctx: ReportContext, timeout_s: float = SQL_TI
             db.executemany(
                 # name comes from sql_table_name(): [a-z0-9_] only
                 f'INSERT INTO "{name}" VALUES ({", ".join("?" * len(names))})',  # noqa: S608
-                ([_sql_value(row.get(n)) for n in names] for row in ctx.rows(ds)))
+                ([_sql_value(row.get(n)) for n in names] for row in dataset_rows(ctx, ds)))
         db.create_function("iso", 1, lambda v: iso_z(int(v)) if v is not None else None,
                            deterministic=True)
         db.create_function("now", 0, lambda: ctx.now)

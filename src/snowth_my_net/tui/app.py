@@ -300,7 +300,16 @@ class CollectorModal(ModalScreen[None]):
 
         import yaml
 
-        definition = _definition(dataclasses.asdict(self.loaded.cfg))
+        cfg = self.loaded.cfg
+        if cfg.kind == "python":
+            definition = _definition({
+                "name": cfg.name, "python_extension": cfg.extension,
+                "function": getattr(cfg.func, "__qualname__", ""), "description": cfg.description,
+                "applies_to": dataclasses.asdict(cfg.applies_to), "columns": cfg.columns,
+                "table": cfg.table or None, "index": cfg.walk.index if cfg.walk else None,
+                "fills": cfg.fills, "every": cfg.every, "mode": cfg.mode})
+        else:
+            definition = _definition(dataclasses.asdict(cfg))
         text = yaml.safe_dump(definition, sort_keys=False, allow_unicode=True)
         with Vertical(classes="dialog wide tall"):
             yield Label(self.loaded.cfg.name, classes="dialog-title")

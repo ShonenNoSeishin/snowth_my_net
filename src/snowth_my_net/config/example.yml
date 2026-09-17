@@ -13,7 +13,8 @@ general:
   # state_dir: /var/lib/snowth_my_net           # $SNOWTH_STATE_DIR   (state.sqlite, lock, OUI)
   # output_dir: /var/lib/snowth_my_net/output   # $SNOWTH_OUTPUT_DIR  (CSV, JSON, maps)
   # secrets_dir: /etc/snowth_my_net/secrets     # $SNOWTH_SECRETS_DIR (base of relative *_file)
-  # extensions_dir: ./extensions                # custom collectors (*.yml), see examples/
+  # extensions_dir: ./extensions                # collectors and reports (*.yml), Python (*.py)
+  # python_extensions: [host_storage]          # Python extensions are loaded by name only
   # log_file: /var/log/snowth_my_net.log        # in addition to stderr; rotated 10 MB x 5
   log_level: info
   language: auto                   # terminal interface: auto (from LANG) | fr | en
@@ -142,3 +143,14 @@ schedule:
   export_push: "0 11,18 * * *"
   # timezone: Europe/Brussels      # only used to interpret this schedule; outputs are UTC
   health_max_age: auto             # auto = twice the longest gap between two collects
+
+# External programs run after a stage: argument list (never a shell), timeout, clean environment.
+# hooks:
+#   after_export:
+#     - name: publish
+#       command: [/usr/local/bin/publish-inventory, "{devices}", "{nodes}"]
+#       timeout: 120
+#   after_collect:
+#     - name: alert
+#       when: failed               # always | ok | failed
+#       command: [/usr/local/bin/notify, "collect {status}", "{summary}"]

@@ -91,9 +91,11 @@ class ReportCfg:
         if bool(self.dataset) == bool(self.sql):
             errs.append(f"report {self.name!r}: set exactly one of dataset or sql")
         if self.dataset and self.dataset not in STATIC_DATASETS and not (
-                self.dataset.startswith("custom:") and len(self.dataset) > 7):
+                self.dataset.startswith(("custom:", "py:"))
+                and len(self.dataset.split(":", 1)[1]) > 0):
             errs.append(f"report {self.name!r}: unknown dataset {self.dataset!r} "
-                        f"({', '.join(STATIC_DATASETS)}, custom:<collector>)")
+                        f"({', '.join(STATIC_DATASETS)}, custom:<collector>, "
+                        "py:<python dataset>)")
         if self.sql:
             if not re.match(r"^\s*(select|with)\b", self.sql, re.IGNORECASE):
                 errs.append(f"report {self.name!r}: sql must be a SELECT query")

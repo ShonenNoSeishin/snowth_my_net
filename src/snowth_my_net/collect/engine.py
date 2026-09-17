@@ -416,7 +416,9 @@ class Collector:
             return
         declared = r.settings.type
         facts = custom.DeviceFacts(r.target.host, r.ident.vendor,
-                                   declared or r.ident.device_type, r.system.object_id)
+                                   declared or r.ident.device_type, r.system.object_id,
+                                   r.system.name, r.ident.model, r.ident.os_name,
+                                   r.ident.os_version)
         previous = (self.repo.custom_current(r.device_id)
                     if self.repo is not None and r.device_id is not None else {})
         now = self.clock.now()
@@ -433,7 +435,7 @@ class Collector:
             async def func(client, r, rows, collector=collector, result=result):
                 rows.key = "entries"
                 try:
-                    await custom.run_collector(client, collector, result)
+                    await custom.run_collector(client, collector, result, facts)
                 finally:
                     rows.columns["entries"] = {(i,): row for i, row in enumerate(result.rows)}
 

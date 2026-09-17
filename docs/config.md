@@ -35,7 +35,8 @@ precedence over `devices:` entries, key by key (see `devices`).
 | `general.state_dir` | `/var/lib/snowth_my_net` | State: `state.sqlite`, `state.lock`, updated vendor database. Must be on a local disk (the lock uses `flock`). |
 | `general.output_dir` | `<state_dir>/output` | CSV, JSON and map outputs. |
 | `general.secrets_dir` | `/etc/snowth_my_net/secrets` | Base of relative `*_file` secret paths. |
-| `general.extensions_dir` | `<config dir>/extensions` | Custom collectors (`*.yml`), see [extensions](extensions.md). |
+| `general.extensions_dir` | `<config dir>/extensions` | Custom collectors and reports (`*.yml`), Python extensions (`*.py`), see [extensions](extensions.md). |
+| `general.python_extensions` | `[]` | Python extensions to load, by name: `<extensions_dir>/<name>.py` or an installed entry point. Nothing is imported unless listed. |
 | `general.log_file` | none | Also log to this file (rotated 10 MB × 5). Logs always go to stderr. |
 | `general.log_level` | `info` | `debug`, `info`, `warning`, `error`. |
 | `general.language` | `auto` | Terminal interface language: `auto` (from `LANG`), `fr`, `en`. |
@@ -228,3 +229,31 @@ container's scheduler at start-up.
 | `schedule.export_push` | `0 11,18 * * *` | `run --no-collect` (export, then push when targets exist). |
 | `schedule.timezone` | process time zone | Only used to interpret the schedule (`CRON_TZ`); every output is UTC. |
 | `schedule.health_max_age` | `auto` | Allowed age of the last successful collect for `health`; `auto` = twice the longest gap of `schedule.collect`. |
+
+## `hooks`
+
+External programs run after a command, for anything snowth_my_net does not do itself (notify, copy
+files, feed another tool). See [extensions](extensions.md#hooks).
+
+```yaml
+hooks:
+  after_export:
+    - name: copy-to-share
+      command: [/usr/local/bin/publish-inventory, "{devices}", "{nodes}"]
+      timeout: 120
+```
+
+| Key | Default | Description |
+|---|---|---|
+| `hooks.after_collect` | `[]` | After `collect` and the collect stage of `run`. |
+| `hooks.after_export` | `[]` | After `export` and the export stage of `run`. |
+| `hooks.after_push` | `[]` | After `push` and the push stage of `run` (not after `--dry-run`). |
+| `hooks.after_report` | `[]` | After each report written by `report run` (and after each failed one). |
+| `hooks.after_collect[].name` | required | Unique within the event; shown in logs and `--json`. |
+| `hooks.after_collect[].command` | required | Program and arguments as a **list**; never run through a shell. Placeholders `{event}`, `{status}`, `{run_id}`, `{output_dir}`, `{state_dir}`, `{summary}`; `{devices}`, `{nodes}`, `{links}`, `{snapshot}` after export and push; `{report}`, `{report_file}` after a report. `{{` and `}}` are literal braces. |
+| `hooks.after_collect[].timeout` | `60` | Then the process group is terminated, and killed 5 s later. |
+| `hooks.after_collect[].when` | `always` | `ok`: only when the stage succeeded; `failed`: only when it did not (`partial` or `failed`). |
+| `hooks.after_collect[].env` | `{}` | Literal variables for the program (never secrets). |
+| `hooks.after_collect[].pass_env` | `[]` | Variables copied from snowth_my_net's environment (e.g. `HTTPS_PROXY`). `check` warns when one is a secret used by the configuration. |
+
+The other events take the same keys: `hooks.after_export[].name`, `hooks.after_export[].command`, `hooks.after_export[].timeout`, `hooks.after_export[].when`, `hooks.after_export[].env`, `hooks.after_export[].pass_env`, `hooks.after_push[].name`, `hooks.after_push[].command`, `hooks.after_push[].timeout`, `hooks.after_push[].when`, `hooks.after_push[].env`, `hooks.after_push[].pass_env`, `hooks.after_report[].name`, `hooks.after_report[].command`, `hooks.after_report[].timeout`, `hooks.after_report[].when`, `hooks.after_report[].env`, `hooks.after_report[].pass_env`.

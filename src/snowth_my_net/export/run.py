@@ -172,6 +172,32 @@ def export(loaded: LoadedConfig, repo: Repo, clock: Clock,
             atomic_write(path, data)
             log.info("wrote %s (%d bytes)", path, len(data))
             result.written.append(path)
+    if only is None and loaded.exporters:
+        _python_exporters(loaded, repo, views, devices, now, result)
     if result.pending:
         log.info("not produced yet (later phases): %s", ", ".join(result.pending))
     return result
+
+
+def _python_exporters(loaded: LoadedConfig, repo: Repo, views: ViewCache, devices: list,
+                      now: int, result: ExportResult) -> None:
+    """Files of Python extensions, built from the snapshot. One failure never stops the rest."""
+    from snowth_my_net.export.snapshot import build_snapshot
+
+    snapshot = build_snapshot(loaded, repo, views.get(), devices, now)
+    for extension, exporter in loaded.exporters:
+        label = f"py:{extension}:{exporter.filename}"
+        try:
+            data = exporter.func(snapshot)
+            if isinstance(data, str):
+                data = data.encode("utf-8")
+            if not isinstance(data, bytes | bytearray):
+                raise TypeError(f"an exporter returns bytes, not {type(data).__name__}")
+            path = loaded.paths.output_dir / exporter.filename
+            atomic_write(path, bytes(data))
+        except Exception as exc:  # extension code: report and continue
+            log.error("exporter %s failed: %s: %s", label, type(exc).__name__, exc)
+            result.failed.append((label, f"{type(exc).__name__}: {exc}"))
+            continue
+        log.info("wrote %s (%d bytes, %s)", path, len(data), label)
+        result.written.append(path)

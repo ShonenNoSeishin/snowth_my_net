@@ -57,9 +57,21 @@ class ReportContext:
     repo: Repo
     now: int
     collectors: list = field(default_factory=list)          # LoadedCollector, files + TUI
+    extra: list = field(default_factory=list)               # Datasets from Python extensions
     _devices: tuple | None = None
     _view: Any = None
     _rows: dict = field(default_factory=dict)
+
+    def datasets(self) -> dict[str, Dataset]:
+        return all_datasets(self.collectors, self.extra)
+
+    def dataset_rows(self, name: str) -> list[dict]:
+        """Rows of any dataset by name (for Python datasets that join other data)."""
+        return self.rows(get_dataset(name, self.collectors, self.extra))
+
+    @property
+    def config_dir(self):
+        return self.loaded.paths.config_file.resolve().parent
 
     def rows(self, dataset: Dataset) -> list[dict]:
         """Rows of a dataset, built once per context (filters never modify them)."""
@@ -413,23 +425,26 @@ def custom_dataset(collector) -> Dataset:
             fields.append(_f("port", description="interface of the ifIndex"))
     for name in columns:
         spec = cfg.value_specs()[name]
-        fields.append(_f(name, description=f"{spec.oid} ({spec.type})"))
+        fields.append(_f(name, description=f"from Python ({getattr(cfg, 'extension', '')})"
+                         if cfg.kind == "python" else f"{spec.oid} ({spec.type})"))
     fields += [_f("status", description="status of the last pass", default=False),
                _f("collected", "time", default=False)]
     return Dataset(f"custom:{cfg.name}", cfg.description or f"values of collector {cfg.name}",
                    fields, _custom_named(cfg.name, columns, port_index))
 
 
-def all_datasets(collectors: list) -> dict[str, Dataset]:
+def all_datasets(collectors: list, extra: list = ()) -> dict[str, Dataset]:
     result = dict(STATIC)
     for collector in collectors:
         dataset = custom_dataset(collector)
         result[dataset.name] = dataset
+    for dataset in extra:
+        result[dataset.name] = dataset
     return result
 
 
-def get_dataset(name: str, collectors: list) -> Dataset:
-    datasets = all_datasets(collectors)
+def get_dataset(name: str, collectors: list, extra: list = ()) -> Dataset:
+    datasets = all_datasets(collectors, extra)
     if name not in datasets:
         known = ", ".join(datasets)
         raise DatasetError(f"unknown dataset {name!r} (known: {known})")

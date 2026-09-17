@@ -100,6 +100,7 @@ anglais).
 | `device show\|set\|unset\|add\|remove\|export-settings\|import-settings` | Réglages manuels |
 | `custom list\|show\|test\|export\|import\|delete` | Collecteurs personnalisés (OID en plus) |
 | `report list\|fields\|show\|preview\|run\|export\|import\|delete` | Rapports personnalisés (CSV, JSON, Markdown, HTML ; SQL en lecture seule) |
+| `hooks list\|test` | Programmes externes lancés après collecte, export, push, rapport |
 | `oui-update [--from-file DIR]` | Mettre à jour la base des constructeurs IEEE |
 | `cron print [--format crontab\|cron.d\|supercronic]` | Lignes de planification issues de `schedule:` |
 | `health [--max-age]` | Code 1 si la dernière collecte réussie est trop ancienne |
@@ -131,7 +132,12 @@ du système.
 Construire ses propres rapports : un jeu de données (équipements, interfaces, nœuds, historique
 IP, VLAN, liens, voisins, collectes, valeurs personnalisées), des colonnes, des filtres et un tri,
 ou une requête SQL en lecture seule ; en CSV, JSON, Markdown ou page HTML autonome, à la demande,
-planifié ou envoyé vers une cible. Voir [docs/extensions.md](docs/extensions.md) et
+planifié ou envoyé vers une cible.
+
+Pour le reste, les extensions Python ajoutent des collecteurs, des jeux de données et des
+exports via une petite API en lecture seule (avec un harnais de test), et les hooks lancent vos
+propres programmes après une collecte, un export, un push ou un rapport. Voir
+[docs/extensions.md](docs/extensions.md) et
 [examples/extensions](examples/extensions/).
 
 ## Documentation
@@ -147,8 +153,9 @@ La documentation détaillée est en anglais :
 
 ## Sécurité
 
-* Lecture seule par construction : aucun chemin de code SNMP SET, aucun shell, aucun
-  sous-processus.
+* Lecture seule par construction : aucun chemin de code SNMP SET, aucun shell. Le seul
+  processus jamais lancé est un hook que vous configurez (liste d'arguments, délai,
+  environnement nettoyé) ; les extensions Python ne sont chargées que si elles sont nommées.
 * Secrets uniquement dans des fichiers ou des variables d'environnement. Le YAML les refuse, les
   journaux les masquent, et l'état ne garde que le nom des identifiants.
 * SNMPv3 authPriv recommandé (`check` signale le v2c) ; TLS vérifié par défaut pour le push,

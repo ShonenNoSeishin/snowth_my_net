@@ -1520,8 +1520,8 @@ permet de transformer tes captures réelles en tests de régression.
 ## 18. Phases d'implémentation
 
 > **Avancement (2026-09-17)** : phases 1, 1b, 2, 3 et 4 livrées ainsi que les étapes E1
-> (collecteurs personnalisés) et E2 (rapports personnalisés). Restent la phase 5 (drivers) et
-> E3 (extensions Python, hooks).
+> (collecteurs personnalisés), E2 (rapports personnalisés) et E3 (extensions Python, hooks).
+> Reste la phase 5 (drivers).
 >
 > Écarts de la phase 4 par rapport au texte :
 > - L'image fait environ 200 Mo décompressée : la base Python pèse 126 Mo, Textual et
@@ -1823,6 +1823,34 @@ Pour ce qui ne tient pas dans une déclaration :
 - **Contrat de données pour les scripts** : `snapshot.json` a un schéma versionné
   (`schema: snowth_my_net/snapshot/1`) et `--json` sur toutes les commandes `show`/`explain`/
   `report run`. Un script externe peut donc lire sans jamais toucher à la base.
+
+> **Implémenté (E3)**, avec ces écarts par rapport au texte ci-dessus :
+> - Extensions Python : `general.python_extensions: [nom]`, chargées depuis
+>   `<extensions_dir>/<nom>.py` puis le point d'entrée `snowth_my_net.extensions`. Module
+>   public `snowth_my_net.api` (`API_VERSION = 1`) : `Extension` avec trois points
+>   d'extension, `collector` (scalaire ou table, mêmes `applies_to`, `every`, `mode`, `fills`
+>   que les collecteurs YAML et même stockage), `report_dataset` (jeu `py:<nom>`) et
+>   `exporter` (fichier écrit par `export` à partir du snapshot). `enricher` n'est pas livré :
+>   un jeu de données Python qui lit `ctx.dataset_rows(...)` et une source externe couvre le
+>   besoin dans les rapports. `driver` viendra avec la phase 5.
+> - `ReadOnlySnmp` n'offre que `get` et `walk` ; une exception du code d'une extension devient
+>   une erreur du collecteur pour cet équipement (jamais un arrêt de la collecte), d'un
+>   rapport ou d'un fichier exporté. Le code Python tourne avec les droits de l'outil : la
+>   documentation le dit clairement, le test AST ne couvre que le code de snowth_my_net.
+> - Harnais `snowth_my_net.testing` : `FakeSnmp`, `load`, `run_collector`, `run_dataset`,
+>   `export`. Exemple testé : `examples/extensions/host_storage.py` (HOST-RESOURCES-MIB,
+>   jeu typé, fichier Prometheus), ajouté à la fixture Linux.
+> - Hooks : `after_collect`, `after_export`, `after_push` et en plus `after_report`. `command`
+>   en liste avec des champs substitués dans chaque argument, `timeout` (groupe de processus
+>   terminé puis tué), `when: always|ok|failed`, `env` littéral et `pass_env` explicite ;
+>   environnement nettoyé avec des variables `SNOWTH_*` et un résumé JSON du stage
+>   (`SNOWTH_SUMMARY`). Exécutés après libération du verrou (dans `run`, à la fin, dans
+>   l'ordre des stages) ; échec = code 1 sans arrêter la suite. Pas de hooks pour les
+>   collectes lancées depuis le TUI, les `--dry-run`, les rapports vers stdout, ni avec
+>   `--no-hooks`. Commandes `hooks list` et `hooks test EVENT [NOM] [--dry-run]` ; `check`
+>   signale les programmes introuvables et les `pass_env` qui contiennent un secret.
+> - Le test de sécurité n'autorise `subprocess` que dans `hooks.py` et vérifie que l'appel est
+>   un `Popen` avec une liste d'arguments, un environnement explicite et sans `shell`.
 
 ### 21.4 TUI
 

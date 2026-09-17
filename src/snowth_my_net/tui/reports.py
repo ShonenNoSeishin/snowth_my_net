@@ -26,7 +26,7 @@ from textual.widgets import (
 
 from snowth_my_net.config.reports import NO_VALUE_OPS, LoadedReport, ReportCfg
 from snowth_my_net.config.validate import ConfigError
-from snowth_my_net.reports.datasets import Dataset, all_datasets
+from snowth_my_net.reports.datasets import Dataset
 from snowth_my_net.reports.engine import ReportError, display, run_report, sql_tables
 from snowth_my_net.reports.service import (
     EmptyReport,
@@ -112,7 +112,7 @@ class ReportScreen(Screen):
         self.ctx = ctx
         self.report = report
         self.report_ctx = context(ctx.loaded, ctx.repo, ctx.clock.now())
-        self.datasets: dict[str, Dataset] = all_datasets(self.report_ctx.collectors)
+        self.datasets: dict[str, Dataset] = self.report_ctx.datasets()
         cfg = report.cfg if report else None
         self.labels = {c.field: c.label for c in (cfg.column_specs() if cfg else []) if c.label}
         self._timer = None
@@ -169,7 +169,8 @@ class ReportScreen(Screen):
                     yield TextArea(cfg.sql or "" if cfg else "", id="b-sql",
                                    language=None, soft_wrap=True, compact=True)
                     yield Static(t("rep.sql_tables", tables=", ".join(
-                        sql_tables(self.report_ctx.collectors))), classes="hint")
+                        sql_tables(self.report_ctx.collectors, self.report_ctx.extra))),
+                        classes="hint")
                 if self.ctx.cfg.push.targets:
                     yield Label(t("rep.push"), classes="section")
                     yield SelectionList(*[(target.name, target.name, target.name in

@@ -130,7 +130,8 @@ async def check_devices(loaded: LoadedConfig, credentials: list[ResolvedCredenti
                 if not answered:
                     dc.warnings.append(f"forced function '{feature}' has no data")
             facts = custom.DeviceFacts(p.target.host, dc.ident.vendor, dc.ident.device_type,
-                                       system.object_id)
+                                       system.object_id, system.name, dc.ident.model,
+                                       dc.ident.os_name, dc.ident.os_version)
             for loaded_collector in collectors:
                 collector = loaded_collector.cfg
                 if not custom.applies(collector, facts):
@@ -139,7 +140,7 @@ async def check_devices(loaded: LoadedConfig, credentials: list[ResolvedCredenti
                 label = f"custom:{collector.name}"
                 try:
                     async with asyncio.timeout(settings.snmp.table_timeout):
-                        await custom.run_collector(client, collector, result)
+                        await custom.run_collector(client, collector, result, facts)
                     dc.mibs[label] = f"ok({len(result.rows)})" if result.rows else "absent"
                     if not result.rows and collector.mode == "force":
                         dc.warnings.append(f"forced collector '{collector.name}' has no data")
@@ -206,6 +207,7 @@ def config_warnings(loaded: LoadedConfig) -> list[str]:
                             "in clear text")
     if cfg.discovery.follow_neighbors and not cfg.discovery.allowed:
         warnings.append("discovery.allowed is empty: only the seeds will ever be polled")
+    warnings += hook_warnings(loaded)
     targets = {t.name for t in cfg.push.targets}
     collectors = {c.cfg.name for c in loaded.collectors}
     for report in loaded.reports:
@@ -217,4 +219,43 @@ def config_warnings(loaded: LoadedConfig) -> list[str]:
             warnings.append(f"report '{r.name}': dataset {r.dataset} needs the collector "
                             f"'{r.dataset[7:]}' (not in extension files; fine if it was "
                             "created in the TUI)")
+    return warnings
+
+
+def secret_env_names(loaded: LoadedConfig) -> set[str]:
+    cfg = loaded.cfg
+    names = {c.community_env for c in cfg.credentials} | {c.auth_key_env for c in cfg.credentials}
+    names |= {c.priv_key_env for c in cfg.credentials}
+    for target in cfg.push.targets:
+        names.add(target.auth.bearer_token_env)
+        if target.auth.basic is not None:
+            names.add(target.auth.basic.password_env)
+        names |= {ref.env for ref in target.headers.values()}
+    return {n for n in names if n}
+
+
+def hook_warnings(loaded: LoadedConfig) -> list[str]:
+    import os
+    import shutil
+
+    from snowth_my_net.hooks import SAFE_PATH
+
+    warnings = []
+    secrets = secret_env_names(loaded)
+    for event, hooks in loaded.cfg.hooks.events().items():
+        for hook in hooks:
+            who = f"hook {event}/{hook.name}"
+            program = hook.command[0]
+            if "{" in program:
+                warnings.append(f"{who}: the program itself should not be a placeholder")
+            elif os.path.isabs(program):
+                if not os.access(program, os.X_OK):
+                    warnings.append(f"{who}: {program} is not an executable file")
+            elif shutil.which(program, path=SAFE_PATH) is None:
+                warnings.append(f"{who}: {program} is not found in {SAFE_PATH} "
+                                "(use an absolute path)")
+            leaked = sorted(secrets & set(hook.pass_env))
+            if leaked:
+                warnings.append(f"{who}: pass_env hands a secret to the hook "
+                                f"({', '.join(leaked)})")
     return warnings

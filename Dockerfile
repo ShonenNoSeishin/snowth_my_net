@@ -68,6 +68,7 @@ RUN /opt/venv/bin/pip install ".[test]" \
  && useradd --system --uid 10001 --gid snowth --home-dir /tmp --shell /usr/sbin/nologin snowth
 COPY tests ./tests
 COPY examples ./examples
+COPY docs ./docs
 COPY tools ./tools
 ENV PATH=/opt/venv/bin:$PATH HOME=/tmp PYTHONDONTWRITEBYTECODE=1
 # /certs: shared with the fake push server; a named volume inherits this ownership.

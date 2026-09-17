@@ -6,6 +6,7 @@ documented in ``docs/config.md``.
 
 from __future__ import annotations
 
+import re
 import zoneinfo
 from dataclasses import dataclass, field
 from typing import Literal
@@ -110,6 +111,7 @@ class GeneralCfg:
     output_dir: str | None = None
     secrets_dir: str | None = None
     extensions_dir: str | None = None       # default: <config directory>/extensions
+    python_extensions: list[str] = field(default_factory=list)   # loaded by name only
     log_file: str | None = None
     log_level: Literal["debug", "info", "warning", "error"] = "info"
     language: Literal["auto", "en", "fr"] = "auto"     # terminal interface only
@@ -505,6 +507,79 @@ class ScheduleCfg:
         return errs
 
 
+# --------------------------------------------------------------------------- hooks
+
+HOOK_COMMON_FIELDS = ("event", "status", "run_id", "output_dir", "state_dir", "summary")
+HOOK_EVENT_FIELDS = {
+    "after_collect": (),
+    "after_export": ("devices", "nodes", "links", "snapshot"),
+    "after_push": ("devices", "nodes", "links", "snapshot"),
+    "after_report": ("report", "report_file"),
+}
+_ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_PLACEHOLDER = re.compile(r"\{([^{}]*)\}")
+
+
+def hook_placeholders(argument: str) -> list[str]:
+    """Names between single braces; ``{{`` and ``}}`` are literal braces."""
+    return _PLACEHOLDER.findall(argument.replace("{{", "").replace("}}", ""))
+
+
+@dataclass
+class HookCfg:
+    name: str
+    command: list[str]                       # argv, never a shell line
+    timeout: Duration = 60
+    when: Literal["always", "ok", "failed"] = "always"
+    env: dict[str, str] = field(default_factory=dict)     # literal, non-secret values
+    pass_env: list[str] = field(default_factory=list)     # variables copied from the caller
+
+    def check(self) -> list[str]:
+        errs = []
+        if not self.command or not self.command[0].strip():
+            errs.append(f"hook '{self.name}': command must be a non-empty list (program first)")
+        if len(self.command) == 1 and " " in self.command[0].strip():
+            errs.append(f"hook '{self.name}': command is a list of arguments, not a shell line "
+                        f"(write [{', '.join(repr(a) for a in self.command[0].split())}])")
+        errs += _positive(f"hook '{self.name}' timeout", self.timeout)
+        for key in [*self.env, *self.pass_env]:
+            if not _ENV_NAME.match(key):
+                errs.append(f"hook '{self.name}': {key!r} is not a variable name")
+            elif key.upper().startswith("SNOWTH_"):
+                errs.append(f"hook '{self.name}': {key} is reserved (SNOWTH_* are set by the "
+                            "tool)")
+        return errs
+
+
+@dataclass
+class HooksCfg:
+    after_collect: list[HookCfg] = field(default_factory=list)
+    after_export: list[HookCfg] = field(default_factory=list)
+    after_push: list[HookCfg] = field(default_factory=list)
+    after_report: list[HookCfg] = field(default_factory=list)
+
+    def events(self) -> dict[str, list[HookCfg]]:
+        return {event: getattr(self, event) for event in HOOK_EVENT_FIELDS}
+
+    def check(self) -> list[str]:
+        errs = []
+        for event, hooks in self.events().items():
+            names = [h.name for h in hooks if h]
+            for name in sorted({n for n in names if names.count(n) > 1}):
+                errs.append(f"hooks.{event}: duplicate hook name '{name}'")
+            allowed = set(HOOK_COMMON_FIELDS) | set(HOOK_EVENT_FIELDS[event])
+            for hook in hooks:
+                if not hook:
+                    continue
+                for argument in hook.command:
+                    for name in hook_placeholders(argument):
+                        if name not in allowed:
+                            errs.append(f"hooks.{event}.{hook.name}: unknown placeholder "
+                                        f"{{{name}}} (available: "
+                                        f"{', '.join('{' + a + '}' for a in sorted(allowed))})")
+        return errs
+
+
 # --------------------------------------------------------------------------- root
 
 
@@ -521,6 +596,7 @@ class Config:
     export: ExportCfg = field(default_factory=ExportCfg)
     push: PushCfg = field(default_factory=PushCfg)
     schedule: ScheduleCfg = field(default_factory=ScheduleCfg)
+    hooks: HooksCfg = field(default_factory=HooksCfg)
 
     def check(self) -> list[str]:
         errs = []

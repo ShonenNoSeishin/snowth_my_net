@@ -89,7 +89,7 @@ def context(loaded: LoadedConfig, repo: Repo, now: int) -> ReportContext:
     from snowth_my_net.collect.custom import all_collectors
 
     collectors, _warnings = all_collectors(loaded.collectors, repo.custom_stored())
-    return ReportContext(loaded, repo, now, collectors)
+    return ReportContext(loaded, repo, now, collectors, list(loaded.datasets))
 
 
 @dataclass

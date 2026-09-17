@@ -136,7 +136,7 @@ def cmd_fields(args) -> int:
     collectors, _w = all_collectors(loaded.collectors, repo.custom_stored() if repo else {})
     if repo:
         repo.conn.close()
-    datasets = all_datasets(collectors)
+    datasets = all_datasets(collectors, loaded.datasets)
     if args.dataset:
         if args.dataset not in datasets:
             raise ManualError(f"unknown dataset {args.dataset!r} ({', '.join(datasets)})")
@@ -261,6 +261,10 @@ def cmd_run(args) -> int:
                 log.error("report %s: %s", cfg.name, exc)
                 failed.append((cfg.name, str(exc)))
                 continue
+            except OSError as exc:
+                log.error("report %s: cannot write: %s", cfg.name, exc)
+                failed.append((cfg.name, f"cannot write: {exc}"))
+                continue
             if to_stdout:
                 sys.stdout.flush()
                 sys.stdout.buffer.write(generated.data)
@@ -282,12 +286,25 @@ def cmd_run(args) -> int:
         return cli.EXIT_PARTIAL if failed else cli.EXIT_OK
     for warning in warnings:
         log.warning("%s", warning)
+    hooks = []
+    for g in results:
+        pushed = [o for o in outcomes if o.file == f"report:{g.cfg.name}"]
+        status = "ok" if all(o.ok for o in pushed) else "partial"
+        hooks += cli.run_event_hooks(args, loaded, "after_report", status, {"report": {
+            "name": g.cfg.name, "path": str(g.path), "rows": len(g.table.rows),
+            "push": [o.as_dict() for o in pushed]}},
+            extra={"report": g.cfg.name, "report_file": str(g.path)})
+    for name, reason in failed:
+        hooks += cli.run_event_hooks(args, loaded, "after_report", "failed", {"report": {
+            "name": name, "error": reason}}, extra={"report": name, "report_file": ""})
     code = cli.EXIT_PARTIAL if failed or any(not o.ok for o in outcomes) else cli.EXIT_OK
+    code = cli.hooks_exit(code, hooks)
     if args.json:
         cli.out_json({"written": [{"report": g.cfg.name, "path": str(g.path),
                                    "rows": len(g.table.rows)} for g in results],
                       "failed": [{"report": n, "reason": r} for n, r in failed],
-                      "push": [o.as_dict() for o in outcomes], "exit_code": code})
+                      "push": [o.as_dict() for o in outcomes], "exit_code": code}
+                     | ({"hooks": [h.as_dict() for h in hooks]} if hooks else {}))
         return code
     for g in results:
         cli.out(f"wrote {g.path} ({len(g.table.rows)} row(s))")
@@ -295,6 +312,7 @@ def cmd_run(args) -> int:
         cli.out(f"FAILED {name}: {reason}")
     if outcomes:
         cli._push_summary(outcomes, [], False)
+    cli.print_hooks(hooks)
     return code
 
 
@@ -406,6 +424,7 @@ def add_parser(sub, common: argparse.ArgumentParser) -> None:
     r.add_argument("--wait", action="store_true", default=None,
                    help="wait for 202 jobs to finish (poll:)")
     r.add_argument("--dry-run", action="store_true", help="show what would be pushed")
+    r.add_argument("--no-hooks", action="store_true", help="do not run hooks.after_report")
     _adhoc_arguments(r)
     r.set_defaults(func=cmd_run)
     r = rsub.add_parser("export", parents=[common],

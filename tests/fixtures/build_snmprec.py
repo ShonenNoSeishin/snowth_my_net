@@ -144,6 +144,18 @@ def ups_mib(manufacturer: str, model: str) -> list[Record]:
     return [text("1.3.6.1.2.1.33.1.1.1.0", manufacturer), text("1.3.6.1.2.1.33.1.1.2.0", model)]
 
 
+def host_storage(rows: list[tuple[int, str, str, int, int, int]]) -> list[Record]:
+    """hrStorageTable rows: (index, hrStorageTypes arc, descr, unit, size, used)."""
+    base = "1.3.6.1.2.1.25.2.3.1"
+    records: list[Record] = []
+    for index, kind, descr, unit, size, used in rows:
+        records += [integer(f"{base}.1.{index}", index),
+                    objid(f"{base}.2.{index}", f"1.3.6.1.2.1.25.2.1.{kind}"),
+                    text(f"{base}.3.{index}", descr), integer(f"{base}.4.{index}", unit),
+                    integer(f"{base}.5.{index}", size), integer(f"{base}.6.{index}", used)]
+    return records
+
+
 def ip_net_to_media(rows: list[tuple[int, str, str]]) -> list[Record]:
     recs = []
     for ifindex, address, hw in rows:
@@ -371,6 +383,11 @@ def agents() -> dict[str, list[Record]]:
         *ip_addresses([("192.0.2.16", 2, 24)]),
         *ip_net_to_physical([(2, "2001:db8::50", A0, 1), (2, "fe80::50", A0, 2),
                              (2, "192.0.2.99", "00:00:5e:00:53:e0", 7)]),   # incomplete
+        # HOST-RESOURCES-MIB hrStorageTable (read by the example Python extension only)
+        *host_storage([(1, "2", "Physical memory", 1024, 8_000_000, 3_000_000),
+                       (31, "4", "/", 4096, 5_000_000, 4_500_000),
+                       (36, "4", "/srv/backup", 4096, 250_000_000, 100_000_000),
+                       (51, "3", "Virtual memory", 1024, 9_000_000, 3_100_000)]),
     ]
 
     # One switch answering on two addresses (two endpoints of the same agent).

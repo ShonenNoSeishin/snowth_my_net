@@ -183,6 +183,32 @@ def _render_report(report: RunReport, loaded: LoadedConfig) -> str:
     return "\n".join(lines)
 
 
+def run_event_hooks(args: argparse.Namespace, loaded: LoadedConfig, event: str, status: str,
+                    payload: dict, run_id: int | None = None,
+                    extra: dict[str, str] | None = None) -> list:
+    """Hooks of an event, unless --no-hooks; always called without the state lock."""
+    if getattr(args, "no_hooks", False) or not loaded.cfg.hooks.events()[event]:
+        return []
+    from snowth_my_net.hooks import run_hooks
+
+    return run_hooks(loaded, event, status, payload, run_id, extra)
+
+
+def hooks_exit(code: int, results: list) -> int:
+    return max(code, EXIT_PARTIAL) if any(not r.ok for r in results) else code
+
+
+def print_hooks(results: list) -> None:
+    for r in results:
+        state = "skipped" if r.skipped else ("ok" if r.ok else "FAILED")
+        out(f"hook {r.event}/{r.name}: {state}" + (f" — {r.detail}" if r.detail and not r.ok
+                                                     else ""))
+
+
+def status_of(code: int, something_done: bool) -> str:
+    return "ok" if code == EXIT_OK else ("partial" if something_done else "failed")
+
+
 def cmd_collect(args: argparse.Namespace, mode: str = "collect") -> int:
     loaded = load(args)
     cfg = loaded.cfg
@@ -198,11 +224,20 @@ def cmd_collect(args: argparse.Namespace, mode: str = "collect") -> int:
                 report = asyncio.run(Collector(loaded, Repo(conn), creds, Clock(), mode).run(only))
             finally:
                 conn.close()
+    hooks = []
+    if mode == "collect" and not getattr(args, "dry_run", False):
+        hooks = run_event_hooks(args, loaded, "after_collect", report.status,
+                                {"collect": _report_dict(report)}, report.run_id)
+    code = hooks_exit(report.exit_code, hooks)
     if args.json:
-        out_json(_report_dict(report))
+        payload = _report_dict(report)
+        if hooks:
+            payload |= {"hooks": [h.as_dict() for h in hooks], "exit_code": code}
+        out_json(payload)
     else:
         out(_render_report(report, loaded))
-    return report.exit_code
+        print_hooks(hooks)
+    return code
 
 
 def cmd_discover(args: argparse.Namespace) -> int:
@@ -218,15 +253,22 @@ def cmd_export(args: argparse.Namespace) -> int:
             result = export(loaded, Repo(conn), Clock(), only)
         finally:
             conn.close()
+    payload = {"written": [str(p) for p in result.written], "failed": result.failed,
+               "pending": result.pending}
+    hooks = run_event_hooks(args, loaded, "after_export",
+                            status_of(result.exit_code, bool(result.written)),
+                            {"export": payload})
+    code = hooks_exit(result.exit_code, hooks)
     if args.json:
-        out_json({"written": [str(p) for p in result.written], "failed": result.failed,
-                  "pending": result.pending, "exit_code": result.exit_code})
+        out_json({**payload, "exit_code": code}
+                 | ({"hooks": [h.as_dict() for h in hooks]} if hooks else {}))
     else:
         for path in result.written:
             out(f"wrote {path}")
         for name, reason in result.failed:
             out(f"FAILED {name}: {reason}")
-    return result.exit_code
+        print_hooks(hooks)
+    return code
 
 
 def _push_summary(outcomes, warnings, as_json: bool) -> int:
@@ -257,9 +299,15 @@ def cmd_push(args: argparse.Namespace) -> int:
     for warning in warnings:
         log.warning("%s", warning)
     code = _push_summary(outcomes, warnings, args.json)
+    hooks = [] if args.dry_run or not outcomes else run_event_hooks(
+        args, loaded, "after_push", status_of(code, any(o.ok for o in outcomes)),
+        {"push": [o.as_dict() for o in outcomes]})
+    code = hooks_exit(code, hooks)
     if args.json:
         out_json({"results": [o.as_dict() for o in outcomes], "warnings": warnings,
-                  "exit_code": code})
+                  "exit_code": code} | ({"hooks": [h.as_dict() for h in hooks]} if hooks else {}))
+    else:
+        print_hooks(hooks)
     return code
 
 
@@ -270,6 +318,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     cfg = loaded.cfg
     codes = []
     payload: dict = {}
+    collected = None
+    outcomes: list = []
     with Locked(loaded, "run", cfg.general.lock_wait.default):
         conn = open_db(loaded.paths.state_file)
         try:
@@ -277,6 +327,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             if not args.no_collect:
                 creds = resolved_credentials(loaded)
                 report = asyncio.run(Collector(loaded, repo, creds, Clock()).run())
+                collected = report
                 codes.append(report.exit_code)
                 payload["collect"] = _report_dict(report)
                 if not args.json:
@@ -300,9 +351,25 @@ def cmd_run(args: argparse.Namespace) -> int:
                 log.warning("%s", warning)
             codes.append(_push_summary(outcomes, warnings, args.json))
             payload["push"] = [o.as_dict() for o in outcomes]
-    code = max(codes) if codes else EXIT_OK
+    # Hooks run once the lock is released, in the order of the stages.
+    hooks = []
+    if collected is not None:
+        hooks += run_event_hooks(args, loaded, "after_collect", collected.status,
+                                 {"collect": payload["collect"]}, collected.run_id)
+    hooks += run_event_hooks(args, loaded, "after_export",
+                             status_of(result.exit_code, bool(result.written)),
+                             {"export": payload["export"]})
+    if outcomes:
+        push_ok = all(o.ok for o in outcomes)
+        hooks += run_event_hooks(args, loaded, "after_push",
+                                 "ok" if push_ok else status_of(1, any(o.ok for o in outcomes)),
+                                 {"push": payload["push"]})
+    code = hooks_exit(max(codes) if codes else EXIT_OK, hooks)
     if args.json:
-        out_json({**payload, "exit_code": code})
+        out_json({**payload, "exit_code": code}
+                 | ({"hooks": [h.as_dict() for h in hooks]} if hooks else {}))
+    else:
+        print_hooks(hooks)
     return code
 
 
@@ -922,7 +989,7 @@ def cmd_custom_show(args: argparse.Namespace) -> int:
 
 
 def cmd_custom_test(args: argparse.Namespace) -> int:
-    from snowth_my_net.collect.custom import CustomResult, run_collector
+    from snowth_my_net.collect.custom import CustomResult, DeviceFacts, run_collector
     from snowth_my_net.collect.probe import connect
     from snowth_my_net.snmp.client import EnginePool, SnmpError
 
@@ -931,7 +998,7 @@ def cmd_custom_test(args: argparse.Namespace) -> int:
     repo = _state_readonly(loaded)
     collectors = {c.cfg.name: c.cfg for c in _collectors(loaded, repo)}
     target = parse_target(args.address)
-    manual, remembered, _stored = _state_facts(repo, target)
+    manual, remembered, stored = _state_facts(repo, target)
     if repo:
         repo.conn.close()
     if args.name not in collectors:
@@ -946,7 +1013,14 @@ def cmd_custom_test(args: argparse.Namespace) -> int:
                 return conn, None, None
             result = CustomResult()
             try:
-                await run_collector(conn.client, collector, result)
+                system = conn.system
+                device = stored or {}
+                facts = DeviceFacts(target.host, device.get("vendor") or "",
+                                    device.get("device_type") or "",
+                                    system.object_id if system else "",
+                                    system.name if system else "", device.get("model") or "",
+                                    device.get("os_name") or "", device.get("os_version") or "")
+                await run_collector(conn.client, collector, result, facts)
             except SnmpError as exc:
                 return conn, result, str(exc)
             return conn, result, None
@@ -1020,6 +1094,46 @@ def cmd_custom_delete(args: argparse.Namespace) -> int:
     return EXIT_OK if deleted else EXIT_PARTIAL
 
 
+def cmd_hooks_list(args: argparse.Namespace) -> int:
+    import shlex
+
+    loaded = load(args)
+    rows = [[event, h.name, shlex.join(h.command), f"{h.timeout}s", h.when]
+            for event, hooks in loaded.cfg.hooks.events().items() for h in hooks]
+    if args.json:
+        out_json([dict(zip(("event", "name", "command", "timeout", "when"), r, strict=True))
+                  for r in rows])
+    else:
+        out(table(["EVENT", "NAME", "COMMAND", "TIMEOUT", "WHEN"], rows)
+            if rows else "no hook configured (hooks: in the configuration)")
+    return EXIT_OK
+
+
+def cmd_hooks_test(args: argparse.Namespace) -> int:
+    from snowth_my_net.hooks import run_hooks
+
+    loaded = load(args)
+    hooks = loaded.cfg.hooks.events()[args.event]
+    if args.name and args.name not in {h.name for h in hooks}:
+        raise ManualError(f"no hook {args.name!r} in hooks.{args.event} "
+                          f"({', '.join(h.name for h in hooks) or 'none'})")
+    extra = ({"report": "test-report", "report_file": str(
+        loaded.paths.output_dir / "reports" / "test-report.csv")}
+        if args.event == "after_report" else None)
+    results = run_hooks(loaded, args.event, args.status, {"test": True}, None, extra,
+                        only=args.name, dry_run=args.dry_run)
+    if args.json:
+        out_json([r.as_dict() for r in results])
+    elif not results:
+        out(f"no hook in hooks.{args.event}")
+    else:
+        out(table(["HOOK", "RESULT", "EXIT", "TIME", "DETAIL"],
+                  [[r.name, "skipped" if r.skipped else ("OK" if r.ok else "FAILED"),
+                    "-" if r.returncode is None else r.returncode, f"{r.duration_ms} ms",
+                    r.detail[:100]] for r in results]))
+    return hooks_exit(EXIT_OK, results)
+
+
 def cmd_tui(args: argparse.Namespace) -> int:
     loaded = load(args)
     general = loaded.cfg.general
@@ -1085,10 +1199,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("collect", parents=[common], help="poll every device and update the state")
     p.add_argument("--device", action="append", metavar="ADDR", help="only this address")
+    p.add_argument("--no-hooks", action="store_true", help="do not run hooks.after_collect")
     p.set_defaults(func=cmd_collect)
 
     p = sub.add_parser("export", parents=[common], help="write CSV/JSON/map outputs")
     p.add_argument("--only", help="comma-separated subset: devices,nodes,links,snapshot,map")
+    p.add_argument("--no-hooks", action="store_true", help="do not run hooks.after_export")
     p.set_defaults(func=cmd_export)
 
     p = sub.add_parser("push", parents=[common], help="send exported files to the push targets")
@@ -1098,6 +1214,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--wait", action="store_true", default=None,
                    help="wait for 202 jobs to finish (poll:)")
     p.add_argument("--dry-run", action="store_true", help="show what would be sent")
+    p.add_argument("--no-hooks", action="store_true", help="do not run hooks.after_push")
     p.set_defaults(func=cmd_push)
 
     p = sub.add_parser("run", parents=[common], help="collect, export and push in one go")
@@ -1105,6 +1222,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--no-push", action="store_true", help="skip the push")
     p.add_argument("--wait", action="store_true", default=None,
                    help="wait for 202 jobs to finish (poll:)")
+    p.add_argument("--no-hooks", action="store_true", help="do not run any hook")
     p.set_defaults(func=cmd_run)
 
     p = sub.add_parser("cron", parents=[common], help="scheduling helpers")
@@ -1200,6 +1318,21 @@ def build_parser() -> argparse.ArgumentParser:
     from snowth_my_net.reports.commands import add_parser as add_report_parser
 
     add_report_parser(sub, common)
+
+    p = sub.add_parser("hooks", parents=[common],
+                       help="external programs run after collect, export, push, report")
+    hsub = p.add_subparsers(title="hooks commands", metavar="ACTION", required=True)
+    h = hsub.add_parser("list", parents=[common], help="configured hooks")
+    h.set_defaults(func=cmd_hooks_list)
+    h = hsub.add_parser("test", parents=[common],
+                        help="run the hooks of an event now, with a test summary")
+    h.add_argument("event", choices=["after_collect", "after_export", "after_push",
+                                     "after_report"])
+    h.add_argument("name", nargs="?", help="only this hook")
+    h.add_argument("--status", choices=["ok", "partial", "failed"], default="ok",
+                   help="status passed to the hooks (default ok)")
+    h.add_argument("--dry-run", action="store_true", help="print the commands only")
+    h.set_defaults(func=cmd_hooks_test)
 
     p = sub.add_parser("tui", parents=[common], help="open the terminal management interface")
     p.set_defaults(func=cmd_tui)
