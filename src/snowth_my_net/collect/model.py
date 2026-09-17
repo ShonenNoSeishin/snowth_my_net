@@ -9,6 +9,7 @@ from snowth_my_net.collect.tables.bridge import FdbEntry
 from snowth_my_net.collect.tables.entity import Chassis
 from snowth_my_net.collect.tables.interfaces import Interface
 from snowth_my_net.collect.tables.ipaddr import DeviceAddress
+from snowth_my_net.collect.tables.neighbors import Neighbor
 from snowth_my_net.collect.tables.system import SystemInfo
 from snowth_my_net.config.effective import DeviceSettings
 from snowth_my_net.snmp.target import Target
@@ -68,6 +69,7 @@ class DeviceResult:
     vlans: dict[int, str] = field(default_factory=dict)          # vlan -> name
     pvid: dict[int, int] = field(default_factory=dict)           # ifIndex -> access/PVID vlan
     bridge_ports: dict[int, int] = field(default_factory=dict)   # bridge port -> ifIndex
+    neighbors: list[Neighbor] = field(default_factory=list)
     ident: Identification | None = None
     outcomes: dict[str, Outcome] = field(default_factory=dict)
     error: str | None = None

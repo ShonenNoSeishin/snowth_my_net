@@ -87,7 +87,8 @@ def test_explain_trunk_transit_and_arp(lab_cfg, capsys):
     _code, result = explain(capsys, lab_cfg, B0)
     trunk = result["nodes"][0]["sightings"][0]
     assert result["nodes"][0]["positions"] == []
-    assert (trunk["verdict"], trunk["role_reasons"]) == ("uplink", ["mac_count"])
+    assert (trunk["verdict"], trunk["role_reasons"]) == ("uplink",
+                                                         ["neighbor_managed", "mac_count"])
 
     _code, result = explain(capsys, lab_cfg, "00:00:5e:00:53:14")
     assert "polled device (PRN-2F-01)" in result["nodes"][0]["excluded"]

@@ -164,6 +164,8 @@ def test_discover_dry_run_identifies_without_writing_state(lab, tmp_path, capsys
     assert code == 0
     assert report["run_id"] is None
     types = {d["address"]: d["device_type"] for d in report["devices"]}
-    assert types == {lab.agent("sw-access"): "switch", lab.agent("printer"): "printer"}
-    assert "interfaces" not in by_address(report)[lab.agent("sw-access")]["functions"]
+    assert types == {lab.agent("sw-access"): "switch", lab.agent("printer"): "printer",
+                     lab.agent("sw-cisco"): ""}              # found through LLDP
+    functions = by_address(report)[lab.agent("sw-access")]["functions"]
+    assert "fdb" not in functions and "arp" not in functions and "lldp" in functions
     assert not (tmp_path / "state").exists()

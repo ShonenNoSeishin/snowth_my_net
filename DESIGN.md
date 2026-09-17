@@ -843,6 +843,18 @@ Exceptions, qui sont le cœur de la justesse du résultat :
   **conservés** au lieu d'être recalculés sans elle. Une coupure LLDP passagère ne déverse donc
   pas un étage entier sur un trunk.
 
+> **Implémentation (phase 3)** :
+> - Les voisins LLDP/CDP sont stockés bruts ; la résolution de l'extrémité distante (adresse de
+>   management, puis MAC de châssis, puis sysName) et les règles `neighbor_managed` /
+>   `neighbor_infra` sont appliquées à la lecture, comme les autres rôles. Les voisins
+>   « actuels » d'un équipement sont ceux de son dernier parcours LLDP (ou CDP) réussi.
+> - CDP n'a pas de bit « point d'accès » : un voisin CDP dont la plateforme est une borne Cisco
+>   (`AIR-…`, `C91xx`, `CW91xx`) reçoit la capacité `wlan_ap`.
+> - Nouvelle clé `general.snmp.port` (161 par défaut) : port des seeds sans port explicite, des
+>   voisins explorés et du balayage.
+> - LLDP-V2-MIB (IEEE 802.1AB-2009) n'est pas encore lu : à ajouter si un agent réel ne sert que
+>   cette version (rare) — voir « Pour aller plus loin ».
+
 ### 9.2 Correspondance port LLDP local → ifIndex
 
 `lldpLocPortNum` n'est pas l'ifIndex chez tout le monde. On essaie dans l'ordre, et la méthode
@@ -1554,10 +1566,9 @@ permet de transformer tes captures réelles en tests de régression.
 
 ## 20. Questions
 
-### Extensibilité (2026-09-17) — à valider
+### Extensibilité (2026-09-17) — validée
 
-Voir §21 : les trois mécanismes proposés (OID personnalisés déclaratifs, rapports
-personnalisés, extensions Python et scripts) et leurs limites de sécurité.
+Voir §21 (décisions en tête de section).
 
 **Toutes répondues le 2026-09-15** : les décisions sont au §0. Les questions d'origine sont
 gardées plus bas pour l'historique.
@@ -1630,8 +1641,12 @@ paquet), origine citée dans `NOTICE` et `tests/data/README.md`.
 
 ## 21. Extensibilité : OID, rapports et scripts personnalisés (proposition)
 
-> Statut : **proposition, à valider** (demande du 2026-09-17 : « rapports customisés exportables
+> Statut : **validé le 2026-09-17** (demande du même jour : « rapports customisés exportables
 > via l'interface, ajout de scripts dédiés, ajout d'OID custom… bref, scalable »).
+> Décisions : découpage E1/E2/E3 conservé ; formats CSV/JSON/Markdown/HTML suffisants ;
+> mode SQL en lecture seule inclus dans E2 (développement raisonnable : vues + autorisateur
+> SQLite) ; hooks acceptés, avec une documentation complète (événements, variables, exemples,
+> dépannage) et une commande `hooks test` pour les essayer à blanc.
 
 Principe : trois niveaux, du plus simple (sans code, depuis le TUI) au plus puissant (Python),
 tous soumis aux mêmes garanties que le cœur :
@@ -1775,3 +1790,12 @@ Pour ce qui ne tient pas dans une déclaration :
 3. Le mode SQL en lecture seule pour les rapports avancés : utile pour toi, ou superflu ?
 4. Hooks : OK pour cette unique exception contrôlée (commande sans shell, délai, environnement
    nettoyé) ?
+
+
+---
+
+## 22. Pour aller plus loin (non planifié)
+
+- LLDP-V2-MIB (`1.3.111.2.802.1.1.13`) en repli de LLDP-MIB.
+- Contextes VRF Cisco pour l'ARP des VRF non globales.
+- Traduction française du texte d'`explain` dans le TUI (aujourd'hui en anglais comme la CLI).

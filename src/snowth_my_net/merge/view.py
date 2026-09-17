@@ -27,6 +27,16 @@ from snowth_my_net.merge.nodes import (
     Sighting,
     resolve_mac,
 )
+from snowth_my_net.merge.topology import (
+    DeviceIndex,
+    DeviceKeys,
+    Link,
+    NeighborObs,
+    ResolvedNeighbor,
+    build_links,
+    resolve_neighbors,
+    uplink_reason,
+)
 from snowth_my_net.snmp.target import split_host_port
 from snowth_my_net.snmp.values import normalize_mac
 from snowth_my_net.state.repo import Repo
@@ -70,7 +80,55 @@ def load_inputs(loaded: LoadedConfig, repo: Repo, now: int) -> tuple[MergeInputs
            for r in conn.execute("SELECT * FROM arp_obs WHERE last_seen >= ?", (horizon,))]
     device_macs = {r["mac"]: r["device_id"]
                    for r in conn.execute("SELECT mac, device_id FROM device_macs")}
-    return MergeInputs(infos, ports, fdb, arp, device_macs), names
+    inputs = MergeInputs(infos, ports, fdb, arp, device_macs)
+    return inputs, names
+
+
+ACTIVE_NEIGHBORS = """
+SELECT n.* FROM neighbors n WHERE n.last_run_id = COALESCE(
+  (SELECT MAX(s.run_id) FROM collect_status s WHERE s.device_id = n.device_id
+     AND s.function = n.protocol AND s.status IN ('ok', 'absent', 'partial')),
+  (SELECT MAX(m.last_run_id) FROM neighbors m WHERE m.device_id = n.device_id
+     AND m.protocol = n.protocol))
+"""
+
+
+def load_topology(loaded: LoadedConfig, repo: Repo, inputs: MergeInputs, names: dict[int, str],
+                  port_name) -> tuple[list[ResolvedNeighbor], list[Link]]:
+    """Resolve the current neighbours, feed the neighbour-based port roles, build links."""
+    conn = repo.conn
+    keys: dict[int, DeviceKeys] = {}
+    fdb_devices = {o.device_id for o in inputs.fdb}
+    for row in conn.execute("SELECT id, sys_name FROM devices"):
+        if row["id"] in names:
+            keys[row["id"]] = DeviceKeys(row["id"], names[row["id"]], row["sys_name"] or "",
+                                         has_fdb=row["id"] in fdb_devices)
+    for row in conn.execute("SELECT device_id, address FROM device_addresses"):
+        if row["device_id"] in keys:
+            keys[row["device_id"]].addresses.add(row["address"])
+    for mac, device_id in inputs.device_macs.items():
+        if device_id in keys:
+            keys[device_id].macs.add(mac)
+    phys = {(r["device_id"], r["ifindex"]): r["phys_mac"] for r in conn.execute(
+        "SELECT device_id, ifindex, phys_mac FROM interfaces WHERE phys_mac IS NOT NULL")}
+    index = DeviceIndex(keys, inputs.ports, phys)
+    observations = [
+        NeighborObs(r["device_id"], r["ifindex"], r["protocol"], r["remote_key"],
+                    r["remote_chassis_id"] or "", r["remote_sys_name"] or "",
+                    r["remote_port_id"] or "", r["remote_port_desc"] or "",
+                    tuple(a for a in (r["remote_mgmt_address"] or "").split(",") if a),
+                    frozenset(c for c in (r["remote_caps"] or "").split(",") if c),
+                    r["remote_platform"] or "", r["first_seen"], r["last_seen"])
+        for r in conn.execute(ACTIVE_NEIGHBORS) if r["device_id"] in keys]
+    resolved = resolve_neighbors(observations, index, port_name)
+    for rn in resolved:
+        if rn.obs.ifindex is None:
+            continue
+        reason = uplink_reason(rn, index, loaded.cfg.nodes.ap_ports_are_access)
+        if reason:
+            inputs.neighbor_reasons.setdefault((rn.obs.device_id, rn.obs.ifindex),
+                                               []).append(reason)
+    return resolved, build_links(resolved, names, port_name)
 
 
 @dataclass
@@ -80,6 +138,8 @@ class NodeView:
     names: dict[int, str]
     oui: OuiDatabase
     dns: dict[str, str] = field(default_factory=dict)       # ip -> name (cache)
+    neighbors: list[ResolvedNeighbor] = field(default_factory=list)
+    links: list[Link] = field(default_factory=list)
     _nodes: list[Node] | None = None
 
     @property
@@ -96,11 +156,23 @@ class NodeView:
     def device_name(self, device_id: int) -> str:
         return self.names.get(device_id, f"#{device_id}")
 
+    @staticmethod
+    def port_name_of(inputs: MergeInputs):
+        def port_name(device_id: int, ifindex: int | None) -> str:
+            port = inputs.ports.get((device_id, ifindex)) if ifindex is not None else None
+            if port is None:
+                return "" if ifindex is None else str(ifindex)
+            return short_port_name(port.name or port.descr) or str(ifindex)
+
+        return port_name
+
     def port_name(self, device_id: int, ifindex: int) -> str:
-        port = self.ctx.inputs.ports.get((device_id, ifindex))
-        if port is None:
-            return str(ifindex)
-        return short_port_name(port.name or port.descr) or str(ifindex)
+        return self.port_name_of(self.ctx.inputs)(device_id, ifindex)
+
+    def link_rows(self) -> list[list[str]]:
+        include = self.loaded.cfg.export.links.include_endpoints
+        return [[lk.a_device, lk.a_port, lk.b_device, lk.b_port, lk.protocol,
+                 iso_z(lk.last_seen)] for lk in self.links if include or not lk.endpoint]
 
     def dns_name(self, ip: str) -> str:
         name = self.dns.get(ip, "")
@@ -148,5 +220,8 @@ class NodeView:
 
 def build_view(loaded: LoadedConfig, repo: Repo, now: int) -> NodeView:
     inputs, names = load_inputs(loaded, repo, now)
-    ctx = MergeContext(inputs, loaded.cfg.nodes, now)
-    return NodeView(loaded, ctx, names, oui_database(loaded), repo.dns_names(now))
+    view = NodeView(loaded, None, names, oui_database(loaded), repo.dns_names(now))
+    view.neighbors, view.links = load_topology(loaded, repo, inputs, names, view.port_name_of(
+        inputs))
+    view.ctx = MergeContext(inputs, loaded.cfg.nodes, now)
+    return view

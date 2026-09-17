@@ -1,0 +1,4 @@
+Local Device,Local Port,Remote Device,Remote Port,Protocol,Last Seen
+ap-lobby,eth0,sw-generic-02,3,LLDP,<TS>
+sw-access-01,1/1/12,sw-cisco-03,Gi1/0/4,LLDP+CDP,<TS>
+sw-cisco-03,Gi1/0/3,core-rtr,Gi0/0/1,CDP,<TS>

@@ -329,6 +329,27 @@ class Repo:
                 "ON CONFLICT(device_id, vlan_id) DO UPDATE SET name = excluded.name, "
                 "last_seen = excluded.last_seen",
                 [(device_id, vlan, name, now) for vlan, name in r.vlans.items()])
+        for protocol in ("lldp", "cdp"):
+            if r.outcome_status(protocol) not in (OK, PARTIAL):
+                continue
+            c.executemany(
+                "INSERT INTO neighbors(device_id, ifindex, protocol, remote_key, "
+                "remote_chassis_id, remote_sys_name, remote_port_id, remote_port_desc, "
+                "remote_mgmt_address, remote_caps, remote_platform, local_port_method, "
+                "first_seen, last_seen, last_run_id) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(device_id, protocol, remote_key, remote_port_id) DO UPDATE SET "
+                "ifindex = excluded.ifindex, remote_chassis_id = excluded.remote_chassis_id, "
+                "remote_sys_name = excluded.remote_sys_name, "
+                "remote_port_desc = excluded.remote_port_desc, "
+                "remote_mgmt_address = excluded.remote_mgmt_address, "
+                "remote_caps = excluded.remote_caps, remote_platform = excluded.remote_platform, "
+                "local_port_method = excluded.local_port_method, "
+                "last_seen = excluded.last_seen, last_run_id = excluded.last_run_id",
+                [(device_id, n.local_ifindex, n.protocol, n.key, n.chassis_id, n.sys_name,
+                  n.port_id, n.port_desc, ",".join(n.mgmt_addresses), ",".join(sorted(n.caps)),
+                  n.platform, n.local_method, now, now, run_id)
+                 for n in r.neighbors if n.protocol == protocol])
         if r.outcome_status("arp") in (OK, PARTIAL):
             c.executemany(
                 "INSERT INTO arp_obs(mac, address, family, device_id, ifindex, source_table, "
@@ -394,6 +415,9 @@ class Repo:
                                       (horizon,)).rowcount
             counts["arp"] = c.execute("DELETE FROM arp_obs WHERE last_seen < ?",
                                       (horizon,)).rowcount
+            counts["neighbors"] = c.execute(
+                "DELETE FROM neighbors WHERE last_seen < ?",
+                (now - retention_days * DAY,)).rowcount
             c.execute("DELETE FROM dns_cache WHERE expires_at < ?", (now - 30 * DAY,))
             counts["devices"] = c.execute(
                 "DELETE FROM devices WHERE last_seen < ?", (now - retention_days * DAY,)).rowcount

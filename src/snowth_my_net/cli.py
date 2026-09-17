@@ -255,6 +255,21 @@ def cmd_show(args: argparse.Namespace) -> int:
                             f"{x['os'] or ''} {x['os_version'] or ''}".strip(),
                             x["device_type"] or "", x["type_rule"] or "",
                             x["last_collect"] or "", x["last_seen"]] for x in data]))
+        elif args.what == "links":
+            from snowth_my_net.merge.view import build_view
+
+            rows = build_view(loaded, repo, Clock().now()).link_rows()
+            if args.filter:
+                needle = args.filter.casefold()
+                rows = [r for r in rows if any(needle in c.casefold() for c in r)]
+            if args.json:
+                keys = ["local_device", "local_port", "remote_device", "remote_port", "protocol",
+                        "last_seen"]
+                out_json([dict(zip(keys, r, strict=True)) for r in rows])
+            else:
+                out(table(["LOCAL DEVICE", "LOCAL PORT", "REMOTE DEVICE", "REMOTE PORT",
+                           "PROTOCOL", "LAST SEEN"], rows))
+                out(f"{len(rows)} link(s)")
         elif args.what == "nodes":
             from snowth_my_net.merge.view import build_view
 
@@ -775,7 +790,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_export)
 
     p = sub.add_parser("show", parents=[common], help="print what the state knows")
-    p.add_argument("what", choices=["devices", "nodes", "runs"])
+    p.add_argument("what", choices=["devices", "nodes", "links", "runs"])
     p.add_argument("--limit", type=int, default=0,
                    help="maximum rows (default: 20 runs, every device and node)")
     p.add_argument("--filter", help="only rows containing this text (any column)")

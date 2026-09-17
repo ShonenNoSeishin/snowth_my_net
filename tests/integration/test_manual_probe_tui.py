@@ -225,7 +225,7 @@ async def test_tui_nodes_tab_search_and_explain(lab, collected):
         app.screen.query_one("#main-tabs", TabbedContent).active = "tab-nodes"
         await wait(app, pilot)
         nodes = app.screen.query_one("#nodes", DataTable)
-        assert nodes.row_count == 15
+        assert nodes.row_count == 19
         app.screen.query_one("#node-filter", Input).value = "192.0.2.50"
         await pilot.pause()
         assert nodes.row_count == 1
@@ -235,4 +235,28 @@ async def test_tui_nodes_tab_search_and_explain(lab, collected):
         assert isinstance(app.screen, ExplainModal)
         body = str(app.screen.query_one("#explain-text").render())
         assert "sw-access-01 1/1/3" in body and "transit" in body
+    ctx.close()
+
+
+async def test_tui_links_tab_and_device_neighbors(lab, collected):
+    ctx = TuiContext(load_config(collected))
+    app = SnowthApp(ctx)
+    async with app.run_test(size=(160, 45)) as pilot:
+        await wait(app, pilot)
+        app.screen.query_one("#main-tabs", TabbedContent).active = "tab-links"
+        await wait(app, pilot)
+        links = app.screen.query_one("#links", DataTable)
+        assert links.row_count == 3
+        app.screen.query_one("#main-tabs", TabbedContent).active = "tab-devices"
+        await wait(app, pilot)
+        select_row(devices_table(app), "sw-access-01")
+        await pilot.press("enter")
+        await wait(app, pilot)
+        neighbors = app.screen.query_one("#neighbors", DataTable)
+        assert neighbors.row_count == 2
+        rows = [[str(c) for c in neighbors.get_row_at(i)] for i in range(neighbors.row_count)]
+        trunk = next(r for r in rows if r[0] == "1/1/12")
+        assert "sw-cisco-03" in trunk[1] and trunk[5] in ("uplink",)
+        phone = next(r for r in rows if r[0] == "1/1/7")
+        assert "telephone" in phone[4] and phone[5] in ("access", "accès")
     ctx.close()

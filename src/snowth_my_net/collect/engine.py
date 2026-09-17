@@ -21,6 +21,7 @@ from snowth_my_net.clock import Clock
 from snowth_my_net.collect import functions, identify
 from snowth_my_net.collect.discovery import (
     PlannedTarget,
+    neighbor_targets,
     plan_targets,
     resolve_seeds,
     sweep_addresses,
@@ -210,7 +211,8 @@ class Collector:
                 planned += await self._sweep(seen, now)
             if not planned:
                 report.errors.append("nothing to poll: no seed and no known device in scope")
-            report.results = await self._collect_all(planned, run_id, now)
+            report.results = await self._collect_all(planned, run_id, now, report.notes,
+                                                     explore=only is None)
         finally:
             self.pool.close()
 
@@ -274,18 +276,39 @@ class Collector:
         return found
 
     async def _collect_all(self, planned: list[PlannedTarget], run_id: int | None,
-                           now: int) -> list[DeviceResult]:
+                           now: int, notes: list[str] | None = None,
+                           explore: bool = True) -> list[DeviceResult]:
+        """Poll every planned target; neighbours found on the way are explored (BFS)."""
         gate = asyncio.Semaphore(self.cfg.general.snmp.concurrency)
-        tasks = [asyncio.create_task(self._guarded(p, gate)) for p in planned]
+        known_hosts = {p.target.host for p in planned}
+        if self.repo:
+            known_hosts |= {row[0] for row in self.repo.conn.execute(
+                "SELECT address FROM device_addresses")}
+        pending = {asyncio.create_task(self._guarded(p, gate)) for p in planned}
         results: list[DeviceResult] = []
-        for next_done in asyncio.as_completed(tasks):
-            r = await next_done
-            results.append(r)
-            if self.repo and run_id is not None and r.alias_of is None:
-                if r.reachable:
-                    r.device_id = self.repo.save_device(r, now, run_id)
-                else:
-                    self.repo.save_failure(r, now, run_id, r.device_id)
+        while pending:
+            done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+            for task in done:
+                r = task.result()
+                results.append(r)
+                if r.system is not None:
+                    known_hosts |= {a.address for a in r.addresses}
+                if self.repo and run_id is not None and r.alias_of is None:
+                    if r.reachable:
+                        r.device_id = self.repo.save_device(r, now, run_id)
+                    else:
+                        self.repo.save_failure(r, now, run_id, r.device_id)
+                if explore and r.alias_of is None and r.neighbors:
+                    found, skipped = neighbor_targets(self.cfg, r.neighbors, r.depth,
+                                                      known_hosts, self.manual)
+                    if notes is not None:
+                        notes.extend(skipped)
+                    for p in found:
+                        log.info("%s: exploring neighbor %s (depth %d)", r.target, p.target,
+                                 p.depth)
+                        if self.repo:
+                            self.repo.ensure_target(str(p.target), "neighbor", p.depth, now)
+                        pending.add(asyncio.create_task(self._guarded(p, gate)))
         if self.repo:
             for r in results:
                 owner = final_owner(r)
@@ -366,9 +389,13 @@ class Collector:
                      final_owner(r).target)
             return
         if self.mode == "discover":
-            return
-        for name, func in (("interfaces", functions.interfaces), ("ipaddr", functions.ipaddr),
-                           ("fdb", functions.fdb), ("arp", functions.arp)):
+            steps = (("interfaces", functions.interfaces), ("lldp", functions.lldp),
+                     ("cdp", functions.cdp))
+        else:
+            steps = (("interfaces", functions.interfaces), ("ipaddr", functions.ipaddr),
+                     ("fdb", functions.fdb), ("arp", functions.arp), ("lldp", functions.lldp),
+                     ("cdp", functions.cdp))
+        for name, func in steps:
             if r.superseded:
                 return
             await run_function(r, name, client, deadline, func)

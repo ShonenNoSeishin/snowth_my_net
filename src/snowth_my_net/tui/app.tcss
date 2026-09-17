@@ -40,7 +40,7 @@ TabPane {
     margin-bottom: 1;
 }
 
-#devices, #runs, #nodes {
+#devices, #runs, #nodes, #links, #neighbors {
     height: 1fr;
 }
 

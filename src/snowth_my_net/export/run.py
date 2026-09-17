@@ -2,15 +2,22 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from snowth_my_net.clock import Clock
+from snowth_my_net.clock import Clock, iso_z
 from snowth_my_net.collect.identify import effective_type
 from snowth_my_net.config.effective import settings_for
 from snowth_my_net.config.loader import LoadedConfig
 from snowth_my_net.export.atomic import atomic_write
-from snowth_my_net.export.csvout import NODES_HEADER, EmptyExport, devices_csv, render_csv
+from snowth_my_net.export.csvout import (
+    LINKS_HEADER,
+    NODES_HEADER,
+    EmptyExport,
+    devices_csv,
+    render_csv,
+)
 from snowth_my_net.export.naming import NameInput, assign_names
 from snowth_my_net.logs import get_logger
 from snowth_my_net.snmp.target import split_host_port
@@ -19,7 +26,7 @@ from snowth_my_net.state.repo import DAY, Repo
 log = get_logger("export")
 
 # Outputs implemented so far; the others arrive with their phase.
-IMPLEMENTED = {"devices", "nodes"}
+IMPLEMENTED = {"devices", "nodes", "links", "snapshot", "map"}
 
 
 @dataclass
@@ -79,49 +86,92 @@ def refresh_dns(loaded: LoadedConfig, repo: Repo, ips: list[str], now: int,
     return len(results)
 
 
-def nodes_csv(loaded: LoadedConfig, repo: Repo, now: int, ptr_lookup=None) -> bytes:
-    from snowth_my_net.merge.view import build_view
+class ViewCache:
+    """Builds the node view (and refreshes DNS) once per export, only if an output needs it."""
 
+    def __init__(self, loaded: LoadedConfig, repo: Repo, now: int, ptr_lookup=None) -> None:
+        self.loaded, self.repo, self.now, self.ptr_lookup = loaded, repo, now, ptr_lookup
+        self._view = None
+
+    def get(self):
+        if self._view is None:
+            from snowth_my_net.merge.view import build_view
+
+            view = build_view(self.loaded, self.repo, self.now)
+            ips = [n.current_ip.ip for n in view.nodes if n.current_ip]
+            if refresh_dns(self.loaded, self.repo, ips, self.now, self.ptr_lookup):
+                view.dns = self.repo.dns_names(self.now)
+            self._view = view
+        return self._view
+
+
+def nodes_csv(loaded: LoadedConfig, repo: Repo, now: int, ptr_lookup=None,
+              views: ViewCache | None = None) -> bytes:
     cfg = loaded.cfg
-    view = build_view(loaded, repo, now)
-    ips = [n.current_ip.ip for n in view.nodes if n.current_ip]
-    if refresh_dns(loaded, repo, ips, now, ptr_lookup):
-        view.dns = repo.dns_names(now)
+    view = (views or ViewCache(loaded, repo, now, ptr_lookup)).get()
     rows = view.rows()
     if not rows and "nodes" not in cfg.export.allow_empty:
         raise EmptyExport("nodes.csv would have no data row")
     return render_csv(NODES_HEADER, rows, cfg.export.csv.line_terminator)
 
 
+def links_csv(loaded: LoadedConfig, views: ViewCache) -> bytes:
+    cfg = loaded.cfg
+    rows = views.get().link_rows()
+    if not rows and "links" not in cfg.export.allow_empty:
+        raise EmptyExport("links.csv would have no data row")
+    return render_csv(LINKS_HEADER, rows, cfg.export.csv.line_terminator)
+
+
 def export(loaded: LoadedConfig, repo: Repo, clock: Clock,
            only: list[str] | None = None, ptr_lookup=None) -> ExportResult:
+    from snowth_my_net.export import maps
+    from snowth_my_net.export.snapshot import build_snapshot
+
     cfg = loaded.cfg
     out_dir = loaded.paths.output_dir
     result = ExportResult()
     now = clock.now()
     devices, names = exported_devices(loaded, repo, now)
+    views = ViewCache(loaded, repo, now, ptr_lookup)
     for name in only or cfg.export.files:
         if name not in IMPLEMENTED:
             result.pending.append(name)
             continue
+        outputs: list[tuple[Path, bytes]] = []
         try:
             if name == "devices":
-                data = devices_csv(devices, names, cfg.export.devices.include_type,
-                                   cfg.export.csv.line_terminator,
-                                   allow_empty="devices" in cfg.export.allow_empty)
-                path = out_dir / "devices.csv"
+                outputs.append((out_dir / "devices.csv", devices_csv(
+                    devices, names, cfg.export.devices.include_type,
+                    cfg.export.csv.line_terminator,
+                    allow_empty="devices" in cfg.export.allow_empty)))
             elif name == "nodes":
-                data = nodes_csv(loaded, repo, now, ptr_lookup)
-                path = out_dir / "nodes.csv"
-            else:  # pragma: no cover - guarded by IMPLEMENTED
-                continue
+                outputs.append((out_dir / "nodes.csv",
+                                nodes_csv(loaded, repo, now, ptr_lookup, views)))
+            elif name == "links":
+                outputs.append((out_dir / "links.csv", links_csv(loaded, views)))
+            elif name == "snapshot":
+                snapshot = build_snapshot(loaded, repo, views.get(), devices, now)
+                outputs.append((out_dir / "snapshot.json", (json.dumps(
+                    snapshot, indent=2, ensure_ascii=False) + "\n").encode("utf-8")))
+            elif name == "map":
+                graph = maps.build_graph(views.get(), devices, cfg.export.map.endpoints)
+                for fmt in cfg.export.map.formats:
+                    if fmt == "dot":
+                        text = maps.render_dot(graph)
+                    elif fmt == "mmd":
+                        text = maps.render_mermaid(graph)
+                    else:
+                        text = maps.render_html(graph, "snowth_my_net map", iso_z(now))
+                    outputs.append((out_dir / f"map.{fmt}", text.encode("utf-8")))
         except EmptyExport as exc:
             log.error("%s; the previous file is kept and will not be pushed", exc)
             result.failed.append((name, str(exc)))
             continue
-        atomic_write(path, data)
-        log.info("wrote %s (%d bytes)", path, len(data))
-        result.written.append(path)
+        for path, data in outputs:
+            atomic_write(path, data)
+            log.info("wrote %s (%d bytes)", path, len(data))
+            result.written.append(path)
     if result.pending:
         log.info("not produced yet (later phases): %s", ", ".join(result.pending))
     return result

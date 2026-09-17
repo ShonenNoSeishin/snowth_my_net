@@ -14,8 +14,7 @@ REASON_TEXT = {"config": "declared in uplinks", "lag": "link aggregation",
 
 
 def _reasons(reasons) -> str:
-    return ", ".join(REASON_TEXT.get(code, code) if code != "mac_count" else detail
-                     for code, detail in reasons)
+    return ", ".join(REASON_TEXT.get(code, detail or code) for code, detail in reasons)
 
 
 def explain_node(view: NodeView, node: Node) -> list[Line]:

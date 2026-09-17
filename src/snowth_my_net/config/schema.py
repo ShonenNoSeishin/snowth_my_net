@@ -45,6 +45,7 @@ class DeviceNameCfg:
 
 @dataclass
 class SnmpCfg:
+    port: int = 161                         # for seeds without a port, neighbours and sweeps
     timeout: float = 3.0
     retries: int = 1
     probe_timeout: float = 2.0
@@ -66,6 +67,8 @@ class SnmpCfg:
             errs += _positive(name, getattr(self, name))
         if not 1 <= self.max_repetitions <= 200:
             errs.append(f"max_repetitions must be between 1 and 200, got {self.max_repetitions}")
+        if not 1 <= self.port <= 65535:
+            errs.append(f"port must be between 1 and 65535, got {self.port}")
         return errs
 
 

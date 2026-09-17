@@ -164,6 +164,7 @@ general:
   output_dir: {tmp / 'out'}
   secrets_dir: {secrets}
   snmp:
+    port: {lab.port}
     timeout: 1
     retries: 0
     probe_timeout: 0.5

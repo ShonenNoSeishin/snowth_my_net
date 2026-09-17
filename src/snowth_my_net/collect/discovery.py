@@ -9,7 +9,7 @@ from snowth_my_net.config.effective import settings_for
 from snowth_my_net.config.schema import Config
 from snowth_my_net.enrich.dns import make_resolver, resolve_host
 from snowth_my_net.logs import get_logger
-from snowth_my_net.snmp.target import AddressError, Target, split_host_port
+from snowth_my_net.snmp.target import AddressError, Target, has_explicit_port, split_host_port
 
 log = get_logger("discovery")
 
@@ -69,6 +69,8 @@ async def resolve_seeds(cfg: Config) -> SeedResolution:
             except LookupError as exc:
                 errors.append(f"seed {seed!r}: {exc}")
                 continue
+        if not has_explicit_port(seed):
+            port = cfg.general.snmp.port
         targets.append((Target(str(ip), port), rank))
     return SeedResolution(targets, errors)
 
@@ -138,5 +140,50 @@ def sweep_addresses(cfg: Config, known: set[str]) -> list[Target]:
         hosts = net.hosts() if net.num_addresses > 2 else iter(net)
         for ip in hosts:
             if str(ip) not in known and scope.check(ip) is None:
-                result.append(Target(str(ip)))
+                result.append(Target(str(ip), cfg.general.snmp.port))
     return result
+
+
+def neighbor_targets(cfg: Config, neighbors: list, depth: int, known_hosts: set[str],
+                     manual: dict | None = None) -> tuple[list[PlannedTarget], list[str]]:
+    """Addresses to explore from the LLDP/CDP neighbours of a device polled at ``depth``.
+
+    Bounded by ``discovery.allowed`` / ``exclude``, ``max_depth`` and the neighbour's
+    announced capabilities (phones and stations are never probed). ``known_hosts`` is updated.
+    """
+    notes: list[str] = []
+    result: list[PlannedTarget] = []
+    d = cfg.discovery
+    if not d.follow_neighbors:
+        return result, notes
+    wanted = set(d.follow_capabilities)
+    scope = Scope(d.allowed, d.exclude, set())
+    for n in neighbors:
+        label = n.sys_name or n.chassis_id or "?"
+        if not n.mgmt_addresses:
+            continue
+        address = n.mgmt_addresses[0]
+        if address in known_hosts:
+            continue
+        if depth + 1 > d.max_depth:
+            notes.append(f"neighbor {label} ({address}): skipped (max_depth {d.max_depth})")
+            continue
+        if not (set(n.caps) & wanted) or "telephone" in n.caps:
+            caps = ",".join(sorted(n.caps)) or "none"
+            notes.append(f"neighbor {label} ({address}): skipped (capabilities {caps})")
+            continue
+        try:
+            ip = ipaddress.ip_address(address)
+        except ValueError:
+            continue
+        reason = scope.check(ip)
+        if reason:
+            notes.append(f"neighbor {label} ({address}): skipped ({reason})")
+            continue
+        if settings_for(cfg, address, manual).disabled:
+            notes.append(f"neighbor {label} ({address}): skipped (disabled)")
+            continue
+        known_hosts.add(address)
+        result.append(PlannedTarget(Target(str(ip), cfg.general.snmp.port), "neighbor",
+                                    depth + 1))
+    return result, notes

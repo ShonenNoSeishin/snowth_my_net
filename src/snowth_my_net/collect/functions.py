@@ -10,6 +10,7 @@ from __future__ import annotations
 from snowth_my_net.collect.model import DeviceResult
 from snowth_my_net.collect.tables import arp as arp_tables
 from snowth_my_net.collect.tables import bridge
+from snowth_my_net.collect.tables import neighbors as nb
 from snowth_my_net.collect.tables.entity import TEXT_COLUMNS, build_chassis, rows_to_fetch
 from snowth_my_net.collect.tables.interfaces import build_interfaces
 from snowth_my_net.collect.tables.ipaddr import (
@@ -231,6 +232,47 @@ async def arp(client: SnmpClient, r: DeviceResult, rows: Rows) -> None:
             arp_tables.parse_net_to_media(rows.column("mphys"), rows.column("mtype")),
         )
         rows.columns["entries"] = {(i,): e for i, e in enumerate(r.arp)}
+
+
+async def lldp(client: SnmpClient, r: DeviceResult, rows: Rows) -> None:
+    """LLDP-MIB remote systems, their management addresses and the local port mapping."""
+    rows.key = "entries"
+    rem_columns = (4, 5, 6, 7, 8, 9, 10, 12)
+    try:
+        await walk_into(client, rows, "rem9", oids.LLDP_REM_ENTRY + (9,))
+        await walk_into(client, rows, "rem5", oids.LLDP_REM_ENTRY + (5,))
+        if rows.column("rem9") or rows.column("rem5"):
+            for column in rem_columns:
+                if column not in (5, 9):
+                    await walk_into(client, rows, f"rem{column}", oids.LLDP_REM_ENTRY + (column,))
+            await walk_into(client, rows, "manaddr", oids.LLDP_REM_MAN_ADDR_IF_SUBTYPE)
+            for column, base in ((2, oids.LLDP_LOC_PORT_ID_SUBTYPE), (3, oids.LLDP_LOC_PORT_ID),
+                                 (4, oids.LLDP_LOC_PORT_DESC)):
+                await walk_into(client, rows, f"loc{column}", base)
+    finally:
+        found = nb.parse_lldp({c: rows.column(f"rem{c}") for c in rem_columns},
+                              rows.column("manaddr"))
+        mapping = nb.map_local_ports({c: rows.column(f"loc{c}") for c in (2, 3, 4)},
+                                     r.interfaces, r.bridge_ports)
+        nb.assign_local_ports(found, mapping)
+        r.neighbors = [n for n in r.neighbors if n.protocol != "lldp"] + found
+        rows.columns["entries"] = {(i,): n for i, n in enumerate(found)}
+
+
+async def cdp(client: SnmpClient, r: DeviceResult, rows: Rows) -> None:
+    """CISCO-CDP-MIB cache (also served by some non-Cisco agents): always attempted."""
+    rows.key = "entries"
+    columns = (3, 4, 5, 6, 7, 8, 9)
+    try:
+        await walk_into(client, rows, "cdp6", oids.CDP_CACHE_ENTRY + (6,))
+        if rows.column("cdp6"):
+            for column in columns:
+                if column != 6:
+                    await walk_into(client, rows, f"cdp{column}", oids.CDP_CACHE_ENTRY + (column,))
+    finally:
+        found = nb.parse_cdp({c: rows.column(f"cdp{c}") for c in columns})
+        r.neighbors = [n for n in r.neighbors if n.protocol != "cdp"] + found
+        rows.columns["entries"] = {(i,): n for i, n in enumerate(found)}
 
 
 Column = dict[tuple[int, ...], object]

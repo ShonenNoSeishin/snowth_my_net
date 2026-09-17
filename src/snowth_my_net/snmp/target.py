@@ -56,6 +56,11 @@ def split_host_port(text: str) -> tuple[str, int]:
     return host, port
 
 
+def has_explicit_port(text: str) -> bool:
+    t = text.strip()
+    return (t.startswith("[") and "]:" in t) or (not t.startswith("[") and t.count(":") == 1)
+
+
 def parse_target(text: str) -> Target:
     """Parse an address whose host part is an IP literal."""
     host, port = split_host_port(text)

@@ -7,9 +7,9 @@ and so that ``explain`` can show exactly why a MAC is where it is.
 Rules, in short:
 
 * A port is an **uplink** when declared (``uplinks``), when it is a link aggregation (only if
-  ``lag_is_uplink``), or when it carried more than ``uplink_mac_threshold`` learned MACs in the
-  last FDB walk of its device. ``access_ports`` forces a port to access. (Neighbor-based rules
-  arrive with LLDP/CDP.)
+  ``lag_is_uplink``), when an LLDP/CDP neighbour is infrastructure (see ``merge.topology``), or
+  when it carried more than ``uplink_mac_threshold`` learned MACs in the last FDB walk of its
+  device. ``access_ports`` forces a port to access.
 * A MAC is positioned on **access ports only**. Seen on several access ports within
   ``transit_window``: the port with the fewest MACs wins, the others are transit ("shadowed").
   Older access sightings stay as the roaming history; the most recent one is the current one.
@@ -93,6 +93,9 @@ class MergeInputs:
     fdb: list[FdbObs]
     arp: list[ArpObs]
     device_macs: dict[str, int]          # MAC -> device id owning it
+    # (device, ifIndex) -> reasons from LLDP/CDP neighbours: (code, detail, hard|soft)
+    neighbor_reasons: dict[tuple[int, int], list[tuple[str, str, str]]] = field(
+        default_factory=dict)
 
 
 # --------------------------------------------------------------------------- outputs
@@ -156,7 +159,7 @@ class Node:
 
 
 def classify_port(port: PortInfo | None, mac_count: int, device: DeviceInfo,
-                  cfg: NodesCfg) -> PortRole:
+                  cfg: NodesCfg, neighbor_reasons=()) -> PortRole:
     labels = port.labels() if port else set()
     if labels & {p.casefold() for p in device.access_ports}:
         return PortRole("access", (("config_access", "listed in access_ports"),))
@@ -166,6 +169,8 @@ def classify_port(port: PortInfo | None, mac_count: int, device: DeviceInfo,
         hard.append(("config", "listed in uplinks"))
     if cfg.lag_is_uplink and port and (port.if_type == IFTYPE_LAG or port.lag_ifindex):
         hard.append(("lag", "link aggregation"))
+    for code, detail, strength in neighbor_reasons:
+        (hard if strength == HARD else soft).append((code, detail))
     if mac_count > device.uplink_mac_threshold:
         soft.append(("mac_count", f"{mac_count} MACs > {device.uplink_mac_threshold}"))
     if hard or soft:
@@ -209,7 +214,8 @@ class MergeContext:
         key = (device_id, ifindex)
         if key not in self._roles:
             self._roles[key] = classify_port(self.inputs.ports.get(key), self.mac_count[key],
-                                             self.inputs.devices[device_id], self.cfg)
+                                             self.inputs.devices[device_id], self.cfg,
+                                             self.inputs.neighbor_reasons.get(key, ()))
         return self._roles[key]
 
     def exclusion(self, mac: str) -> str | None:

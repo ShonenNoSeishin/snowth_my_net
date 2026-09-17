@@ -199,6 +199,49 @@ def ip_net_to_physical(rows: list[tuple[int, str, str, int]]) -> list[Record]:
     return recs
 
 
+def lldp_local_ports(ports: dict[int, tuple[int, str, str]]) -> list[Record]:
+    """portNum -> (portIdSubtype, portId, portDesc)."""
+    base = "1.0.8802.1.1.2.1.3.7.1"
+    recs = []
+    for num, (subtype, port_id, desc) in ports.items():
+        recs += [integer(f"{base}.2.{num}", subtype), text(f"{base}.3.{num}", port_id),
+                 text(f"{base}.4.{num}", desc)]
+    return recs
+
+
+def lldp_remote(entries: list[dict]) -> list[Record]:
+    base = "1.0.8802.1.1.2.1.4.1.1"
+    recs = []
+    for e in entries:
+        idx = f"0.{e['port']}.{e.get('index', 1)}"
+        recs += [integer(f"{base}.4.{idx}", 4), mac(f"{base}.5.{idx}", e["chassis"]),
+                 integer(f"{base}.6.{idx}", e["port_subtype"]),
+                 mac(f"{base}.7.{idx}", e["port_id"]) if e["port_subtype"] == 3
+                 else text(f"{base}.7.{idx}", e["port_id"]),
+                 text(f"{base}.8.{idx}", e.get("port_desc", "")),
+                 text(f"{base}.9.{idx}", e["sys_name"]),
+                 text(f"{base}.10.{idx}", e.get("sys_descr", "")),
+                 octets(f"{base}.11.{idx}", bytes.fromhex(e["caps"])),
+                 octets(f"{base}.12.{idx}", bytes.fromhex(e["caps"]))]
+        if e.get("address"):
+            recs.append(integer(f"1.0.8802.1.1.2.1.4.2.1.3.{idx}.1.4.{e['address']}", 2))
+    return recs
+
+
+def cdp_cache(entries: list[dict]) -> list[Record]:
+    base = "1.3.6.1.4.1.9.9.23.1.2.1.1"
+    recs = []
+    for e in entries:
+        idx = f"{e['ifindex']}.{e.get('index', 1)}"
+        recs += [integer(f"{base}.3.{idx}", 1),
+                 octets(f"{base}.4.{idx}", ipaddress.IPv4Address(e["address"]).packed),
+                 text(f"{base}.5.{idx}", e.get("version", "")),
+                 text(f"{base}.6.{idx}", e["device_id"]), text(f"{base}.7.{idx}", e["port"]),
+                 text(f"{base}.8.{idx}", e["platform"]),
+                 octets(f"{base}.9.{idx}", e["caps"].to_bytes(4, "big"))]
+    return recs
+
+
 def filler_macs(prefix: str, count: int) -> list[str]:
     return [f"{prefix}:{i:02x}" for i in range(1, count + 1)]
 
@@ -207,6 +250,10 @@ def filler_macs(prefix: str, count: int) -> list[str]:
 # c1 only in the firewall ARP table, d0/d1 on the Cisco per-VLAN switch.
 A0, A1, B0 = "00:00:5e:00:53:a0", "00:00:5e:00:53:a1", "00:00:5e:00:53:b0"
 C0, C1, D0, D1 = "00:00:5e:00:53:c0", "00:00:5e:00:53:c1", "00:00:5e:00:53:d0", "00:00:5e:00:53:d1"
+# d2 behind a CDP router neighbour; f0 an IP phone with f1 (a PC) behind it; f2 a Wi-Fi client.
+D2, F0, F1, F2 = "00:00:5e:00:53:d2", "00:00:5e:00:53:f0", "00:00:5e:00:53:f1", "00:00:5e:00:53:f2"
+# LLDP capability bits as BITS octets: bridge 0x20, wlanAccessPoint 0x10, bridge+telephone 0x24
+CAP_BRIDGE, CAP_AP, CAP_PHONE = "20", "10", "24"
 
 # --------------------------------------------------------------------------- agents
 
@@ -245,9 +292,18 @@ def agents() -> dict[str, list[Record]]:
              (5, "00:00:5e:00:01:0a", 6, 3),           # VRRP virtual MAC
              (5, sw_mac, 12, 4),                       # "self" entry
              (5, B0, 12, 3),
+             (5, F0, 7, 3), (5, F1, 7, 3),             # phone and the PC behind it
              *[(5, m, 12, 3) for m in filler_macs("00:00:5e:00:54", 5)]],   # trunk: 6 MACs
             vlan_fdb={10: 5, 20: 6}, names={10: "USERS", 20: "VOICE"},
             pvid={**{bp: 10 for bp in range(1, 12)}, 12: 1}),
+        *lldp_local_ports({n: (7, f"1/1/{n}", f"1/1/{n}") for n in range(1, 13)}),
+        *lldp_remote([
+            {"port": 12, "chassis": "00:00:5e:00:53:21", "port_subtype": 5, "port_id": "Gi1/0/4",
+             "port_desc": "GigabitEthernet1/0/4", "sys_name": "sw-cisco-03.example.net",
+             "caps": CAP_BRIDGE, "address": "127.0.0.21"},
+            {"port": 7, "chassis": F0, "port_subtype": 3, "port_id": F0, "port_desc": "WAN",
+             "sys_name": "SEP00005E0053F0", "caps": CAP_PHONE, "address": "192.0.2.77"},
+        ]),
     ]
 
     # Unknown vendor, bridge-only LLDP capabilities: the type must stay EMPTY.
@@ -262,9 +318,13 @@ def agents() -> dict[str, list[Record]]:
         # without LLDP: a0 and a1 are seen there too (transit), with 3 local hosts.
         *base_ports({1: 1, 2: 2, 3: 3, 4: 4}),
         gauge("1.3.6.1.2.1.17.7.1.4.5.1.1.1", 30),
-        *dot1d_fdb([(C0, 1), (A0, 2), (A1, 2),
+        *dot1d_fdb([(C0, 1), (A0, 2), (A1, 2), (F2, 3),
                     *[(m, 2) for m in filler_macs("00:00:5e:00:55", 3)]]),
         *dot1d_fdb([("00:00:00:00:00:00", 3)]),        # garbage entry, dropped
+        *lldp_local_ports({n: (5, str(n), f"Port {n}") for n in range(1, 5)}),
+        *lldp_remote([{"port": 3, "chassis": "00:00:5e:00:53:20", "port_subtype": 5,
+                       "port_id": "eth0", "sys_name": "ap-lobby", "caps": CAP_AP,
+                       "address": "127.0.0.20"}]),
     ]
 
     # Sophos-like firewall: no layer 3 in sysServices, no ENTITY-MIB, no bridge, v2c only,
@@ -350,6 +410,17 @@ def agents() -> dict[str, list[Record]]:
         text("1.3.6.1.4.1.9.9.46.1.3.1.1.4.1.1", "default"),
         text("1.3.6.1.4.1.9.9.46.1.3.1.1.4.1.10", "OFFICE"),
         integer("1.3.6.1.4.1.9.9.68.1.2.2.1.2.10101", 10),
+        *lldp_local_ports({n: (5, f"Gi1/0/{n}", f"GigabitEthernet1/0/{n}") for n in range(1, 5)}),
+        *lldp_remote([{"port": 4, "chassis": "00:00:5e:00:53:11", "port_subtype": 7,
+                       "port_id": "1/1/12", "sys_name": "sw-access-01", "caps": CAP_BRIDGE,
+                       "address": "127.0.0.11"}]),
+        *cdp_cache([
+            {"ifindex": 10104, "device_id": "sw-access-01.example.net", "port": "1/1/12",
+             "platform": "Aruba JL679A", "caps": 0x08, "address": "127.0.0.11"},
+            {"ifindex": 10103, "device_id": "core-rtr(FGL2233X0ZZ)",
+             "port": "GigabitEthernet0/0/1", "platform": "cisco ISR4331/K9", "caps": 0x01,
+             "address": "203.0.113.1"},
+        ]),
     ]
     return a
 
@@ -359,7 +430,7 @@ def vlan_instances() -> dict[str, dict[int, list[Record]]]:
     ports = base_ports({n: 10100 + n for n in range(1, 5)})
     return {"sw-cisco": {
         1: [*ports, *dot1d_fdb([(D1, 2)])],
-        10: [*ports, *dot1d_fdb([(D0, 1)])],
+        10: [*ports, *dot1d_fdb([(D0, 1), (D2, 3)])],
     }}
 
 

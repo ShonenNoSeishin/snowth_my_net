@@ -394,6 +394,9 @@ class MainScreen(Screen):
                 yield Input(placeholder=t("nodes.placeholder"), id="node-filter")
                 yield DataTable(id="nodes", cursor_type="row", zebra_stripes=True)
                 yield Static("", id="nodes-count", classes="legend")
+            with TabPane(t("tab.links"), id="tab-links"):
+                yield DataTable(id="links", cursor_type="row", zebra_stripes=True)
+                yield Static("", id="links-count", classes="legend")
             with TabPane(t("tab.runs"), id="tab-runs"):
                 yield DataTable(id="runs", cursor_type="row", zebra_stripes=True)
         yield Footer()
@@ -410,6 +413,11 @@ class MainScreen(Screen):
                            ("dns", "col.dns"), ("switch", "col.switch"), ("port", "col.port"),
                            ("vlan", "col.vlan"), ("seen", "col.seen")):
             nodes.add_column(t(label), key=key)
+        links = self.query_one("#links", DataTable)
+        for key, label in (("a", "col.local_device"), ("ap", "col.local_port"),
+                           ("b", "col.remote_device"), ("bp", "col.remote_port"),
+                           ("proto", "col.protocol"), ("seen", "col.seen")):
+            links.add_column(t(label), key=key)
         runs = self.query_one("#runs", DataTable)
         for key, label in (("id", "col.run"), ("command", "col.command"),
                            ("started", "col.started"), ("duration", "col.duration"),
@@ -427,8 +435,11 @@ class MainScreen(Screen):
         self.fill_runs()
         self.view = None
         self.node_rows = None
-        if self.query_one("#main-tabs", TabbedContent).active == "tab-nodes":
+        active = self.query_one("#main-tabs", TabbedContent).active
+        if active == "tab-nodes":
             self.fill_nodes()
+        elif active == "tab-links":
+            self.fill_links()
         self.query_one(TopBar).refresh_status()
 
     NODE_LIMIT: ClassVar[int] = 2000
@@ -458,10 +469,22 @@ class MainScreen(Screen):
             text += " · " + self.ctx.t("nodes.truncated", limit=self.NODE_LIMIT)
         self.query_one("#nodes-count", Static).update(text)
 
+    def fill_links(self) -> None:
+        view = self.ensure_view()
+        table = self.query_one("#links", DataTable)
+        table.clear()
+        rows = view.link_rows()
+        for i, r in enumerate(rows):
+            table.add_row(Text(r[0], style="bold"), r[1], Text(r[2], style="bold"), r[3], r[4],
+                          self.ctx.local_time_iso(r[5]), key=str(i))
+        self.query_one("#links-count", Static).update(self.ctx.t("links.count", count=len(rows)))
+
     @on(TabbedContent.TabActivated, "#main-tabs")
     def tab_activated(self, event: TabbedContent.TabActivated) -> None:
         if event.pane.id == "tab-nodes":
             self.fill_nodes()
+        elif event.pane.id == "tab-links":
+            self.fill_links()
 
     @on(Input.Changed, "#node-filter")
     def node_filter_changed(self) -> None:
@@ -623,6 +646,9 @@ class DeviceScreen(Screen):
                                      compact=True)
                     yield Static(t("tester.hint"), id="tester-status")
                     yield DataTable(id="results", zebra_stripes=True)
+            with TabPane(t("tab.neighbors"), id="tab-neighbors"), Vertical():
+                yield Static("", id="neighbors-empty", classes="empty")
+                yield DataTable(id="neighbors", zebra_stripes=True)
             with TabPane(t("tab.last"), id="tab-last"), Vertical():
                 yield Static(id="last-when")
                 yield DataTable(id="last", zebra_stripes=True)
@@ -702,6 +728,7 @@ class DeviceScreen(Screen):
         self.load_form()
         self.load_presets()
         self.load_last()
+        self.load_neighbors()
 
     async def on_unmount(self) -> None:
         if self.pool is not None:
@@ -850,7 +877,37 @@ class DeviceScreen(Screen):
             table.add_row(o["function"], Text(o["status"], style=styles.get(o["status"], "")),
                           str(o["rows"] or 0), f"{o['duration_ms'] or 0} ms", o["detail"] or "")
 
+    def load_neighbors(self) -> None:
+        from snowth_my_net.merge.view import build_view
+
+        t = self.ctx.t
+        table = self.query_one("#neighbors", DataTable)
+        table.clear(columns=True)
+        empty = self.query_one("#neighbors-empty", Static)
+        if self.row.device_id is None:
+            empty.update(t("neighbors.none"))
+            return
+        view = build_view(self.ctx.loaded, self.ctx.repo, self.ctx.clock.now())
+        mine = [rn for rn in view.neighbors if rn.obs.device_id == self.row.device_id]
+        empty.update("" if mine else t("neighbors.none"))
+        empty.display = not mine
+        for label in ("col.local_port", "col.remote_device", "col.remote_port", "col.protocol",
+                      "col.caps", "col.role", "col.seen"):
+            table.add_column(t(label))
+        for rn in sorted(mine, key=lambda x: (x.obs.ifindex or 0, x.obs.protocol)):
+            port = view.port_name(rn.obs.device_id, rn.obs.ifindex) if rn.obs.ifindex else "?"
+            role = view.ctx.role(rn.obs.device_id, rn.obs.ifindex) if rn.obs.ifindex else None
+            remote = Text(rn.remote_name, style="bold" if rn.remote_device_id else "")
+            polled = "remote.polled" if rn.remote_device_id else "remote.not_polled"
+            remote.append(f"  ({t(polled)})", style="dim")
+            role_text = Text(t(f"role.{role.role}") if role else "—",
+                             style="yellow" if role and role.uplink else "green")
+            table.add_row(port, remote, rn.remote_port, rn.obs.protocol.upper(),
+                          ", ".join(sorted(rn.obs.caps)) or "—", role_text,
+                          self.ctx.local_time(rn.obs.last_seen))
+
     def refresh_all(self) -> None:
+        self.load_neighbors()
         self.load_identity()
         self.load_form()
         self.load_presets()

@@ -6,6 +6,10 @@
 00:00:5e:00:53:c1,"ICANN, IANA Department",192.0.2.60,,,,,<TS>
 00:00:5e:00:53:d0,"ICANN, IANA Department",,,sw-cisco-03,Gi1/0/1,10,<TS>
 00:00:5e:00:53:d1,"ICANN, IANA Department",,,sw-cisco-03,Gi1/0/2,1,<TS>
+00:00:5e:00:53:d2,"ICANN, IANA Department",,,,,,<TS>
+00:00:5e:00:53:f0,"ICANN, IANA Department",,,sw-access-01,1/1/7,10,<TS>
+00:00:5e:00:53:f1,"ICANN, IANA Department",,,sw-access-01,1/1/7,10,<TS>
+00:00:5e:00:53:f2,"ICANN, IANA Department",,,sw-generic-02,3,,<TS>
 00:00:5e:00:54:01,"ICANN, IANA Department",,,,,,<TS>
 00:00:5e:00:54:02,"ICANN, IANA Department",,,,,,<TS>
 00:00:5e:00:54:03,"ICANN, IANA Department",,,,,,<TS>
