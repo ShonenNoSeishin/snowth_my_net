@@ -1,0 +1,518 @@
+"""Configuration schema — the single source of truth for every key of the YAML file.
+
+Defaults are generic (never tuned for a particular site); the reasoning behind each default is
+documented in ``docs/config.md``.
+"""
+
+from __future__ import annotations
+
+import zoneinfo
+from dataclasses import dataclass, field
+from typing import Literal
+
+from snowth_my_net.config.validate import Duration, Network
+
+DeviceType = Literal[
+    "switch", "router", "firewall", "wireless", "server", "printer", "facility", "other"
+]
+FeatureMode = Literal["auto", "force", "off"]
+Capability = Literal[
+    "other", "repeater", "bridge", "wlan_ap", "router", "telephone", "docsis", "station"
+]
+AuthProtocol = Literal["md5", "sha", "sha224", "sha256", "sha384", "sha512"]
+PrivProtocol = Literal["des", "3des", "aes128", "aes192", "aes256", "aes192c", "aes256c"]
+
+_SECRET_HINT = "secrets are never written in the YAML; use {0}_file (path) or {0}_env (variable)"
+
+
+def _positive(name: str, value: float | int | None, allow_zero: bool = False) -> list[str]:
+    if value is None:
+        return []
+    if value < 0 or (value == 0 and not allow_zero):
+        return [f"{name} must be {'>= 0' if allow_zero else '> 0'}, got {value}"]
+    return []
+
+
+# --------------------------------------------------------------------------- general
+
+
+@dataclass
+class DeviceNameCfg:
+    strip_domain: Literal["first_dot", "suffixes", "none"] = "first_dot"
+    domain_suffixes: list[str] = field(default_factory=list)
+    duplicate_names: Literal["suffix_ip", "keep"] = "suffix_ip"
+
+
+@dataclass
+class SnmpCfg:
+    timeout: float = 3.0
+    retries: int = 1
+    probe_timeout: float = 2.0
+    max_repetitions: int = 25
+    use_bulk: bool = True
+    concurrency: int = 16
+    per_device_concurrency: int = 1
+    pace_ms: int = 0
+    table_timeout: Duration = 180
+    device_timeout: Duration = 600
+    max_rows_per_table: int = 500_000
+
+    def check(self) -> list[str]:
+        errs = _positive("timeout", self.timeout) + _positive("probe_timeout", self.probe_timeout)
+        errs += _positive("retries", self.retries, allow_zero=True)
+        errs += _positive("pace_ms", self.pace_ms, allow_zero=True)
+        for name in ("concurrency", "per_device_concurrency", "table_timeout", "device_timeout",
+                     "max_rows_per_table"):
+            errs += _positive(name, getattr(self, name))
+        if not 1 <= self.max_repetitions <= 200:
+            errs.append(f"max_repetitions must be between 1 and 200, got {self.max_repetitions}")
+        return errs
+
+
+@dataclass
+class SnmpOverride:
+    """Per-device overrides of :class:`SnmpCfg` (unset keys inherit the global value)."""
+
+    timeout: float | None = None
+    retries: int | None = None
+    max_repetitions: int | None = None
+    use_bulk: bool | None = None
+    per_device_concurrency: int | None = None
+    pace_ms: int | None = None
+    table_timeout: Duration | None = None
+    device_timeout: Duration | None = None
+    max_rows_per_table: int | None = None
+
+    def check(self) -> list[str]:
+        errs = _positive("timeout", self.timeout)
+        errs += _positive("retries", self.retries, allow_zero=True)
+        errs += _positive("pace_ms", self.pace_ms, allow_zero=True)
+        for name in ("per_device_concurrency", "table_timeout", "device_timeout",
+                     "max_rows_per_table"):
+            errs += _positive(name, getattr(self, name))
+        if self.max_repetitions is not None and not 1 <= self.max_repetitions <= 200:
+            errs.append(f"max_repetitions must be between 1 and 200, got {self.max_repetitions}")
+        return errs
+
+
+@dataclass
+class LockWaitCfg:
+    collect: Duration = 60
+    default: Duration = 900
+
+
+@dataclass
+class GeneralCfg:
+    state_dir: str | None = None
+    output_dir: str | None = None
+    secrets_dir: str | None = None
+    log_file: str | None = None
+    log_level: Literal["debug", "info", "warning", "error"] = "info"
+    language: Literal["auto", "en", "fr"] = "auto"     # terminal interface only
+    device_name: DeviceNameCfg = field(default_factory=DeviceNameCfg)
+    lock_wait: LockWaitCfg = field(default_factory=LockWaitCfg)
+    run_timeout: Duration = 3000
+    retention_days: int = 90
+    snmp: SnmpCfg = field(default_factory=SnmpCfg)
+
+    def check(self) -> list[str]:
+        return _positive("retention_days", self.retention_days) + _positive(
+            "run_timeout", self.run_timeout
+        )
+
+
+# --------------------------------------------------------------------------- credentials
+
+
+@dataclass
+class CredentialCfg:
+    __forbidden_keys__ = {
+        "community": _SECRET_HINT.format("community"),
+        "auth_key": _SECRET_HINT.format("auth_key"),
+        "priv_key": _SECRET_HINT.format("priv_key"),
+        "password": _SECRET_HINT.format("auth_key"),
+    }
+
+    name: str
+    version: Literal["2c", "3"]
+    scope: list[Network] = field(default_factory=list)
+    community_file: str | None = None
+    community_env: str | None = None
+    username: str | None = None
+    auth_protocol: AuthProtocol | None = None
+    auth_key_file: str | None = None
+    auth_key_env: str | None = None
+    priv_protocol: PrivProtocol | None = None
+    priv_key_file: str | None = None
+    priv_key_env: str | None = None
+
+    def check(self) -> list[str]:
+        errs: list[str] = []
+        who = f"credential '{self.name}'"
+        community = bool(self.community_file or self.community_env)
+        v3_keys = [k for k in ("username", "auth_protocol", "auth_key_file", "auth_key_env",
+                               "priv_protocol", "priv_key_file", "priv_key_env")
+                   if getattr(self, k) is not None]
+        if self.version == "2c":
+            if not community:
+                errs.append(f"{who}: v2c needs community_file or community_env")
+            if v3_keys:
+                errs.append(f"{who}: v2c does not use {', '.join(v3_keys)}")
+            return errs
+        if community:
+            errs.append(f"{who}: SNMPv3 does not use a community")
+        if not self.username:
+            errs.append(f"{who}: SNMPv3 needs a username")
+        has_auth_key = bool(self.auth_key_file or self.auth_key_env)
+        has_priv_key = bool(self.priv_key_file or self.priv_key_env)
+        if self.auth_protocol and not has_auth_key:
+            errs.append(f"{who}: auth_protocol needs auth_key_file or auth_key_env")
+        if has_auth_key and not self.auth_protocol:
+            errs.append(f"{who}: an auth key is set but auth_protocol is missing")
+        if self.priv_protocol and not self.auth_protocol:
+            errs.append(f"{who}: privacy (priv_protocol) requires authentication (auth_protocol)")
+        if self.priv_protocol and not has_priv_key:
+            errs.append(f"{who}: priv_protocol needs priv_key_file or priv_key_env")
+        if has_priv_key and not self.priv_protocol:
+            errs.append(f"{who}: a privacy key is set but priv_protocol is missing")
+        return errs
+
+    @property
+    def security_level(self) -> str:
+        if self.version == "2c":
+            return "v2c"
+        if self.priv_protocol:
+            return "authPriv"
+        return "authNoPriv" if self.auth_protocol else "noAuthNoPriv"
+
+
+# --------------------------------------------------------------------------- discovery
+
+
+@dataclass
+class DiscoveryCfg:
+    seeds: list[str] = field(default_factory=list)
+    allowed: list[Network] = field(default_factory=list)
+    exclude: list[Network] = field(default_factory=list)
+    follow_neighbors: bool = True
+    max_depth: int = 3
+    follow_capabilities: list[Capability] = field(
+        default_factory=lambda: ["bridge", "router", "wlan_ap"]
+    )
+    sweep: list[Network] = field(default_factory=list)
+    sweep_rate: int = 50
+    sweep_interval: Duration = 86400
+    forget_after_days: int = 90
+
+    def check(self) -> list[str]:
+        errs = _positive("max_depth", self.max_depth, allow_zero=True)
+        errs += _positive("sweep_rate", self.sweep_rate)
+        errs += _positive("forget_after_days", self.forget_after_days)
+        for net in self.sweep:
+            if net is not None and not any(
+                net.version == a.version and net.subnet_of(a) for a in self.allowed if a
+            ):
+                errs.append(f"sweep range {net} is not inside discovery.allowed")
+        total = sum(n.num_addresses for n in self.sweep if n is not None)
+        if total > 65536:
+            errs.append(f"sweep covers {total} addresses; the limit is 65536 per run")
+        return errs
+
+
+# --------------------------------------------------------------------------- devices
+
+
+@dataclass
+class FeaturesCfg:
+    entity: FeatureMode | None = None
+    interfaces: FeatureMode | None = None
+    ipaddr: FeatureMode | None = None
+    fdb: FeatureMode | None = None
+    arp: FeatureMode | None = None
+    lldp: FeatureMode | None = None
+    cdp: FeatureMode | None = None
+
+
+@dataclass
+class DeviceOverride:
+    address: Network
+    name: str | None = None
+    type: DeviceType | None = None
+    credential: str | None = None
+    features: FeaturesCfg = field(default_factory=FeaturesCfg)
+    vlan_indexing: Literal["auto", "cisco", "off"] | None = None
+    uplinks: list[str] | None = None
+    access_ports: list[str] | None = None
+    uplink_mac_threshold: int | None = None
+    snmp: SnmpOverride = field(default_factory=SnmpOverride)
+    driver: str | None = None
+    tolerate_failure: bool | None = None
+    ha_mode: Literal["members", "vip"] | None = None
+    disabled: bool | None = None
+
+    def check(self) -> list[str]:
+        return _positive("uplink_mac_threshold", self.uplink_mac_threshold)
+
+
+# --------------------------------------------------------------------------- nodes / dns / oui
+
+
+DEFAULT_IGNORED_PREFIXES = [
+    "00:00:5e:00:01",  # VRRP IPv4 virtual router MAC (RFC 5798)
+    "00:00:5e:00:02",  # VRRP IPv6 virtual router MAC
+    "00:00:0c:07:ac",  # HSRPv1 virtual MAC
+    "00:00:0c:9f:f",   # HSRPv2 virtual MAC
+]
+
+
+@dataclass
+class NodesCfg:
+    uplink_mac_threshold: int = 50
+    lag_is_uplink: bool = False
+    ap_ports_are_access: bool = True
+    uplink_fallback: bool = False
+    include_unlocated: bool = True
+    include_device_macs: bool = False
+    positions: Literal["all", "current"] = "all"
+    retention_days: int = 30
+    prefer_ipv4: bool = True
+    current_ip_window: Duration = 86400
+    ignore_macs: list[str] = field(default_factory=list)
+    ignore_mac_prefixes: list[str] = field(default_factory=lambda: list(DEFAULT_IGNORED_PREFIXES))
+
+    def check(self) -> list[str]:
+        from snowth_my_net.snmp.values import normalize_mac, normalize_mac_prefix
+
+        errs = _positive("uplink_mac_threshold", self.uplink_mac_threshold)
+        errs += _positive("retention_days", self.retention_days)
+        errs += [f"ignore_macs: invalid MAC {m!r}" for m in self.ignore_macs
+                 if normalize_mac(m) is None]
+        errs += [f"ignore_mac_prefixes: invalid prefix {p!r}" for p in self.ignore_mac_prefixes
+                 if normalize_mac_prefix(p) is None]
+        return errs
+
+
+@dataclass
+class DnsCfg:
+    enabled: bool = True
+    resolvers: list[str] = field(default_factory=list)
+    timeout: float = 2.0
+    concurrency: int = 20
+    cache_ttl: Duration = 86400
+    negative_ttl: Duration = 3600
+    strip_domain: bool = False
+
+    def check(self) -> list[str]:
+        import ipaddress
+
+        errs = _positive("timeout", self.timeout) + _positive("concurrency", self.concurrency)
+        for r in self.resolvers:
+            try:
+                ipaddress.ip_address(r)
+            except ValueError:
+                errs.append(f"resolvers: {r!r} is not an IP address")
+        return errs
+
+
+@dataclass
+class OuiCfg:
+    file: str | None = None
+    clean_names: bool = True
+    urls: list[str] = field(
+        default_factory=lambda: [
+            "https://standards-oui.ieee.org/oui/oui.csv",
+            "https://standards-oui.ieee.org/oui28/mam.csv",
+            "https://standards-oui.ieee.org/oui36/oui36.csv",
+        ]
+    )
+
+
+# --------------------------------------------------------------------------- export
+
+
+@dataclass
+class CsvCfg:
+    line_terminator: Literal["crlf", "lf"] = "crlf"
+
+
+@dataclass
+class DevicesExportCfg:
+    include_type: bool = True
+
+
+@dataclass
+class LinksExportCfg:
+    include_endpoints: bool = False
+
+
+@dataclass
+class MapCfg:
+    formats: list[Literal["dot", "mmd", "html"]] = field(
+        default_factory=lambda: ["dot", "mmd", "html"]
+    )
+    endpoints: Literal["none", "grouped", "all"] = "none"
+
+
+ExportFile = Literal["devices", "nodes", "links", "snapshot", "map"]
+
+
+@dataclass
+class ExportCfg:
+    files: list[ExportFile] = field(
+        default_factory=lambda: ["devices", "nodes", "links", "snapshot", "map"]
+    )
+    allow_empty: list[Literal["devices", "nodes", "links"]] = field(default_factory=list)
+    csv: CsvCfg = field(default_factory=CsvCfg)
+    devices: DevicesExportCfg = field(default_factory=DevicesExportCfg)
+    links: LinksExportCfg = field(default_factory=LinksExportCfg)
+    map: MapCfg = field(default_factory=MapCfg)
+
+
+# --------------------------------------------------------------------------- push
+
+
+@dataclass
+class SecretRefCfg:
+    file: str | None = None
+    env: str | None = None
+
+    def check(self) -> list[str]:
+        if bool(self.file) == bool(self.env):
+            return ["set exactly one of file or env"]
+        return []
+
+
+@dataclass
+class BasicAuthCfg:
+    __forbidden_keys__ = {"password": _SECRET_HINT.format("password")}
+
+    username: str
+    password_file: str | None = None
+    password_env: str | None = None
+
+    def check(self) -> list[str]:
+        if bool(self.password_file) == bool(self.password_env):
+            return ["basic auth needs exactly one of password_file or password_env"]
+        return []
+
+
+@dataclass
+class PushAuthCfg:
+    __forbidden_keys__ = {
+        "bearer_token": _SECRET_HINT.format("bearer_token"),
+        "token": _SECRET_HINT.format("bearer_token"),
+    }
+
+    bearer_token_file: str | None = None
+    bearer_token_env: str | None = None
+    basic: BasicAuthCfg | None = None
+
+    def check(self) -> list[str]:
+        if self.bearer_token_file and self.bearer_token_env:
+            return ["set either bearer_token_file or bearer_token_env, not both"]
+        if (self.bearer_token_file or self.bearer_token_env) and self.basic:
+            return ["choose bearer or basic authentication, not both"]
+        return []
+
+
+@dataclass
+class PollCfg:
+    url: str
+    id_field: str = "id"
+    status_field: str = "status"
+    pending: list[str] = field(default_factory=lambda: ["queued", "running"])
+    success: list[str] = field(default_factory=lambda: ["done"])
+    interval: Duration = 5
+    timeout: Duration = 1800
+
+    def check(self) -> list[str]:
+        return [] if "{id}" in self.url else ["poll.url must contain the {id} placeholder"]
+
+
+PushFile = Literal["devices", "nodes", "links", "snapshot"]
+
+
+@dataclass
+class PushTargetCfg:
+    name: str
+    url: str
+    files: list[PushFile] = field(default_factory=lambda: ["devices", "nodes"])
+    auth: PushAuthCfg = field(default_factory=PushAuthCfg)
+    headers: dict[str, SecretRefCfg] = field(default_factory=dict)
+    multipart_field: str = "file"
+    extra_fields: dict[str, str] = field(default_factory=dict)
+    tls_verify: bool = True
+    ca_bundle: str | None = None
+    timeout: Duration = 120
+    retries: int = 0
+    wait: bool = False
+    poll: PollCfg | None = None
+
+    def check(self) -> list[str]:
+        errs = []
+        if not self.url.startswith(("https://", "http://")):
+            errs.append(f"target '{self.name}': url must start with https:// or http://")
+        if not self.files:
+            errs.append(f"target '{self.name}': files must not be empty")
+        if len(set(self.files)) != len(self.files):
+            errs.append(f"target '{self.name}': files contains duplicates")
+        errs += _positive("retries", self.retries, allow_zero=True)
+        return errs
+
+
+@dataclass
+class PushCfg:
+    targets: list[PushTargetCfg] = field(default_factory=list)
+
+    def check(self) -> list[str]:
+        names = [t.name for t in self.targets if t]
+        dup = sorted({n for n in names if names.count(n) > 1})
+        return [f"duplicate push target name(s): {', '.join(dup)}"] if dup else []
+
+
+# --------------------------------------------------------------------------- schedule
+
+
+@dataclass
+class ScheduleCfg:
+    collect: str | None = "*/10 * * * *"
+    export_push: str | None = "0 11,18 * * *"
+    timezone: str | None = None
+    health_max_age: Duration | Literal["auto"] = "auto"
+
+    def check(self) -> list[str]:
+        if self.timezone:
+            try:
+                zoneinfo.ZoneInfo(self.timezone)
+            except (zoneinfo.ZoneInfoNotFoundError, ValueError):
+                return [f"schedule.timezone: unknown time zone {self.timezone!r}"]
+        return []
+
+
+# --------------------------------------------------------------------------- root
+
+
+@dataclass
+class Config:
+    version: Literal[1] = 1
+    general: GeneralCfg = field(default_factory=GeneralCfg)
+    credentials: list[CredentialCfg] = field(default_factory=list)
+    discovery: DiscoveryCfg = field(default_factory=DiscoveryCfg)
+    devices: list[DeviceOverride] = field(default_factory=list)
+    nodes: NodesCfg = field(default_factory=NodesCfg)
+    dns: DnsCfg = field(default_factory=DnsCfg)
+    oui: OuiCfg = field(default_factory=OuiCfg)
+    export: ExportCfg = field(default_factory=ExportCfg)
+    push: PushCfg = field(default_factory=PushCfg)
+    schedule: ScheduleCfg = field(default_factory=ScheduleCfg)
+
+    def check(self) -> list[str]:
+        errs = []
+        names = [c.name for c in self.credentials if c]
+        dup = sorted({n for n in names if names.count(n) > 1})
+        if dup:
+            errs.append(f"duplicate credential name(s): {', '.join(dup)}")
+        for i, dev in enumerate(self.devices):
+            if dev and dev.credential and dev.credential not in names:
+                errs.append(f"devices[{i}].credential: unknown credential '{dev.credential}'")
+        return errs

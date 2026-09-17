@@ -1,0 +1,73 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "snowth-my-net"
+version = "0.1.0.dev0"
+description = "Lightweight, read-only SNMP network mapper: inventory, MAC/ARP merge, topology, CSV export."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+keywords = ["snmp", "network", "inventory", "topology", "lldp", "arp", "fdb"]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Networking :: Monitoring",
+]
+dependencies = [
+    # SNMP v2c/v3, asyncio, pure Python.
+    "pysnmp>=7.1.26,<8",
+    # Required by pysnmp for SNMPv3 privacy (DES/AES) but not declared by it.
+    "cryptography>=42",
+    # Configuration file (safe_load only).
+    "PyYAML>=6.0",
+    # PTR lookups with configurable resolvers and timeouts; also resolves seed host names.
+    "dnspython>=2.6",
+    # Terminal management interface; imported only by the `tui` command.
+    "textual>=8,<9",
+]
+
+[project.optional-dependencies]
+# snmpsim imports pysmi at start-up without declaring it.
+test = ["pytest>=8", "pytest-asyncio>=0.23", "snmpsim>=1.2,<2", "pysmi>=1.5"]
+dev = ["snowth-my-net[test]", "ruff>=0.6"]
+
+[project.scripts]
+snowth_my_net = "snowth_my_net.cli:entry"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/snowth_my_net"]
+artifacts = ["src/snowth_my_net/**/*.tcss", "src/snowth_my_net/**/*.sql",
+             "src/snowth_my_net/**/*.yml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "integration: needs snmpsim (skipped when it is not installed)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]
+ignore = [
+    "S101",   # assert in tests
+    "S311",   # random is not used for crypto
+    "S508",   # SNMPv2c is supported on purpose (SNMPv3 is recommended in the docs)
+    "RUF001", "RUF002", "RUF003",  # unicode look-alikes in docs/comments
+    "RUF005", # OID tuples read better as concatenations
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "B011"]
+"src/snowth_my_net/config/schema.py" = ["S105", "RUF012"]  # hint strings, __forbidden_keys__

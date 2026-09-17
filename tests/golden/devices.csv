@@ -1,0 +1,9 @@
+"Device Name","Device Details","IP Address",Location,Model,Serial,Vendor,"Operating System","OS Version","MAC Address","Device Type"
+ap-lobby,"Wireless Access Point AP-100, firmware 1.2",127.0.0.20,,,,,,,00:00:5e:00:53:20,wireless
+backup01,Linux backup01 6.1.0-18-amd64 #1 SMP PREEMPT_DYNAMIC Debian 6.1.76-1 (2024-02-01) x86_64,127.0.0.16,,,,,Linux,6.1.0-18-amd64,,
+fw-edge,Linux localhost 6.6.44 #1 SMP Tue Jan 14 08:00:00 UTC 2026 x86_64,127.0.0.13,Server room,,,Sophos,SFOS,,,firewall
+PRN-2F-01,Office printer MFP-1000,127.0.0.14,"2nd floor, copy room",,,,,,,printer
+sw-access-01,Aruba JL679A 6100 12G CL4 2SFP+ 139W Swch PL.10.13.1005,127.0.0.11,"Building A, floor 1, rack 2",JL679A,SG12KW1234,HPE Aruba,AOS-CX,PL.10.13.1005,00:00:5e:00:53:11,switch
+sw-core-01,"Juniper Networks, Inc. ex2300-24p Ethernet Switch, kernel JUNOS 21.4R3-S5.4, Build date: 2024-01-10 00:00:00 UTC Copyright (c) 1996-2024 Juniper Networks, Inc.",127.0.0.17,,EX2300-24P,JW3619AB0001,Juniper,Junos,21.4R3-S5.4,00:00:5e:00:53:17,switch
+sw-generic-02,"Managed Gigabit Switch, firmware 2.4.1",127.0.0.12,Building B,,,,,,00:00:5e:00:53:12,
+ups-rack-a,Network Management Card for UPS,127.0.0.15,,,,,,,,facility

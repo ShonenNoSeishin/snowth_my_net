@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Local deployment data (Docker Compose volumes)
+/data/
+/output/
+/secrets/
+/config/snowth_my_net.yml
+.env

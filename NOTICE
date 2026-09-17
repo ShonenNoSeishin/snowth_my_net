@@ -1,0 +1,26 @@
+snowth_my_net
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+The software is provided "AS IS", without warranties or conditions of any kind; the authors
+accept no liability (sections 7 and 8 of the license).
+
+Third-party components (installed as dependencies, not bundled in this repository):
+  pysnmp, pyasn1 ...................... BSD-2-Clause
+  cryptography ........................ Apache-2.0 OR BSD-3-Clause
+  PyYAML .............................. MIT
+  dnspython ........................... ISC
+  textual, rich ....................... MIT
+  pygments ............................ BSD-2-Clause
+  markdown-it-py, mdit-py-plugins,
+  linkify-it-py, uc-micro-py .......... MIT
+  platformdirs ........................ MIT
+  typing-extensions ................... PSF-2.0
+Test-only tools: pytest (MIT), pytest-asyncio (Apache-2.0), snmpsim (BSD-2-Clause),
+pysmi (BSD-2-Clause), ruff (MIT).
+
+Test data:
+  tests/data/identify_corpus.jsonl contains identification strings (sysObjectID, sysDescr,
+  model names) as emitted by network devices, gathered from public SNMP recordings of the
+  LibreNMS project (https://github.com/librenms/librenms, GPL-3.0). Only these factual
+  device strings are used, for testing; no LibreNMS file, code or classification is included,
+  and the test data is not part of the installed package.
