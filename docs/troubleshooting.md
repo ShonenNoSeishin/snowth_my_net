@@ -59,8 +59,9 @@ phone keeps its position. Phones are never probed during exploration and are not
 ## Wi-Fi clients
 
 * Local bridging: clients are in the switch MAC table on the AP's port (`ap_ports_are_access`).
-* Tunnelled to a controller: clients appear on the controller's port, which becomes an uplink;
-  a controller driver is needed (planned).
+* Tunnelled to a controller: clients appear on the controller's port, which becomes an uplink.
+  For Cisco AireOS the `cisco-wlc` driver publishes the APs and positions the clients on their
+  radios; other controllers need a Python driver. See [drivers](drivers.md).
 
 ## Vendor notes
 
@@ -68,8 +69,10 @@ phone keeps its position. Phones are never probed during exploration and are not
 |---|---|
 | Cisco IOS/IOS-XE | Per-VLAN bridge instances (above); `lldpLocPortNum` is not the ifIndex (mapped by name); HSRP virtual MACs ignored. |
 | Cisco NX-OS | CDP device IDs `hostname(SERIAL)` are cleaned. |
-| Juniper EX/QFX | FDB ids are not VLAN numbers: `dot1qVlanFdbId` is used. |
+| Juniper EX/QFX | FDB ids are not VLAN numbers: `dot1qVlanFdbId` is used. MACs learnt on logical units (`ge-0/0/5.0`) are attributed to the physical port. |
 | HPE Aruba AOS-CX, ProVision | Standard MIBs; bridge ports equal ifIndexes on ProVision. |
-| Fortinet, Sophos, Palo Alto | ARP through IP-MIB; ENTITY-MIB often absent (Model/Serial empty) — add a custom collector for version/serial. |
-| MikroTik RouterOS | Partial BRIDGE-MIB depending on the version. |
+| Fortinet, Sophos | ARP through IP-MIB; ENTITY-MIB often absent: the `fortinet` and `sophos` drivers read serial, version (and model for Sophos) from the private MIBs. |
+| Palo Alto | ARP through IP-MIB; ENTITY-MIB usually present. No driver. |
+| MikroTik RouterOS | Partial BRIDGE-MIB depending on the version; the `mikrotik` driver adds identity and the stations of its wireless interfaces. |
+| Cisco AireOS controllers | `cisco-wlc` driver: synthetic APs and client positions. |
 | Ubiquiti UniFi/EdgeSwitch | Generic SNMP stack identifiers: vendor from the MAC OUI. |

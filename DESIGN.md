@@ -1519,9 +1519,8 @@ permet de transformer tes captures réelles en tests de régression.
 
 ## 18. Phases d'implémentation
 
-> **Avancement (2026-09-17)** : phases 1, 1b, 2, 3 et 4 livrées ainsi que les étapes E1
-> (collecteurs personnalisés), E2 (rapports personnalisés) et E3 (extensions Python, hooks).
-> Reste la phase 5 (drivers).
+> **Avancement (2026-09-17)** : phases 1, 1b, 2, 3, 4 et 5 livrées, ainsi que les étapes
+> E1 (collecteurs personnalisés), E2 (rapports personnalisés) et E3 (extensions Python, hooks).
 >
 > Écarts de la phase 4 par rapport au texte :
 > - L'image fait environ 200 Mo décompressée : la base Python pèse 126 Mo, Textual et
@@ -1541,6 +1540,28 @@ permet de transformer tes captures réelles en tests de régression.
 | 3 | LLDP / CDP, correspondance des ports, règles « voisin » des uplinks, exploration BFS, `links.csv`, `snapshot.json` complet, `map.dot` / `map.mmd` / `map.html` | Deux switches voisins, carte HTML ouverte hors ligne |
 | 4 | Push + poll, `run`, `cron print`, `health`, Dockerfile, compose (prod + profil test), `.env.example`, README EN/FR, référence de config, formats, systemd | `docker compose --profile test run --rm tests` vert ; `docker compose up -d` puis healthy |
 | 5 | Drivers selon ton parc (voir Q1) : OS/versions (Fortinet, Sophos, MikroTik), clients Wi-Fi (contrôleurs, AP), particularités Juniper (sous-interfaces `.0`), VRF | Fixtures tirées de tes captures |
+
+> **Implémenté (phase 5)**, sans captures réelles pour l'instant : les drivers suivent les
+> définitions des MIB constructeur et sont testés sur des agents synthétiques ; chaque objet lu
+> a un préréglage du testeur d'OID pour être vérifié à la main, et `driver: none` les coupe.
+> - Cadre `drivers/` (§7.6 simplifié) : sélection par sysObjectID ou `devices[].driver`
+>   (`auto`, `none`, nom) ; fonction `driver` (identité, champs vides seulement, avant
+>   l'appariement de l'équipement pour profiter du numéro de série) et `driver:<nom>`
+>   (observations, après la collecte standard). `quirks` n'a pas été nécessaire.
+> - `fortinet` (série, version FortiOS), `sophos` (modèle, version SFOS, clé d'appliance comme
+>   numéro de série ; valeurs acceptées seulement si leur forme est plausible), `mikrotik`
+>   (carte, série, version, stations Wi-Fi de `mtxrWlRtabTable`), `cisco-wlc` (AireOS : AP
+>   synthétiques dans `devices.csv`, clients positionnés sur `radioN`, IP apprises par le
+>   contrôleur). Catalyst 9800, autres contrôleurs et VDOM FortiGate : non couverts.
+> - AP synthétiques : appariés par MAC de base (`devices.driver = synthetic:<driver>`) ; si l'AP
+>   est aussi interrogé, son identité interrogée est gardée ; pas d'AP sans adresse.
+> - Générique plutôt que driver : unités logiques (`ge-0/0/5.0`, `Gi0/1.10`) rattachées au
+>   port physique quand `ifStackTable` et le nom concordent ; une radio (ifType 71) ne devient
+>   jamais un uplink par le seuil de MAC.
+> - Extensions Python : `extension.driver(...)` avec `@identity` et `@observations`
+>   (`Station`, `AccessPoint`, `Observations`), essayés avant les drivers intégrés ;
+>   `testing.run_driver`. Documentation : `docs/drivers.md`.
+> - VRF : reste dans « Pour aller plus loin » (§22).
 
 ---
 

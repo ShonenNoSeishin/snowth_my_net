@@ -144,6 +144,44 @@ PRESETS: tuple[Preset, ...] = (
         _c("hrStorageDescr", "1.3.6.1.2.1.25.2.3.1.3"),
         _c("hrStorageSize", "1.3.6.1.2.1.25.2.3.1.5"),
         _c("hrStorageUsed", "1.3.6.1.2.1.25.2.3.1.6")), types=frozenset({"server"})),
+    # Objects read by the vendor drivers: check them by hand before trusting a driver.
+    Preset("fortinet", "Fortinet: serial and FortiOS version (fortinet driver)",
+           "Fortinet : numéro de série et version FortiOS (driver fortinet)", (
+        _c("fnSysSerial", "1.3.6.1.4.1.12356.100.1.1.1.0"),
+        _c("fgSysVersion", "1.3.6.1.4.1.12356.101.4.1.1.0")),
+        mode="get", types=frozenset({"firewall", "wireless", "switch"})),
+    Preset("sophos-sfos", "Sophos SFOS: model, firmware, appliance key (sophos driver)",
+           "Sophos SFOS : modèle, firmware, clé d'appliance (driver sophos)", (
+        _c("sfosDeviceName", "1.3.6.1.4.1.2604.5.1.1.2.0"),
+        _c("sfosDeviceType", "1.3.6.1.4.1.2604.5.1.1.3.0"),
+        _c("sfosDeviceFWVersion", "1.3.6.1.4.1.2604.5.1.1.4.0"),
+        _c("sfosDeviceAppKey", "1.3.6.1.4.1.2604.5.1.1.5.0")),
+        mode="get", types=frozenset({"firewall"})),
+    Preset("mikrotik", "MikroTik: board, serial, RouterOS version (mikrotik driver)",
+           "MikroTik : carte, numéro de série, version RouterOS (driver mikrotik)", (
+        _c("mtxrBoardName", "1.3.6.1.4.1.14988.1.1.7.8.0"),
+        _c("mtxrSerialNumber", "1.3.6.1.4.1.14988.1.1.7.3.0"),
+        _c("mtxrLicVersion", "1.3.6.1.4.1.14988.1.1.4.4.0")),
+        mode="get", types=frozenset({"router", "wireless", "switch"})),
+    Preset("mikrotik-wifi", "MikroTik: Wi-Fi stations (mikrotik driver)",
+           "MikroTik : stations Wi-Fi (driver mikrotik)", (
+        _c("mtxrWlRtabIface", "1.3.6.1.4.1.14988.1.1.1.2.1.2"),
+        _c("mtxrWlRtabStrength", "1.3.6.1.4.1.14988.1.1.1.2.1.3")),
+        types=frozenset({"router", "wireless"})),
+    Preset("cisco-wlc-aps", "Cisco AireOS: access points (cisco-wlc driver)",
+           "Cisco AireOS : points d'accès (driver cisco-wlc)", (
+        _c("bsnAPName", "1.3.6.1.4.1.14179.2.2.1.1.3"),
+        _c("bsnAPModel", "1.3.6.1.4.1.14179.2.2.1.1.16"),
+        _c("bsnAPSerialNumber", "1.3.6.1.4.1.14179.2.2.1.1.17"),
+        _c("bsnApIpAddress", "1.3.6.1.4.1.14179.2.2.1.1.19")),
+        types=frozenset({"wireless"})),
+    Preset("cisco-wlc-clients", "Cisco AireOS: clients (cisco-wlc driver)",
+           "Cisco AireOS : clients (driver cisco-wlc)", (
+        _c("bsnMobileStationIpAddress", "1.3.6.1.4.1.14179.2.1.4.1.2"),
+        _c("bsnMobileStationAPMacAddr", "1.3.6.1.4.1.14179.2.1.4.1.4", "mac"),
+        _c("bsnMobileStationAPIfSlotId", "1.3.6.1.4.1.14179.2.1.4.1.5"),
+        _c("bsnMobileStationSsid", "1.3.6.1.4.1.14179.2.1.4.1.7")),
+        types=frozenset({"wireless"})),
     Preset("enterprise", "Vendor private sub-tree (first values)",
            "Sous-arbre privé du constructeur (premières valeurs)", (), mode="enterprise"),
 )

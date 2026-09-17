@@ -344,7 +344,8 @@ def agents() -> dict[str, list[Record]]:
     ]
 
     # Sophos-like firewall: no layer 3 in sysServices, no ENTITY-MIB, no bridge, v2c only,
-    # ARP only through the legacy ipNetToMediaTable.
+    # ARP only through the legacy ipNetToMediaTable. Model, version and serial number only in
+    # SFOS-FIREWALL-MIB (sophos driver).
     a["fw"] = [
         *system("Linux localhost 6.6.44 #1 SMP Tue Jan 14 08:00:00 UTC 2026 x86_64",
                 "1.3.6.1.4.1.2604.5", "fw-edge.example.net", location="Server room",
@@ -356,6 +357,10 @@ def agents() -> dict[str, list[Record]]:
                           (1, "192.0.2.51", "00:00:5e:00:53:a1"),
                           (2, "198.51.100.20", "00:00:5e:00:53:b0"),
                           (1, "192.0.2.40", C0), (1, "192.0.2.60", C1)]),
+        text("1.3.6.1.4.1.2604.5.1.1.2.0", "fw-edge"),
+        text("1.3.6.1.4.1.2604.5.1.1.3.0", "XGS2100"),
+        text("1.3.6.1.4.1.2604.5.1.1.4.0", "SFOS 20.0.1 MR-1-Build342"),
+        text("1.3.6.1.4.1.2604.5.1.1.5.0", "X21002ABCDEF12"),
     ]
 
     # Printer of an unknown vendor: typed by the standard Printer-MIB only.
@@ -446,6 +451,93 @@ def agents() -> dict[str, list[Record]]:
     return a
 
 
+def if_stack(pairs: list[tuple[int, int]]) -> list[Record]:
+    """ifStackStatus: (higher layer, lower layer) -> active."""
+    return [integer(f"1.3.6.1.2.1.31.1.2.1.3.{hi}.{lo}", 1) for hi, lo in pairs]
+
+
+def driver_agents() -> dict[str, list[Record]]:
+    """Agents for vendor drivers (phase 5), served by the lab but not part of all_seeds()."""
+    a: dict[str, list[Record]] = {}
+    stations = [f"00:00:5e:00:56:{n:02x}" for n in range(1, 9)]
+
+    # FortiGate: sysDescr is just the model; version and serial in the private MIB.
+    a["fortigate"] = [
+        *system("FGT60F", "1.3.6.1.4.1.12356.101.1.643", "fgt-branch", services=78),
+        *interfaces([{"index": 1, "descr": "wan1", "mac": "00:00:5e:00:53:22"},
+                     {"index": 5, "descr": "internal", "mac": "00:00:5e:00:53:23"}]),
+        *ip_addresses([("192.0.2.22", 5, 24)]),
+        text("1.3.6.1.4.1.12356.100.1.1.1.0", "FGT60FTK20000001"),
+        text("1.3.6.1.4.1.12356.101.4.1.1.0", "v7.2.5,build1517,230606 (GA.F)"),
+    ]
+
+    # MikroTik RouterOS access point: stations registered on wlan1 (ifType 71).
+    a["mikrotik"] = [
+        *system("RouterOS RB5009UG+S+", "1.3.6.1.4.1.14988.1", "mt-office", services=78),
+        *interfaces([{"index": 1, "descr": "ether1", "mac": "00:00:5e:00:53:24"},
+                     {"index": 7, "descr": "wlan1", "type": 71, "mac": "00:00:5e:00:53:25"}]),
+        *ip_addresses([("192.0.2.23", 1, 24)]),
+        *ip_net_to_media([(7, "192.0.2.131", stations[0])]),
+        text("1.3.6.1.4.1.14988.1.1.4.4.0", "7.12.1"),
+        text("1.3.6.1.4.1.14988.1.1.7.3.0", "HCQ0812ABC1"),
+        text("1.3.6.1.4.1.14988.1.1.7.8.0", "RB5009UG+S+"),
+        *[integer(f"1.3.6.1.4.1.14988.1.1.1.2.1.2.{_mac_index(m)}.7", 7)
+          for m in stations[:3]],
+    ]
+
+    # Cisco AireOS controller: two joined APs, clients tunnelled to the controller.
+    ap_hall, ap_lab = "00:00:5e:00:53:70", "00:00:5e:00:53:71"
+    ap_base = "1.3.6.1.4.1.14179.2.2.1.1"
+    sta_base = "1.3.6.1.4.1.14179.2.1.4.1"
+    aps = []
+    for ap_mac, name, address, serial, location in (
+            (ap_hall, "ap-hall", "192.0.2.70", "FGL2201AAAA", "Main hall"),
+            (ap_lab, "ap-lab", "192.0.2.71", "FGL2201BBBB", "")):
+        idx = _mac_index(ap_mac)
+        aps += [mac(f"{ap_base}.1.{idx}", ap_mac), text(f"{ap_base}.3.{idx}", name),
+                text(f"{ap_base}.4.{idx}", location), text(f"{ap_base}.8.{idx}", "8.10.185.0"),
+                text(f"{ap_base}.16.{idx}", "AIR-AP2802I-E-K9"),
+                text(f"{ap_base}.17.{idx}", serial), ipaddr(f"{ap_base}.19.{idx}", address)]
+    clients = []
+    for sta, ap_mac, slot, address in ((stations[3], ap_hall, 1, "192.0.2.101"),
+                                       (stations[4], ap_hall, 0, "192.0.2.102"),
+                                       (stations[5], ap_lab, 1, ""),
+                                       (stations[6], "00:00:5e:00:53:7f", 1, "192.0.2.109")):
+        idx = _mac_index(sta)
+        clients += [mac(f"{sta_base}.1.{idx}", sta), integer(f"{sta_base}.5.{idx}", slot),
+                    mac(f"{sta_base}.4.{idx}", ap_mac), text(f"{sta_base}.7.{idx}", "corp")]
+        if address:
+            clients.append(ipaddr(f"{sta_base}.2.{idx}", address))
+    a["wlc"] = [
+        *system("Cisco Controller", "1.3.6.1.4.1.14179.1.1.4.3", "wlc-01", services=6),
+        *interfaces([{"index": 1, "descr": "Port 1", "mac": "00:00:5e:00:53:26"}]),
+        *ip_addresses([("192.0.2.24", 1, 24)]),
+        *aps, *clients,
+    ]
+
+    # Juniper EX: MACs are learnt on logical units ge-0/0/N.0 stacked on the physical ports;
+    # LLDP (and so the uplink rule) lives on the physical port ge-0/0/2.
+    ex_mac = "00:00:5e:00:53:27"
+    a["ex-units"] = [
+        *system("Juniper Networks, Inc. ex3400-24t Ethernet Switch, kernel JUNOS 22.4R3.25",
+                "1.3.6.1.4.1.2636.1.1.1.2.151", "ex-floor2", services=6),
+        *bridge_address(ex_mac), *lldp_local(ex_mac, CAP_BRIDGE),
+        *interfaces([{"index": 510, "descr": "ge-0/0/1", "mac": "00:00:5e:27:01:01"},
+                     {"index": 511, "descr": "ge-0/0/2", "mac": "00:00:5e:27:01:02"},
+                     {"index": 530, "descr": "ge-0/0/1.0", "type": 53},
+                     {"index": 531, "descr": "ge-0/0/2.0", "type": 53},
+                     {"index": 540, "descr": "irb.0", "type": 53}]),
+        *if_stack([(530, 510), (531, 511)]),
+        *ip_addresses([("192.0.2.25", 540, 24)]),
+        *base_ports({1: 530, 2: 531}),
+        *qbridge_fdb([(7, stations[7], 1, 3), (7, C0, 2, 3)], {10: 7}, {10: "USERS"}, {}),
+        *lldp_local_ports({2: (5, "ge-0/0/2", "ge-0/0/2")}),
+        *lldp_remote([{"port": 2, "chassis": "00:00:5e:00:53:99", "port_subtype": 5,
+                       "port_id": "xe-0/0/1", "sys_name": "core-unpolled", "caps": CAP_BRIDGE}]),
+    ]
+    return a
+
+
 def vlan_instances() -> dict[str, dict[int, list[Record]]]:
     """Per-VLAN bridge instances: agent -> {vlan: records}."""
     ports = base_ports({n: 10100 + n for n in range(1, 5)})
@@ -462,7 +554,7 @@ def render(records: list[Record]) -> str:
 
 def build(out: Path = OUT) -> dict[str, Path]:
     written = {}
-    for name, records in agents().items():
+    for name, records in {**agents(), **driver_agents()}.items():
         path = out / name / "public.snmprec"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(render(records), encoding="ascii")

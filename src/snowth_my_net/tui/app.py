@@ -1109,6 +1109,7 @@ class DeviceScreen(Screen):
                 (t("id.location"), device["sys_location"] or "—"),
                 (t("id.contact"), device["sys_contact"] or "—"),
                 (t("id.credential"), device["credential"] or "—"),
+                (t("id.driver"), device["driver"] or "—"),
                 (t("id.type"), type_text),
                 (t("id.why"), Text(f"{rule} — {reason}" if rule else "—", style="italic")),
                 (t("id.seen"), self.ctx.local_time(device["last_seen"])),

@@ -244,6 +244,7 @@ STRINGS: dict[str, tuple[str, str]] = {
     "id.location": ("Location", "Emplacement"),
     "id.contact": ("Contact", "Contact"),
     "id.credential": ("SNMP credential", "Identifiant SNMP"),
+    "id.driver": ("Vendor driver", "Driver constructeur"),
     "id.type": ("Type", "Type"),
     "id.why": ("Why this type", "Pourquoi ce type"),
     "id.no_type": ("empty — no sure evidence; set it by hand in Settings",

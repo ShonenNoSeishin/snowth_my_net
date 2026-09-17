@@ -74,7 +74,8 @@ def build_snapshot(loaded, repo, view, devices: list[dict], now: int) -> dict:
             "os": d["os_name"], "os_version": d["os_version"], "base_mac": d["base_mac"],
             "device_type": d["device_type"], "type_rule": d["type_rule"],
             "type_reason": d["type_reason"], "detected_type": d.get("detected_type"),
-            "credential": d["credential"], "first_seen": iso_z(d["first_seen"]),
+            "credential": d["credential"], "driver": d["driver"],
+            "first_seen": iso_z(d["first_seen"]),
             "last_seen": iso_z(d["last_seen"]), "last_collect_status": d["last_collect_status"],
             "chassis": [{k: c[k] for k in ("model", "serial", "sw_rev", "descr")}
                         for c in by_device["chassis"][d["id"]]],

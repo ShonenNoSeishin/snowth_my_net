@@ -79,7 +79,7 @@ added within a version.
     "location": "…", "contact": "…", "object_id": "…", "vendor": "…", "model": "…",
     "serial": "…", "os": "…", "os_version": "…", "base_mac": "…",
     "device_type": "…", "type_rule": "…", "type_reason": "…", "detected_type": "…",
-    "credential": "v3-main", "first_seen": "…", "last_seen": "…", "last_collect_status": "ok",
+    "credential": "v3-main", "driver": "sophos", "first_seen": "…", "last_seen": "…", "last_collect_status": "ok",
     "chassis": [], "addresses": [], "vlans": [],
     "interfaces": [{"ifindex": 8, "name": "Gi1/0/1", "role": "access", "role_reasons": [],
                     "mac_count": 1, "…": "…"}],

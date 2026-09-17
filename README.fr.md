@@ -134,8 +134,12 @@ IP, VLAN, liens, voisins, collectes, valeurs personnalisées), des colonnes, des
 ou une requête SQL en lecture seule ; en CSV, JSON, Markdown ou page HTML autonome, à la demande,
 planifié ou envoyé vers une cible.
 
-Pour le reste, les extensions Python ajoutent des collecteurs, des jeux de données et des
-exports via une petite API en lecture seule (avec un harnais de test), et les hooks lancent vos
+Les drivers constructeur complètent ce que les MIB standard ne disent pas (identité Fortinet,
+Sophos et MikroTik, stations Wi-Fi MikroTik, points d'accès et clients des contrôleurs Cisco
+AireOS), sans jamais remplacer la collecte standard.
+
+Pour le reste, les extensions Python ajoutent des collecteurs, des jeux de données, des exports
+et des drivers via une petite API en lecture seule (avec un harnais de test), et les hooks lancent vos
 propres programmes après une collecte, un export, un push ou un rapport. Voir
 [docs/extensions.md](docs/extensions.md) et
 [examples/extensions](examples/extensions/).
@@ -148,6 +152,7 @@ La documentation détaillée est en anglais :
 * [Formats de sortie et push HTTP](docs/formats.md)
 * [Déploiement : pipx + cron/systemd, Docker Compose](docs/deployment.md)
 * [Dépannage et notes par constructeur](docs/troubleshooting.md)
+* [Drivers constructeur](docs/drivers.md)
 * [Extensions](docs/extensions.md)
 * [Notes de conception](DESIGN.md) (en français)
 

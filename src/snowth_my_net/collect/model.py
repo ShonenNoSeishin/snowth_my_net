@@ -71,6 +71,8 @@ class DeviceResult:
     bridge_ports: dict[int, int] = field(default_factory=dict)   # bridge port -> ifIndex
     neighbors: list[Neighbor] = field(default_factory=list)
     custom: dict[str, tuple[Outcome, object]] = field(default_factory=dict)  # name -> result
+    driver: str = ""                      # name of the vendor driver used, if any
+    synthetic: list = field(default_factory=list)   # drivers.SyntheticDevice
     ident: Identification | None = None
     outcomes: dict[str, Outcome] = field(default_factory=dict)
     error: str | None = None

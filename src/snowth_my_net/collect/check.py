@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 
+from snowth_my_net import drivers
 from snowth_my_net.collect import custom, functions, identify
 from snowth_my_net.collect.discovery import PlannedTarget
 from snowth_my_net.collect.engine import run_function, snmp_params
@@ -17,6 +18,7 @@ from snowth_my_net.collect.model import DeviceResult, Identification
 from snowth_my_net.collect.tables.system import IDENTITY_OIDS, parse_system
 from snowth_my_net.config.effective import settings_for
 from snowth_my_net.config.loader import LoadedConfig, ResolvedCredential
+from snowth_my_net.drivers.base import fill_identity
 from snowth_my_net.snmp import oids
 from snowth_my_net.snmp.client import EnginePool, SnmpClient, SnmpError
 from snowth_my_net.snmp.credentials import candidates_for, probe
@@ -106,6 +108,20 @@ async def check_devices(loaded: LoadedConfig, credentials: list[ResolvedCredenti
             await run_function(r, "type_evidence", client, deadline, functions.type_evidence)
             dc.ident = identify.identify(system, r.chassis, r.evidence, settings.type,
                                          override_source=settings.source("type"))
+            driver = drivers.select(settings.driver, system.object_id, loaded.drivers)
+            if driver is not None:
+                label = f"driver:{driver.name}"
+                r.ident = dc.ident
+                try:
+                    async with asyncio.timeout(settings.snmp.table_timeout):
+                        found = await driver.identify(client, r)
+                    filled = fill_identity(dc.ident, found)
+                    dc.mibs[label] = f"ok({', '.join(filled)})" if filled else (
+                        "ok" if found or not driver.identity_requests() else "absent")
+                except TimeoutError:
+                    dc.mibs[label] = "timeout"
+                except SnmpError as exc:
+                    dc.mibs[label] = "timeout" if exc.kind == "timeout" else f"error: {exc}"
             for key, source in settings.sources.items():
                 if source == "manual" and key in baseline_sources(cfg, p.target.host):
                     dc.warnings.append(f"manual setting '{key}' overrides config.yml")

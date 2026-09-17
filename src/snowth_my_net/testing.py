@@ -21,7 +21,7 @@ from typing import Any
 
 from snowth_my_net.api import DeviceView, Extension, Value
 
-__all__ = ["FakeSnmp", "device", "export", "load", "run_collector", "run_dataset"]
+__all__ = ["FakeSnmp", "device", "export", "load", "run_collector", "run_dataset", "run_driver"]
 
 
 def _key(oid: str) -> tuple[int, ...]:
@@ -111,6 +111,25 @@ def run_dataset(extension: Extension, name: str,
     if declared is None:
         raise KeyError(f"no dataset {name!r} in extension {extension.name!r}")
     return declared.func(_Context(datasets or {}, now or int(time.time())))
+
+
+def run_driver(extension: Extension, name: str, snmp: FakeSnmp | None = None,
+               view: DeviceView | None = None, **device_fields: str) -> tuple[dict, Any]:
+    """Run a driver's identity and observations functions: ``(identity, Observations)``."""
+    declared = next((d for d in extension.drivers if d.name == name), None)
+    if declared is None:
+        raise KeyError(f"no driver {name!r} in extension {extension.name!r}")
+    view = view or device(**device_fields)
+    snmp = snmp or FakeSnmp({})
+
+    async def go():
+        identity = (await declared.identity_func(view, snmp)
+                    if declared.identity_func else {})
+        observations = (await declared.observations_func(view, snmp)
+                        if declared.observations_func else None)
+        return identity, observations
+
+    return asyncio.run(go())
 
 
 def export(extension: Extension, filename: str, snapshot: dict) -> bytes:

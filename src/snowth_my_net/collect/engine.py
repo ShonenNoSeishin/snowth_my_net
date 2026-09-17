@@ -14,9 +14,11 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
+from snowth_my_net import drivers
 from snowth_my_net.clock import Clock
 from snowth_my_net.collect import custom, functions, identify
 from snowth_my_net.collect.discovery import (
@@ -37,9 +39,11 @@ from snowth_my_net.collect.model import (
     DeviceResult,
     Outcome,
 )
+from snowth_my_net.collect.tables.bridge import FdbEntry
 from snowth_my_net.collect.tables.system import IDENTITY_OIDS, parse_system
 from snowth_my_net.config.effective import FEATURES, DeviceSettings, settings_for
 from snowth_my_net.config.loader import LoadedConfig, ResolvedCredential
+from snowth_my_net.drivers.base import fill_identity
 from snowth_my_net.logs import get_logger
 from snowth_my_net.snmp import oids
 from snowth_my_net.snmp.client import EnginePool, SnmpClient, SnmpError, SnmpParams
@@ -61,6 +65,45 @@ def snmp_params(settings: DeviceSettings) -> SnmpParams:
         use_bulk=s.use_bulk, per_device_concurrency=s.per_device_concurrency,
         pace_ms=s.pace_ms, max_rows=s.max_rows_per_table,
     )
+
+
+def driver_identity(driver: drivers.Driver) -> Function:
+    """The ``driver`` function: private identity objects, applied to empty fields only."""
+
+    async def func(client: SnmpClient, r: DeviceResult, rows: Rows) -> None:
+        assert r.ident is not None and r.system is not None
+        found = await driver.identify(client, r)
+        values = rows.column("values")
+        for key, value in found.items():
+            if value:
+                values[(len(values),)] = key
+        if not driver.identity_requests() and not found:
+            values[(0,)] = driver.name          # nothing to read: the driver still applies
+        filled = fill_identity(r.ident, found)
+        if not r.ident.device_type and "model" in filled:
+            vendor = r.ident.vendor
+            _os, _version, rule = identify.os_of(r.system, vendor)
+            r.ident.device_type, r.ident.type_rule, r.ident.type_reason = identify.decide_type(
+                r.system, r.evidence, vendor, r.ident.model, rule)
+
+    return func
+
+
+def fold_subinterfaces(r: DeviceResult) -> None:
+    """Sightings on a logical unit (``ge-0/0/5.0``) belong to its physical port, where LLDP,
+    the port role and the operator's port names live."""
+    parents = {i.ifindex: i.parent_ifindex for i in r.interfaces.values() if i.parent_ifindex}
+    if not parents:
+        return
+    folded: dict[tuple[str, int, int], FdbEntry] = {}
+    for entry in r.fdb:
+        if entry.ifindex in parents:
+            entry = dataclasses.replace(entry, ifindex=parents[entry.ifindex])
+        folded.setdefault((entry.mac, entry.ifindex, entry.vlan), entry)
+    r.fdb = list(folded.values())
+    for unit, port in parents.items():
+        if unit in r.pvid and port not in r.pvid:
+            r.pvid[port] = r.pvid[unit]
 
 
 async def run_function(r: DeviceResult, name: str, client: SnmpClient, deadline: float,
@@ -383,6 +426,11 @@ class Collector:
         # when reading, so that changing them takes effect at once and "back to automatic"
         # shows what the evidence says.
         r.ident = identify.identify(r.system, r.chassis, r.evidence)
+        driver = drivers.select(r.settings.driver, r.system.object_id, self.loaded.drivers)
+        if driver is not None:
+            r.driver = driver.name
+            await run_function(r, "driver", client, deadline, driver_identity(driver),
+                               mode="auto")
         if self.repo is not None:
             matched, warnings = self.repo.match_device(
                 serial=r.ident.serial, pen=r.ident.pen, base_mac=r.system.base_mac,
@@ -407,6 +455,11 @@ class Collector:
             if r.superseded:
                 return
             await run_function(r, name, client, deadline, func)
+        fold_subinterfaces(r)
+        if (self.mode == "collect" and driver is not None and driver.has_extra
+                and not r.superseded):
+            await run_function(r, f"driver:{driver.name}", client, deadline, driver.extra,
+                               mode="auto")
         if self.mode == "collect" and not r.superseded:
             await self._custom(r, client, deadline)
 

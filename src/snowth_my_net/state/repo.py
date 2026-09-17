@@ -242,6 +242,7 @@ class Repo:
             "type_rule": ident.type_rule if entity_known else keep,
             "type_reason": ident.type_reason if entity_known else keep,
             "credential": r.credential,
+            "driver": r.driver or None,
             "last_seen": now, "last_collect_at": now, "last_collect_status": r.status,
         }
         with self.conn:
@@ -261,6 +262,7 @@ class Repo:
             self._save_details(device_id, r, now)
             self._save_observations(device_id, r, now, run_id)
             self._save_custom(device_id, r, now)
+            self._save_synthetic(device_id, r, now, run_id)
             self._save_outcomes(run_id, device_id, r.outcomes.values())
             self._target_ok(str(r.target), now, device_id, r.credential, is_alias=False)
         return device_id
@@ -309,9 +311,72 @@ class Repo:
                   i.oper_status, i.speed_mbps, i.phys_mac, i.lag_ifindex, now)
                  for i in r.interfaces.values()])
 
+    def _save_synthetic(self, parent_id: int, r: DeviceResult, now: int, run_id: int) -> None:
+        """Devices described by a driver (e.g. access points of a wireless controller).
+
+        A synthetic device is matched by its base MAC. When that device is also polled
+        directly, its polled identity is kept and only the stations are added.
+        """
+        if not r.synthetic or r.outcome_status(f"driver:{r.driver}") not in (OK, PARTIAL):
+            return
+        c = self.conn
+        parent = r.system.name if r.system else f"#{parent_id}"
+        vendor = r.ident.vendor if r.ident else ""
+        for syn in r.synthetic:
+            if not syn.address:
+                continue                  # no management address: nothing to join on
+            row = c.execute(
+                "SELECT id, driver FROM devices WHERE base_mac = ? UNION "
+                "SELECT d.id, d.driver FROM device_macs m JOIN devices d ON d.id = m.device_id "
+                "WHERE m.mac = ? LIMIT 1", (syn.key_mac, syn.key_mac)).fetchone()
+            fields = {
+                "mgmt_address": syn.address, "sys_name": syn.name,
+                "sys_descr": f"{syn.model or 'Access point'} (reported by {parent})",
+                "sys_location": syn.location, "vendor": vendor, "model": syn.model,
+                "serial": syn.serial or None, "os_version": syn.os_version,
+                "device_type": syn.device_type, "type_rule": "driver",
+                "type_reason": syn.type_reason, "driver": f"synthetic:{r.driver}",
+                "base_mac": syn.key_mac, "last_seen": now, "last_collect_at": now,
+                "last_collect_status": "ok",
+            }
+            if row is None:
+                cols = [*fields, "first_seen"]
+                cur = c.execute(
+                    f"INSERT INTO devices({', '.join(cols)}) "  # noqa: S608 - fixed names
+                    f"VALUES ({', '.join('?' * len(cols))})", [*fields.values(), now])
+                device_id = int(cur.lastrowid)
+            else:
+                device_id = row["id"]
+                if (row["driver"] or "").startswith("synthetic:"):
+                    c.execute(f"UPDATE devices SET {', '.join(f'{k} = ?' for k in fields)} "  # noqa: S608
+                              "WHERE id = ?", [*fields.values(), device_id])
+                else:
+                    c.execute("UPDATE devices SET last_seen = ? WHERE id = ?", (now, device_id))
+            c.execute(
+                "INSERT INTO device_macs(device_id, mac, source, last_seen) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(device_id, mac) DO UPDATE SET last_seen = excluded.last_seen",
+                (device_id, syn.key_mac, "driver", now))
+            c.execute(
+                "INSERT INTO device_addresses(device_id, address, last_seen) VALUES (?, ?, ?) "
+                "ON CONFLICT(device_id, address) DO UPDATE SET last_seen = excluded.last_seen",
+                (device_id, syn.address, now))
+            c.executemany(
+                "INSERT INTO interfaces(device_id, ifindex, name, descr, if_type, last_seen) "
+                "VALUES (?, ?, ?, ?, 71, ?) ON CONFLICT(device_id, ifindex) DO UPDATE SET "
+                "last_seen = excluded.last_seen",
+                [(device_id, port, name, name, now) for port, name in syn.ports.items()])
+            c.executemany(
+                "INSERT INTO fdb_obs(mac, device_id, ifindex, vlan, vlan_source, method, "
+                "first_seen, last_seen, last_run_id) VALUES (?, ?, ?, ?, 'none', ?, ?, ?, ?) "
+                "ON CONFLICT(mac, device_id, ifindex, vlan) DO UPDATE SET "
+                "last_seen = excluded.last_seen, last_run_id = excluded.last_run_id",
+                [(mac, device_id, port, vlan, r.driver, now, now, run_id)
+                 for mac, port, vlan in syn.stations])
+
     def _save_observations(self, device_id: int, r: DeviceResult, now: int, run_id: int) -> None:
         c = self.conn
-        if r.outcome_status("fdb") in (OK, PARTIAL):
+        driver_extra = r.outcome_status(f"driver:{r.driver}") in (OK, PARTIAL)
+        if r.outcome_status("fdb") in (OK, PARTIAL) or driver_extra:
             c.executemany(
                 "INSERT INTO fdb_obs(mac, device_id, ifindex, vlan, vlan_source, method, "
                 "first_seen, last_seen, last_run_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
@@ -351,7 +416,7 @@ class Repo:
                   n.port_id, n.port_desc, ",".join(n.mgmt_addresses), ",".join(sorted(n.caps)),
                   n.platform, n.local_method, now, now, run_id)
                  for n in r.neighbors if n.protocol == protocol])
-        if r.outcome_status("arp") in (OK, PARTIAL):
+        if r.outcome_status("arp") in (OK, PARTIAL) or driver_extra:
             c.executemany(
                 "INSERT INTO arp_obs(mac, address, family, device_id, ifindex, source_table, "
                 "first_seen, last_seen, last_run_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "

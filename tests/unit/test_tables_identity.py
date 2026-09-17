@@ -136,3 +136,39 @@ def test_duplicate_names_get_an_ip_suffix():
         DeviceNameCfg(),
     )
     assert names == {1: "Switch (10.0.0.1)", 2: "switch (10.0.0.2)", 3: "core"}
+
+
+def test_logical_units_are_folded_into_their_physical_port_only_when_named_after_it():
+    cols = {
+        "ifName": {510: b"ge-0/0/1", 530: b"ge-0/0/1.0", 511: b"ge-0/0/2", 531: b"ge-0/0/2.100",
+                   540: b"irb.0", 600: b"gr-0/0/0", 601: b"gr-0/0/0.0", 700: b"ae0",
+                   701: b"ae0.0", 702: b"ge-0/0/9", 800: b"eth0.x"},
+        "ifType": {510: 6, 530: 53, 511: 6, 531: 53, 540: 53, 600: 131, 601: 53, 700: 161,
+                   701: 53, 702: 6, 800: 135},
+    }
+    stack = [(530, 510), (531, 511), (540, 0), (601, 600), (701, 700), (700, 702),
+             (800, 510)]
+    ifs = build_interfaces(cols, stack=stack)
+    assert {i: ifs[i].parent_ifindex for i in (530, 531, 540, 601, 701, 800)} == {
+        530: 510, 531: 511, 540: None, 601: 600, 701: 700, 800: None}
+    both = build_interfaces(cols, stack=[(530, 510), (530, 511)])
+    assert both[530].parent_ifindex is None          # two lower layers: ambiguous, untouched
+
+
+def test_fold_subinterfaces_merges_sightings_and_pvid():
+    from snowth_my_net.collect.engine import fold_subinterfaces
+    from snowth_my_net.collect.model import DeviceResult
+    from snowth_my_net.collect.tables.bridge import FdbEntry
+    from snowth_my_net.collect.tables.interfaces import Interface
+
+    r = DeviceResult(target=None, origin="seed", depth=0, settings=None)
+    r.interfaces = {510: Interface(510, "ge-0/0/1"), 530: Interface(530, "ge-0/0/1.0",
+                                                                    parent_ifindex=510)}
+    r.fdb = [FdbEntry("00:00:5e:00:53:01", 530, 10, "fdb", "qbridge"),
+             FdbEntry("00:00:5e:00:53:01", 510, 10, "fdb", "qbridge"),
+             FdbEntry("00:00:5e:00:53:02", 530, 10, "fdb", "qbridge")]
+    r.pvid = {530: 10}
+    fold_subinterfaces(r)
+    assert sorted((e.mac, e.ifindex) for e in r.fdb) == [("00:00:5e:00:53:01", 510),
+                                                         ("00:00:5e:00:53:02", 510)]
+    assert r.pvid == {530: 10, 510: 10}

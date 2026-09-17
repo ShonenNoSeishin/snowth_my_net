@@ -42,6 +42,7 @@ class Interface:
     speed_mbps: int | None = None
     phys_mac: str | None = None
     lag_ifindex: int | None = None
+    parent_ifindex: int | None = None    # logical unit (ge-0/0/5.0, Gi0/1.10) -> physical port
 
     @property
     def port_name(self) -> str:
@@ -97,4 +98,24 @@ def build_interfaces(
     for port, agg_index in (lag_attached or {}).items():
         if agg_index and port in result and agg_index != port and agg_index in result:
             result[port].lag_ifindex = agg_index
+    lowers: dict[int, list[int]] = {}
+    for higher, lower in stack or []:
+        if higher in result and lower in result and higher != lower:
+            lowers.setdefault(higher, []).append(lower)
+    for higher, below in lowers.items():
+        if len(below) == 1 and is_unit_of(result[higher], result[below[0]]):
+            result[higher].parent_ifindex = below[0]
     return result
+
+
+def is_unit_of(unit: Interface, port: Interface) -> bool:
+    """``ge-0/0/5.0`` over ``ge-0/0/5``: a numbered logical unit named after its lower layer.
+
+    Both conditions (ifStackTable says so AND the name is ``<port>.<number>``) are required, so
+    tunnels, VLAN interfaces and bundles are never folded into a port by accident.
+    """
+    for unit_name, port_name in ((unit.name, port.name), (unit.descr, port.descr)):
+        if port_name and unit_name.startswith(port_name + ".") and \
+                unit_name[len(port_name) + 1:].isdigit():
+            return True
+    return False

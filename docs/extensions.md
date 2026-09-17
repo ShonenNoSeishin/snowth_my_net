@@ -251,6 +251,7 @@ A complete, tested example: [`examples/extensions/host_storage.py`](../examples/
 | `collector(name, columns=[…], table=False, index="raw", applies_to={…}, every=0, mode="auto", fills={…}, description="", limit=10000)` | `async def f(device, snmp)` returning a dict of `columns`, or with `table=True` a list of dicts with an `index` key (`index="port"` when it is an ifIndex) | Stored like a YAML collector: device sheet, `custom show`, `snapshot.json`, dataset `custom:<name>`, `fills` of standard fields. |
 | `report_dataset(name, fields=[Field(…)], description="")` | `def f(ctx)` returning a list of dicts | Dataset `py:<name>` for reports (SQL table `py_<name>`). `ctx.now` is the current time, `ctx.dataset_rows("devices")` gives another dataset, `ctx.config_dir` the configuration directory. |
 | `exporter(filename, description="")` | `def f(snapshot)` returning bytes (or text) | Written atomically under the output directory by `export` (not with `--only`). |
+| `driver(name, object_ids=[…], description="")` then `@drv.identity` / `@drv.observations` | `async def f(device, snmp)` returning a dict (`model`, `serial`, `os_name`, `os_version`) / `Observations(stations, arp, access_points)` | A vendor driver, tried before the built-in ones; see [drivers](drivers.md#writing-a-driver). |
 
 `device` is a `DeviceView` (`address`, `name`, `vendor`, `model`, `os_name`, `os_version`,
 `device_type`, `object_id`). `snmp.get("oid", …)` returns `{oid: value}`; `snmp.walk("oid")`
@@ -287,6 +288,7 @@ snmp = testing.FakeSnmp({"1.3.6.1.2.1.25.2.3.1.3.31": b"/", "1.3.6.1.2.1.25.2.3.
 rows = testing.run_collector(ext, "host-storage", snmp, vendor="Linux")   # stored values
 usage = testing.run_dataset(ext, "disk-usage", {"custom:host-storage": rows})
 data = testing.export(ext, "metrics/snowth_my_net.prom", {"devices": [], "nodes": []})
+identity, observations = testing.run_driver(ext, "acme-os", snmp)
 ```
 
 Then, on a real device and without storing anything: `snowth_my_net custom test host-storage

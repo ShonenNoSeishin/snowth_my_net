@@ -257,7 +257,10 @@ class DeviceOverride:
     disabled: bool | None = None
 
     def check(self) -> list[str]:
-        return _positive("uplink_mac_threshold", self.uplink_mac_threshold)
+        errs = _positive("uplink_mac_threshold", self.uplink_mac_threshold)
+        if self.driver is not None and not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,62}", self.driver):
+            errs.append(f"driver: {self.driver!r} is not a driver name")
+        return errs   # names are checked once Python extensions are loaded (loader)
 
 
 # --------------------------------------------------------------------------- nodes / dns / oui

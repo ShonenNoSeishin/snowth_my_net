@@ -32,6 +32,7 @@ class PythonParts:
     collectors: list = field(default_factory=list)      # LoadedCollector
     datasets: list = field(default_factory=list)        # reports Dataset
     exporters: list = field(default_factory=list)       # (extension name, PythonExporter)
+    drivers: list = field(default_factory=list)         # drivers.python.ExtensionDriver
 
 
 def _short_error(exc: BaseException) -> str:
@@ -70,6 +71,8 @@ def load_python_extensions(names: list[str], directory: Path | None,
     from snowth_my_net.api import API_VERSION, Extension
     from snowth_my_net.collect.custom import python_collector_cfg
     from snowth_my_net.config.extensions import AppliesTo, LoadedCollector
+    from snowth_my_net.drivers import NAMES as BUILTIN_DRIVERS
+    from snowth_my_net.drivers.python import ExtensionDriver
     from snowth_my_net.reports.datasets import Dataset
 
     parts = PythonParts()
@@ -77,6 +80,7 @@ def load_python_extensions(names: list[str], directory: Path | None,
     seen_collectors = set(taken_collectors)
     seen_datasets: set[str] = set()
     seen_files: set[str] = set()
+    seen_drivers: set[str] = set()
     for name in names:
         try:
             extension, origin = find_extension(name, directory)
@@ -121,6 +125,17 @@ def load_python_extensions(names: list[str], directory: Path | None,
             parts.datasets.append(Dataset(f"py:{ds.name}", ds.description or
                                           f"from the Python extension {name}", ds.fields,
                                           _dataset_builder(ds.func)))
+        for declared in extension.drivers:
+            if declared.name in BUILTIN_DRIVERS or declared.name in seen_drivers:
+                errors.append(f"python extension '{name}': driver name '{declared.name}' is "
+                              "already used")
+                continue
+            if declared.identity_func is None and declared.observations_func is None:
+                errors.append(f"python extension '{name}': driver '{declared.name}' has neither "
+                              "identity nor observations")
+                continue
+            seen_drivers.add(declared.name)
+            parts.drivers.append(ExtensionDriver(declared, name))
         for exporter in extension.exporters:
             if exporter.filename in seen_files:
                 errors.append(f"python extension '{name}': file '{exporter.filename}' is "

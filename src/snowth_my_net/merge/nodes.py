@@ -98,6 +98,8 @@ class MergeInputs:
         default_factory=dict)
 
 
+IFTYPE_80211 = 71
+
 # --------------------------------------------------------------------------- outputs
 
 
@@ -171,7 +173,8 @@ def classify_port(port: PortInfo | None, mac_count: int, device: DeviceInfo,
         hard.append(("lag", "link aggregation"))
     for code, detail, strength in neighbor_reasons:
         (hard if strength == HARD else soft).append((code, detail))
-    if mac_count > device.uplink_mac_threshold:
+    # A radio (ifType ieee80211) serves stations directly: many MACs are expected there.
+    if mac_count > device.uplink_mac_threshold and not (port and port.if_type == IFTYPE_80211):
         soft.append(("mac_count", f"{mac_count} MACs > {device.uplink_mac_threshold}"))
     if hard or soft:
         return PortRole("uplink", tuple(hard + soft), HARD if hard else SOFT)

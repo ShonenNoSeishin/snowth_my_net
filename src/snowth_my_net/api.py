@@ -26,6 +26,9 @@ Extension points:
   ``py:<name>``.
 * ``exporter`` — ``def f(snapshot: dict) -> bytes``, written by ``export`` to the output
   directory.
+* ``driver`` — a vendor driver chosen by sysObjectID (or ``devices[].driver``): an ``identity``
+  function returning model/serial/OS fields (only empty fields are filled), and an
+  ``observations`` function returning Wi-Fi stations, ARP entries and access points.
 
 The SNMP object only offers ``get`` and ``walk``: extensions stay read-only towards devices.
 Test an extension without a network with :mod:`snowth_my_net.testing`.
@@ -41,8 +44,9 @@ from typing import Any, Protocol
 
 from snowth_my_net.reports.datasets import Field
 
-__all__ = ["API_VERSION", "DatasetContext", "DeviceView", "Extension", "ExtensionDefinitionError",
-           "Field", "ReadOnlySnmp", "Value", "ip", "mac", "number", "text"]
+__all__ = ["API_VERSION", "AccessPoint", "DatasetContext", "DeviceView", "Extension",
+           "ExtensionDefinitionError", "Field", "Observations", "ReadOnlySnmp", "Station", "Value",
+           "ip", "mac", "number", "text"]
 
 API_VERSION = 1
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}$")
@@ -164,6 +168,57 @@ class PythonExporter:
     description: str = ""
 
 
+@dataclass(frozen=True)
+class Station:
+    """A client seen on one of the device's own interfaces (``port`` is its ifIndex)."""
+
+    mac: str
+    port: int
+    vlan: int = 0
+
+
+@dataclass
+class AccessPoint:
+    """An access point described by a controller; published in ``devices.csv``."""
+
+    mac: str                     # base MAC: the identity of the AP
+    name: str
+    address: str                 # management IP (required to appear in the outputs)
+    model: str = ""
+    serial: str = ""
+    os_version: str = ""
+    location: str = ""
+    stations: list[Station] = field(default_factory=list)   # port = radio number
+    radio_names: dict[int, str] = field(default_factory=dict)
+
+
+@dataclass
+class Observations:
+    stations: list[Station] = field(default_factory=list)
+    arp: list[tuple[str, str]] = field(default_factory=list)          # (mac, ip)
+    access_points: list[AccessPoint] = field(default_factory=list)
+
+
+@dataclass
+class PythonDriver:
+    name: str
+    object_ids: list[str]
+    description: str = ""
+    identity_func: Callable | None = None
+    observations_func: Callable | None = None
+
+    def identity(self, func):
+        """``async def f(device, snmp) -> dict`` with any of model, serial, os_name,
+        os_version."""
+        self.identity_func = func
+        return func
+
+    def observations(self, func):
+        """``async def f(device, snmp) -> Observations``, run after the standard collection."""
+        self.observations_func = func
+        return func
+
+
 class Extension:
     def __init__(self, name: str, api_version: int = API_VERSION) -> None:
         if not NAME_RE.match(name):
@@ -174,6 +229,22 @@ class Extension:
         self.collectors: list[PythonCollector] = []
         self.datasets: list[PythonDataset] = []
         self.exporters: list[PythonExporter] = []
+        self.drivers: list[PythonDriver] = []
+
+    def driver(self, name: str, *, object_ids: list[str], description: str = ""
+               ) -> PythonDriver:
+        """Declare a driver; then decorate functions with ``.identity`` and
+        ``.observations``."""
+        if not NAME_RE.match(name):
+            raise ExtensionDefinitionError(f"driver name {name!r}: use lowercase letters, "
+                                           "digits, '-' and '_'")
+        bad = [o for o in object_ids if not re.fullmatch(r"\d+(\.\d+)+", str(o).strip("."))]
+        if bad:
+            raise ExtensionDefinitionError(f"driver {name!r}: object_ids must be numeric OIDs "
+                                           f"({', '.join(map(str, bad))})")
+        declared = PythonDriver(name, [str(o).strip(".") for o in object_ids], description)
+        self.drivers.append(declared)
+        return declared
 
     def collector(self, name: str, *, columns: list[str], table: bool = False,
                   index: str = "raw", applies_to: dict | None = None, every: str | int = 0,

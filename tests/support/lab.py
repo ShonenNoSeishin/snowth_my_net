@@ -42,6 +42,15 @@ LAB = {
     "sw-cisco": (["127.0.0.21"], True),
 }
 DEAD = "127.0.0.19"
+# Vendor driver agents (phase 5): served by the lab, not part of all_seeds() so that the golden
+# files of the standard path stay independent of them.
+DRIVER_LAB = {
+    "fortigate": (["127.0.0.22"], True),
+    "mikrotik": (["127.0.0.23"], True),
+    "wlc": (["127.0.0.24"], True),
+    "ex-units": (["127.0.0.25"], True),
+}
+ALL_AGENTS = {**LAB, **DRIVER_LAB}
 
 
 def responder_path() -> str | None:
@@ -65,7 +74,7 @@ class RunningLab:
         return f"{host}:{self.port}"
 
     def agent(self, name: str, index: int = 0) -> str:
-        return self.address(LAB[name][0][index])
+        return self.address(ALL_AGENTS[name][0][index])
 
     def all_seeds(self, with_dead: bool = True) -> list[str]:
         seeds = [self.address(h) for hosts, _ in LAB.values() for h in hosts]
@@ -120,7 +129,7 @@ def start_lab(root: Path, port: int | None = None, timeout: float = 60) -> Runni
     if responder is None:
         raise RuntimeError("snmpsim-command-responder not found (pip install snmpsim pysmi)")
     lab = RunningLab(port or _free_port(), root)
-    for name, (hosts, v3) in LAB.items():
+    for name, (hosts, v3) in ALL_AGENTS.items():
         data = root / name / "data"
         shutil.copytree(FIXTURES / name, data)
         (data / "public.snmprec").rename(data / f"{COMMUNITY}.snmprec")
@@ -140,7 +149,7 @@ def start_lab(root: Path, port: int | None = None, timeout: float = 60) -> Runni
                     f"--v3-priv-key={V3_PRIV}", "--v3-priv-proto=AES128"]
         lab.procs.append(subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
                                           stderr=subprocess.DEVNULL))
-    hosts = [h for spec, _ in LAB.values() for h in spec]
+    hosts = [h for spec, _ in ALL_AGENTS.values() for h in spec]
     missing = asyncio.run(_wait_ready(hosts, lab.port, time.monotonic() + timeout))
     if missing:
         lab.stop()

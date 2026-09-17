@@ -120,7 +120,11 @@ Build your own reports: pick a dataset (devices, interfaces, nodes, IP history, 
 neighbours, runs, custom values), columns, filters and sort, or write a read-only SQL query; get
 CSV, JSON, Markdown or a standalone HTML page, on demand, on a schedule, or pushed to a target.
 
-For the rest, Python extensions add collectors, report datasets and exporters through a small
+Vendor drivers fill what standard MIBs cannot say (Fortinet, Sophos and MikroTik identity,
+MikroTik Wi-Fi stations, access points and clients of Cisco AireOS controllers), without ever
+replacing the standard collection.
+
+For the rest, Python extensions add collectors, report datasets, exporters and drivers through a small
 read-only API (with a test harness), and hooks run your own programs after a collect, an export,
 a push or a report.
 See [docs/extensions.md](docs/extensions.md) and [examples/extensions](examples/extensions/).
@@ -131,6 +135,7 @@ See [docs/extensions.md](docs/extensions.md) and [examples/extensions](examples/
 * [Output formats and HTTP push](docs/formats.md)
 * [Deployment: pipx + cron/systemd, Docker Compose](docs/deployment.md)
 * [Troubleshooting and vendor notes](docs/troubleshooting.md)
+* [Vendor drivers](docs/drivers.md)
 * [Extensions](docs/extensions.md)
 * [Design notes](DESIGN.md) (in French)
 

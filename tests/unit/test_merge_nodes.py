@@ -142,3 +142,11 @@ def test_exclusions():
 def test_arp_only_mac_is_a_node_without_position():
     n = resolve_nodes(inputs(arps=[arp(HOST, "192.0.2.50")]), NodesCfg(), NOW)[0]
     assert n.positions == [] and n.current_ip.ip == "192.0.2.50" and n.last_seen == NOW
+
+
+def test_a_radio_is_never_an_uplink_because_of_its_station_count():
+    ports = {(1, 7): PortInfo(name="wlan1", if_type=71), (1, 8): PortInfo(name="ether8")}
+    data = inputs([fdb(HOST, 1, 7), *filler(1, 7, 80)], ports=ports)
+    assert where(node(data)) == [(1, 7)]
+    data = inputs([fdb(HOST, 1, 8), *filler(1, 8, 80)], ports=ports)
+    assert where(node(data)) == []

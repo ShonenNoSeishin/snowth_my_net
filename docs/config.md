@@ -129,7 +129,7 @@ function is `off`.
 | `devices[].snmp.table_timeout` | global | Override. |
 | `devices[].snmp.device_timeout` | global | Override. |
 | `devices[].snmp.max_rows_per_table` | global | Override. |
-| `devices[].driver` | automatic | Reserved for vendor drivers. |
+| `devices[].driver` | `auto` | Vendor driver: `auto` (chosen by sysObjectID), `none`, or a driver name (`fortinet`, `sophos`, `mikrotik`, `cisco-wlc`, or one of a Python extension) to use it whatever the device announces. See [drivers](drivers.md). |
 | `devices[].tolerate_failure` | `false` | The device stays in the outputs; its failure does not set exit code 1. |
 | `devices[].ha_mode` | members | On a cluster virtual IP: `members` polls the member addresses (the VIP becomes an alias), `vip` polls the VIP. |
 | `devices[].disabled` | `false` | Never poll this address. |

@@ -133,3 +133,47 @@ def test_collector_errors_are_contained():
 
 def test_dataset_field_names_come_from_the_api():
     assert Field("x", "integer").type == "integer"
+
+
+def test_driver_declarations_and_harness():
+    from snowth_my_net.api import Observations, Station
+
+    ext = Extension("acme")
+    with pytest.raises(ExtensionDefinitionError, match="numeric OIDs"):
+        ext.driver("x", object_ids=["enterprises.9"])
+    drv = ext.driver("acme-os", object_ids=[".1.3.6.1.4.1.99999"])
+    assert drv.object_ids == ["1.3.6.1.4.1.99999"]
+
+    @drv.identity
+    async def identity(device, snmp):
+        values = await snmp.get("1.3.6.1.4.1.99999.1.0")
+        return {"os_version": text(values["1.3.6.1.4.1.99999.1.0"])}
+
+    @drv.observations
+    async def observations(device, snmp):
+        return Observations(stations=[Station(text(v), int(i)) for i, v in
+                                      await snmp.walk("1.3.6.1.4.1.99999.2")])
+
+    snmp = testing.FakeSnmp({"1.3.6.1.4.1.99999.1.0": b"4.2", "1.3.6.1.4.1.99999.2.3":
+                             b"00:00:5e:00:53:01"})
+    identity_found, observed = testing.run_driver(ext, "acme-os", snmp)
+    assert identity_found == {"os_version": "4.2"}
+    assert observed.stations == [Station("00:00:5e:00:53:01", 3)]
+
+
+def test_python_drivers_are_loaded_and_names_checked(tmp_path):
+    write(tmp_path, "drv", """
+        from snowth_my_net.api import Extension
+        extension = Extension("drv")
+        empty = extension.driver("empty", object_ids=["1.3.6.1.4.1.1"])
+        taken = extension.driver("fortinet", object_ids=["1.3.6.1.4.1.1"])
+        ok = extension.driver("ok", object_ids=["1.3.6.1.4.1.2"])
+
+        @ok.identity
+        async def identity(device, snmp):
+            return {}
+    """)
+    with pytest.raises(ConfigError) as caught:
+        load_python_extensions(["drv"], tmp_path, set())
+    errors = "\n".join(caught.value.errors)
+    assert "driver 'empty' has neither" in errors and "'fortinet' is already used" in errors

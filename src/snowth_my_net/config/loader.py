@@ -66,6 +66,7 @@ class LoadedConfig:
     reports: list = field(default_factory=list)          # LoadedReport from extension files
     datasets: list = field(default_factory=list)         # report Datasets from Python
     exporters: list = field(default_factory=list)        # (extension, PythonExporter)
+    drivers: list = field(default_factory=list)          # drivers of Python extensions
     python: list = field(default_factory=list)           # LoadedPython
 
     def resolve_credentials(self) -> tuple[list[ResolvedCredential], list[str]]:
@@ -172,5 +173,13 @@ def load_config(
                                        {c.cfg.name for c in collectors})
         loaded.collectors += parts.collectors
         loaded.datasets, loaded.exporters = parts.datasets, parts.exporters
-        loaded.python = parts.extensions
+        loaded.drivers, loaded.python = parts.drivers, parts.extensions
+    from snowth_my_net.drivers import NAMES
+
+    known = {*NAMES, *(d.name for d in loaded.drivers)}
+    unknown = [f"devices[{i}].driver: unknown driver {d.driver!r} (auto, none, "
+               f"{', '.join(sorted(known))})" for i, d in enumerate(cfg.devices)
+               if d.driver not in (None, "auto", "none") and d.driver not in known]
+    if unknown:
+        raise ConfigError(unknown)
     return loaded
