@@ -229,6 +229,128 @@ def cmd_export(args: argparse.Namespace) -> int:
     return result.exit_code
 
 
+def _push_summary(outcomes, warnings, as_json: bool) -> int:
+    failed = [o for o in outcomes if not o.ok]
+    if as_json:
+        return EXIT_PARTIAL if failed else EXIT_OK
+    for warning in warnings:
+        out(f"warning  {warning}")
+    if outcomes:
+        out(table(["TARGET", "FILE", "RESULT", "HTTP", "TIME", "DETAIL"],
+                  [[o.target, o.file, "OK" if o.ok else "FAILED", o.status or "-",
+                    f"{o.duration_ms} ms", (o.detail or "")[:90]] for o in outcomes]))
+    else:
+        out("no push target configured")
+    return EXIT_PARTIAL if failed else EXIT_OK
+
+
+def cmd_push(args: argparse.Namespace) -> int:
+    from snowth_my_net.push.http import PushError, push_all
+
+    loaded = load(args)
+    with Locked(loaded, "push", loaded.cfg.general.lock_wait.default):
+        try:
+            outcomes, warnings = push_all(loaded, target_name=args.target, files=args.file,
+                                          wait=args.wait, dry_run=args.dry_run)
+        except PushError as exc:
+            raise ManualError(str(exc)) from None
+    for warning in warnings:
+        log.warning("%s", warning)
+    code = _push_summary(outcomes, warnings, args.json)
+    if args.json:
+        out_json({"results": [o.as_dict() for o in outcomes], "warnings": warnings,
+                  "exit_code": code})
+    return code
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    from snowth_my_net.push.http import push_all
+
+    loaded = load(args)
+    cfg = loaded.cfg
+    codes = []
+    payload: dict = {}
+    with Locked(loaded, "run", cfg.general.lock_wait.default):
+        conn = open_db(loaded.paths.state_file)
+        try:
+            repo = Repo(conn)
+            if not args.no_collect:
+                creds = resolved_credentials(loaded)
+                report = asyncio.run(Collector(loaded, repo, creds, Clock()).run())
+                codes.append(report.exit_code)
+                payload["collect"] = _report_dict(report)
+                if not args.json:
+                    out(_render_report(report, loaded))
+            result = export(loaded, repo, Clock())
+            codes.append(result.exit_code)
+            payload["export"] = {"written": [str(p) for p in result.written],
+                                 "failed": result.failed}
+            if not args.json:
+                for path in result.written:
+                    out(f"wrote {path}")
+                for name, reason in result.failed:
+                    out(f"FAILED {name}: {reason}")
+        finally:
+            conn.close()
+        if not args.no_push and cfg.push.targets:
+            failed = {name: f"export failed in this run: {reason}"
+                      for name, reason in result.failed}
+            outcomes, warnings = push_all(loaded, wait=args.wait, available=failed)
+            for warning in warnings:
+                log.warning("%s", warning)
+            codes.append(_push_summary(outcomes, warnings, args.json))
+            payload["push"] = [o.as_dict() for o in outcomes]
+    code = max(codes) if codes else EXIT_OK
+    if args.json:
+        out_json({**payload, "exit_code": code})
+    return code
+
+
+def cmd_cron_print(args: argparse.Namespace) -> int:
+    from snowth_my_net.schedule.planning import render_crontab
+
+    loaded = load(args)
+    sys.stdout.write(render_crontab(loaded, args.format, args.user, args.binary,
+                                    args.config_path))
+    return EXIT_OK
+
+
+def cmd_health(args: argparse.Namespace) -> int:
+    from snowth_my_net.config.validate import parse_duration
+    from snowth_my_net.schedule.planning import max_collect_age
+
+    loaded = load(args)
+    if args.max_age:
+        try:
+            max_age, origin = parse_duration(args.max_age), "--max-age"
+        except ValueError as exc:
+            raise ManualError(str(exc)) from None
+    else:
+        max_age, origin = max_collect_age(loaded)
+    now = Clock().now()
+    last = None
+    if loaded.paths.state_file.exists():
+        conn = open_db(loaded.paths.state_file, readonly=True)
+        try:
+            last = Repo(conn).last_successful_collect()
+        finally:
+            conn.close()
+    age = None if last is None else now - last["finished_at"]
+    healthy = age is not None and age <= max_age
+    if args.json:
+        out_json({"healthy": healthy, "age_s": age, "max_age_s": max_age, "max_age_from": origin,
+                  "last_collect": None if last is None else {
+                      "run_id": last["id"], "finished_at": iso_z(last["finished_at"]),
+                      "status": last["status"]}})
+    elif last is None:
+        out(f"UNHEALTHY: no successful collect yet (max age {max_age}s, {origin})")
+    else:
+        state = "OK" if healthy else "UNHEALTHY"
+        out(f"{state}: last successful collect {iso_z(last['finished_at'])} ({last['status']}), "
+            f"{age}s ago, max {max_age}s ({origin})")
+    return EXIT_OK if healthy else EXIT_PARTIAL
+
+
 def cmd_show(args: argparse.Namespace) -> int:
     loaded = load(args)
     conn = open_db(loaded.paths.state_file, readonly=True)
@@ -959,6 +1081,37 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("export", parents=[common], help="write CSV/JSON/map outputs")
     p.add_argument("--only", help="comma-separated subset: devices,nodes,links,snapshot,map")
     p.set_defaults(func=cmd_export)
+
+    p = sub.add_parser("push", parents=[common], help="send exported files to the push targets")
+    p.add_argument("--target", help="only this target")
+    p.add_argument("--file", action="append", choices=["devices", "nodes", "links", "snapshot"],
+                   help="only this file (repeatable)")
+    p.add_argument("--wait", action="store_true", default=None,
+                   help="wait for 202 jobs to finish (poll:)")
+    p.add_argument("--dry-run", action="store_true", help="show what would be sent")
+    p.set_defaults(func=cmd_push)
+
+    p = sub.add_parser("run", parents=[common], help="collect, export and push in one go")
+    p.add_argument("--no-collect", action="store_true", help="skip the collect")
+    p.add_argument("--no-push", action="store_true", help="skip the push")
+    p.add_argument("--wait", action="store_true", default=None,
+                   help="wait for 202 jobs to finish (poll:)")
+    p.set_defaults(func=cmd_run)
+
+    p = sub.add_parser("cron", parents=[common], help="scheduling helpers")
+    cron_sub = p.add_subparsers(title="cron commands", metavar="ACTION", required=True)
+    c = cron_sub.add_parser("print", parents=[common],
+                            help="print crontab lines generated from schedule:")
+    c.add_argument("--format", choices=["crontab", "cron.d", "supercronic"], default="crontab")
+    c.add_argument("--user", default="snowth", help="user column for --format cron.d")
+    c.add_argument("--binary", help="path of the snowth_my_net command in the lines")
+    c.add_argument("--config-path", help="configuration path written in the lines")
+    c.set_defaults(func=cmd_cron_print)
+
+    p = sub.add_parser("health", parents=[common],
+                       help="fail when the last successful collect is too old")
+    p.add_argument("--max-age", help="override the allowed age (e.g. 30m, 2h)")
+    p.set_defaults(func=cmd_health)
 
     p = sub.add_parser("show", parents=[common], help="print what the state knows")
     p.add_argument("what", choices=["devices", "nodes", "links", "runs"])

@@ -487,12 +487,22 @@ class ScheduleCfg:
     health_max_age: Duration | Literal["auto"] = "auto"
 
     def check(self) -> list[str]:
+        from snowth_my_net.schedule.cron import CronError, parse_cron
+
+        errs = []
         if self.timezone:
             try:
                 zoneinfo.ZoneInfo(self.timezone)
             except (zoneinfo.ZoneInfoNotFoundError, ValueError):
-                return [f"schedule.timezone: unknown time zone {self.timezone!r}"]
-        return []
+                errs.append(f"schedule.timezone: unknown time zone {self.timezone!r}")
+        for name in ("collect", "export_push"):
+            expression = getattr(self, name)
+            if expression:
+                try:
+                    parse_cron(expression)
+                except CronError as exc:
+                    errs.append(f"schedule.{name}: {exc}")
+        return errs
 
 
 # --------------------------------------------------------------------------- root
