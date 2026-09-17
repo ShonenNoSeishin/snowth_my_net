@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+:root { --bg: #f7f7f5; --panel: #ffffff; --text: #1d2126; --muted: #69707a; --line: #e2e3e0;
+        --accent: #2f6f5e; --stripe: #fafaf8; --hover: #eef4f1; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #15181c; --panel: #1c2026; --text: #e3e6ea; --muted: #97a0aa; --line: #2c323a;
+          --accent: #7cc7ae; --stripe: #1f242a; --hover: #243029; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+       font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 1400px; margin: 0 auto; padding: 28px 16px 48px; }
+h1 { margin: 0 0 4px; font-size: 22px; font-weight: 650; }
+.description { margin: 0 0 4px; }
+.meta { color: var(--muted); font-size: 12.5px; margin: 0 0 18px; }
+.bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+input[type=search] { flex: 1 1 260px; max-width: 420px; padding: 7px 10px; font: inherit;
+       color: var(--text); background: var(--panel); border: 1px solid var(--line);
+       border-radius: 6px; }
+input[type=search]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.count { color: var(--muted); font-size: 13px; }
+.wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line);
+        border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--line);
+         white-space: nowrap; }
+td.text { white-space: normal; min-width: 6em; }
+th.integer, td.integer { text-align: right; }
+thead th { position: sticky; top: 0; background: var(--panel); font-size: 12.5px; }
+th button { all: unset; cursor: pointer; font-weight: 600; color: var(--muted); }
+th button:hover, th[aria-sort] button { color: var(--text); }
+th button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.arrow { display: inline-block; width: 1em; color: var(--accent); }
+th[aria-sort=ascending] .arrow::after { content: " ▲"; }
+th[aria-sort=descending] .arrow::after { content: " ▼"; }
+tbody tr:nth-child(even) { background: var(--stripe); }
+tbody tr:hover { background: var(--hover); }
+tbody tr:last-child td { border-bottom: 0; }
+.empty { padding: 24px; color: var(--muted); text-align: center; }
+</style>
+</head>
+<body>
+<main>
+<h1>__TITLE__</h1>
+<p class="description">__DESCRIPTION__</p>
+<p class="meta">__META__</p>
+<div class="bar">
+  <input type="search" id="q" placeholder="Filter rows…" aria-label="Filter rows">
+  <span class="count"><span id="shown">__COUNT__</span> / __COUNT__ rows</span>
+</div>
+<div class="wrap">
+<table id="report">
+<thead><tr>__HEAD__</tr></thead>
+<tbody>
+__BODY__
+</tbody>
+</table>
+</div>
+</main>
+<script>
+(function () {
+  var table = document.getElementById("report");
+  var tbody = table.tBodies[0];
+  var rows = Array.prototype.slice.call(tbody.rows);
+  var collator = new Intl.Collator(undefined, {numeric: true, sensitivity: "base"});
+  if (!rows.length) {
+    var cell = document.createElement("td");
+    cell.colSpan = table.tHead.rows[0].cells.length || 1;
+    cell.className = "empty";
+    cell.textContent = "No rows.";
+    tbody.appendChild(document.createElement("tr")).appendChild(cell);
+  }
+  Array.prototype.forEach.call(table.tHead.rows[0].cells, function (th, index) {
+    th.querySelector("button").addEventListener("click", function () {
+      var ascending = th.getAttribute("aria-sort") !== "ascending";
+      Array.prototype.forEach.call(table.tHead.rows[0].cells, function (other) {
+        other.removeAttribute("aria-sort");
+      });
+      th.setAttribute("aria-sort", ascending ? "ascending" : "descending");
+      var numeric = th.dataset.type !== "text";
+      rows.sort(function (a, b) {
+        var x = a.cells[index].dataset.sort, y = b.cells[index].dataset.sort;
+        if (x === "" || y === "") { return x === y ? 0 : (x === "" ? 1 : -1); }
+        var result = numeric ? Number(x) - Number(y) : collator.compare(x, y);
+        return ascending ? result : -result;
+      });
+      rows.forEach(function (row) { tbody.appendChild(row); });
+    });
+  });
+  var input = document.getElementById("q");
+  var shown = document.getElementById("shown");
+  input.addEventListener("input", function () {
+    var words = input.value.toLowerCase().split(/\s+/).filter(Boolean);
+    var count = 0;
+    rows.forEach(function (row) {
+      var text = row.textContent.toLowerCase();
+      var visible = words.every(function (w) { return text.indexOf(w) !== -1; });
+      row.hidden = !visible;
+      if (visible) { count += 1; }
+    });
+    shown.textContent = count;
+  });
+})();
+</script>
+</body>
+</html>

@@ -108,3 +108,8 @@ def test_shipped_examples_are_valid():
     examples = Path(__file__).resolve().parents[2] / "examples" / "extensions"
     names = [c.cfg.name for c in load_extension_dir(examples)]
     assert names == ["ups-battery", "poe-ports", "fortigate-version"]
+    from snowth_my_net.config.extensions import load_extensions
+
+    reports = [r.cfg.name for r in load_extensions(examples)[1]]
+    assert reports == ["untyped-devices", "stale-nodes", "crowded-access-ports",
+                       "vendors-per-switch"]

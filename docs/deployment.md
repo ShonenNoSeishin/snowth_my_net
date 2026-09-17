@@ -44,7 +44,10 @@ sudo -u snowth snowth_my_net --config /etc/snowth_my_net/config.yml cron print -
 0 11,18 * * * snowth /usr/local/bin/snowth_my_net --config /etc/snowth_my_net/config.yml -q run --no-collect
 ```
 
-Regenerate after changing `schedule:`. `CRON_TZ=` is written when `schedule.timezone` is set
+Reports with a `schedule:` add one `report run <name>` line each (see
+[extensions.md](extensions.md#schedule-and-push)).
+
+Regenerate after changing `schedule:` or a report schedule. `CRON_TZ=` is written when `schedule.timezone` is set
 (cronie supports it; with other crons, set the host time zone).
 
 ### systemd timers
@@ -132,7 +135,7 @@ the container sets `SNOWTH_SECRETS_DIR=/run/secrets`, where Compose mounts them.
 | Host | Container | |
 |---|---|---|
 | `./config/snowth_my_net.yml` | `/etc/snowth_my_net/config.yml` | read-only |
-| `./config/extensions/` | `/etc/snowth_my_net/extensions/` | read-only, custom collectors |
+| `./config/extensions/` | `/etc/snowth_my_net/extensions/` | read-only, custom collectors and reports |
 | `./data/` | `/var/lib/snowth_my_net` | state, lock, vendor database |
 | `./output/` | `/output` | CSV, JSON, maps, readable on the host |
 

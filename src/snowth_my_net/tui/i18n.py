@@ -22,6 +22,97 @@ STRINGS: dict[str, tuple[str, str]] = {
     "tab.nodes": ("Nodes", "Nœuds"),
     "tab.links": ("Links", "Liens"),
     "tab.extensions": ("Extensions", "Extensions"),
+    "tab.reports": ("Reports", "Rapports"),
+    "key.new_report": ("New report", "Nouveau rapport"),
+    "key.export_report": ("Export", "Exporter"),
+    "key.export": ("Export", "Exporter"),
+    "key.reload": ("Reload data", "Recharger les données"),
+    "col.source": ("Source", "Source"),
+    "col.format": ("Format", "Format"),
+    "col.schedule": ("Schedule", "Planification"),
+    "col.push": ("Push", "Envoi"),
+    "col.title": ("Title", "Titre"),
+    "rep.none": ("No report yet. Press n to build one: pick a dataset, tick columns, add "
+                 "filters and watch the preview.",
+                 "Aucun rapport. Appuyez sur n pour en construire un : choisissez un jeu de "
+                 "données, cochez les colonnes, ajoutez des filtres et regardez l'aperçu."),
+    "rep.count": ("{count} report(s) — ⏎ open · n new · x export · del delete a report created "
+                  "here", "{count} rapport(s) — ⏎ ouvrir · n nouveau · x exporter · suppr "
+                  "supprimer un rapport créé ici"),
+    "rep.title_new": ("New report", "Nouveau rapport"),
+    "rep.title_edit": ("Report {name}", "Rapport {name}"),
+    "rep.from_file": ("Defined in {origin}: changes are previewed and exported here but must be "
+                      "saved in that file (or saved here under another name).",
+                      "Défini dans {origin} : les modifications sont prévisualisées et exportées "
+                      "ici mais doivent être enregistrées dans ce fichier (ou ici sous un autre "
+                      "nom)."),
+    "rep.name": ("Name", "Nom"),
+    "rep.report_title": ("Title", "Titre"),
+    "rep.source": ("Data", "Données"),
+    "rep.sql_source": ("SQL query (read-only)", "Requête SQL (lecture seule)"),
+    "rep.unknown": ("unknown", "inconnu"),
+    "rep.format": ("Format", "Format"),
+    "rep.limit": ("Row limit", "Limite de lignes"),
+    "rep.no_limit": ("none", "aucune"),
+    "rep.schedule": ("Schedule (cron)", "Planification (cron)"),
+    "rep.allow_empty": ("Write when empty", "Écrire si vide"),
+    "rep.columns": ("Columns", "Colonnes"),
+    "rep.filters": ("Filters (all must match)", "Filtres (tous doivent correspondre)"),
+    "rep.add_filter": ("+ Add a filter", "+ Ajouter un filtre"),
+    "rep.field": ("field", "champ"),
+    "rep.value": ("value (list: a, b)", "valeur (liste : a, b)"),
+    "rep.sort": ("Sort", "Tri"),
+    "rep.sort_placeholder": ("vendor, -last_seen  (- = descending)",
+                             "vendor, -last_seen  (- = décroissant)"),
+    "rep.sql": ("SQL query", "Requête SQL"),
+    "rep.sql_tables": ("Tables: {tables}. Helpers: iso(time), age_days(time), now().",
+                       "Tables : {tables}. Fonctions : iso(temps), age_days(temps), now()."),
+    "rep.push": ("Push to", "Envoyer vers"),
+    "rep.export": ("Export now", "Exporter maintenant"),
+    "rep.preview_invalid": ("Preview paused: fix the definition (see below the form).",
+                            "Aperçu en pause : corrigez la définition (voir sous le formulaire)."),
+    "rep.preview_count": ("Preview: {shown} of {total} row(s)",
+                          "Aperçu : {shown} ligne(s) sur {total}"),
+    "rep.preview_limited": ("the file keeps the first {limit}",
+                            "le fichier garde les {limit} premières"),
+    "rep.name_required": ("Give the report a name (lowercase letters, digits, - and _).",
+                          "Donnez un nom au rapport (minuscules, chiffres, - et _)."),
+    "rep.file_name": ("{name} is defined in an extension file: choose another name.",
+                      "{name} est défini dans un fichier d'extension : choisissez un autre nom."),
+    "rep.exists": ("A report named {name} already exists.",
+                   "Un rapport nommé {name} existe déjà."),
+    "rep.saved": ("{name} saved.", "{name} enregistré."),
+    "rep.schedule_hint": ("Its schedule becomes active once the crontab is regenerated "
+                          "(snowth_my_net cron print, or restart the container).",
+                          "Sa planification devient active quand la crontab est régénérée "
+                          "(snowth_my_net cron print, ou redémarrage du conteneur)."),
+    "rep.empty": ("{name} has no row: nothing written (tick “Write when empty” to write it "
+                  "anyway).", "{name} n'a aucune ligne : rien n'est écrit (cochez « Écrire si "
+                  "vide » pour l'écrire quand même)."),
+    "rep.written": ("Wrote {path} ({rows} row(s))", "{path} écrit ({rows} ligne(s))"),
+    "rep.confirm_push": ("Also push the report to {targets}?",
+                         "Envoyer aussi le rapport vers {targets} ?"),
+    "rep.file_delete": ("{name} comes from {origin}: edit or delete it in that file.",
+                        "{name} vient de {origin} : modifiez-le ou supprimez-le dans ce fichier."),
+    "rep.confirm_delete": ("Delete the report {name}? Files already written are kept.",
+                           "Supprimer le rapport {name} ? Les fichiers déjà écrits sont gardés."),
+    "op.eq": ("equals", "égal à"),
+    "op.ne": ("differs from", "différent de"),
+    "op.contains": ("contains", "contient"),
+    "op.not_contains": ("does not contain", "ne contient pas"),
+    "op.startswith": ("starts with", "commence par"),
+    "op.endswith": ("ends with", "finit par"),
+    "op.regex": ("matches regex", "correspond à la regex"),
+    "op.gt": ("greater than", "plus grand que"),
+    "op.ge": ("at least", "au moins"),
+    "op.lt": ("less than", "plus petit que"),
+    "op.le": ("at most", "au plus"),
+    "op.empty": ("is empty", "est vide"),
+    "op.not_empty": ("is not empty", "n'est pas vide"),
+    "op.in": ("is one of", "est parmi"),
+    "op.not_in": ("is none of", "n'est aucun de"),
+    "op.older_than": ("older than (7d, 12h)", "plus ancien que (7d, 12h)"),
+    "op.newer_than": ("newer than (7d, 12h)", "plus récent que (7d, 12h)"),
     "tab.custom": ("Custom", "Personnalisé"),
     "custom.none": ("No custom value for this device. Create a collector from the OID tester "
                     "(“Save as custom OID”) or in extensions/*.yml.",
@@ -274,6 +365,9 @@ STRINGS: dict[str, tuple[str, str]] = {
         "[b]Devices[/b]\n"
         "  ⏎  open the device    /  filter    r  refresh\n"
         "  c  collect all        a  add       del  remove\n\n"
+        "[b]Reports[/b]\n"
+        "  ⏎  open the builder    n  new report    x  export    del  delete\n"
+        "  In the builder: ctrl+s save · ctrl+e export now · ctrl+r reload data\n\n"
         "[b]Device[/b]\n"
         "  esc  back    c  collect this device    ctrl+s  save settings\n"
         "  Tabs: Identity · Settings · OID tester · Last collect\n\n"
@@ -287,6 +381,9 @@ STRINGS: dict[str, tuple[str, str]] = {
         "[b]Équipements[/b]\n"
         "  ⏎  ouvrir la fiche    /  filtrer    r  rafraîchir\n"
         "  c  tout collecter     a  ajouter    suppr  retirer\n\n"
+        "[b]Rapports[/b]\n"
+        "  ⏎  ouvrir le constructeur    n  nouveau rapport    x  exporter    suppr  supprimer\n"
+        "  Dans le constructeur : ctrl+s enregistrer · ctrl+e exporter · ctrl+r recharger\n\n"
         "[b]Fiche équipement[/b]\n"
         "  échap  retour    c  collecter cet équipement    ctrl+s  enregistrer les réglages\n"
         "  Onglets : Identité · Réglages · Testeur d'OID · Dernière collecte\n\n"

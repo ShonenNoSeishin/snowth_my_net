@@ -527,6 +527,8 @@ class MainScreen(Screen):
         ("slash", "focus_filter", "key.filter", True, False),
         ("c", "collect_all", "key.collect_all", True, False),
         ("a", "add", "key.add", True, False),
+        ("n", "new_report", "key.new_report", True, False),
+        ("x", "export_report", "key.export_report", True, False),
         ("delete", "remove", "key.remove", True, False),
         ("r", "refresh", "key.refresh", True, False),
         ("question_mark", "help", "key.help", True, False),
@@ -557,6 +559,10 @@ class MainScreen(Screen):
             with TabPane(t("tab.links"), id="tab-links"):
                 yield DataTable(id="links", cursor_type="row", zebra_stripes=True)
                 yield Static("", id="links-count", classes="legend")
+            with TabPane(t("tab.reports"), id="tab-reports"):
+                yield DataTable(id="reports", cursor_type="row", zebra_stripes=True)
+                yield Static("", id="reports-empty", classes="empty")
+                yield Static("", id="reports-count", classes="legend")
             with TabPane(t("tab.extensions"), id="tab-extensions"):
                 yield DataTable(id="extensions", cursor_type="row", zebra_stripes=True)
                 yield Static("", id="extensions-count", classes="legend")
@@ -580,6 +586,12 @@ class MainScreen(Screen):
         for key, label in (("name", "col.name"), ("kind", "col.kind"), ("scope", "col.scope"),
                            ("origin", "col.origin"), ("description", "col.description")):
             extensions.add_column(t(label), key=key)
+        reports = self.query_one("#reports", DataTable)
+        for key, label in (("name", "col.name"), ("source", "col.source"),
+                           ("format", "col.format"), ("schedule", "col.schedule"),
+                           ("push", "col.push"), ("origin", "col.origin"),
+                           ("title", "col.title")):
+            reports.add_column(t(label), key=key)
         links = self.query_one("#links", DataTable)
         for key, label in (("a", "col.local_device"), ("ap", "col.local_port"),
                            ("b", "col.remote_device"), ("bp", "col.remote_port"),
@@ -609,6 +621,8 @@ class MainScreen(Screen):
             self.fill_links()
         elif active == "tab-extensions":
             self.fill_extensions()
+        elif active == "tab-reports":
+            self.fill_reports()
         self.query_one(TopBar).refresh_status()
 
     NODE_LIMIT: ClassVar[int] = 2000
@@ -686,6 +700,74 @@ class MainScreen(Screen):
             self.fill_links()
         elif event.pane.id == "tab-extensions":
             self.fill_extensions()
+        elif event.pane.id == "tab-reports":
+            self.fill_reports()
+            self.query_one("#reports", DataTable).focus()
+        self.refresh_bindings()
+
+    def check_action(self, action: str, parameters: tuple) -> bool | None:
+        if action in ("new_report", "export_report"):
+            with contextlib.suppress(Exception):
+                return self.query_one("#main-tabs", TabbedContent).active == "tab-reports"
+            return False
+        return True
+
+    # reports ------------------------------------------------------------------------------
+
+    def reports(self):
+        from snowth_my_net.tui.reports import catalog
+
+        return catalog(self.ctx)
+
+    def fill_reports(self) -> None:
+        t = self.ctx.t
+        table = self.query_one("#reports", DataTable)
+        table.clear()
+        items = self.reports()
+        for loaded in items:
+            r = loaded.cfg
+            origin = t("ext.origin_tui") if loaded.origin == "tui" else loaded.origin
+            table.add_row(Text(r.name, style="bold"), r.source, r.format, r.schedule or "—",
+                          ", ".join(r.push) or "—", origin, r.title, key=r.name)
+        self.query_one("#reports-empty", Static).update(t("rep.none") if not items else "")
+        self.query_one("#reports-empty", Static).display = not items
+        self.query_one("#reports-count", Static).update(t("rep.count", count=len(items)))
+
+    def selected_report(self):
+        table = self.query_one("#reports", DataTable)
+        if table.row_count == 0:
+            return None
+        key = table.coordinate_to_cell_key(table.cursor_coordinate).row_key.value
+        return next((r for r in self.reports() if r.cfg.name == key), None)
+
+    @on(DataTable.RowSelected, "#reports")
+    def report_selected(self) -> None:
+        loaded = self.selected_report()
+        if loaded is not None:
+            self.app.push_screen(self.app.report_screen(loaded))
+
+    def action_new_report(self) -> None:
+        self.app.push_screen(self.app.report_screen(None))
+
+    def action_export_report(self) -> None:
+        from snowth_my_net.reports.engine import ReportError
+        from snowth_my_net.reports.service import EmptyReport
+        from snowth_my_net.tui.reports import export_report
+
+        t = self.ctx.t
+        loaded = self.selected_report()
+        if loaded is None:
+            return
+        try:
+            generated = export_report(self.ctx, loaded.cfg)
+        except EmptyReport:
+            self.notify(t("rep.empty", name=loaded.cfg.name), severity="warning", timeout=8)
+            return
+        except (ReportError, OSError) as exc:
+            self.notify(str(exc), severity="error", timeout=10)
+            return
+        self.notify(t("rep.written", path=str(generated.path), rows=len(generated.table.rows)),
+                    timeout=8)
 
     @on(Input.Changed, "#node-filter")
     def node_filter_changed(self) -> None:
@@ -781,6 +863,20 @@ class MainScreen(Screen):
     @work(group="remove")
     async def action_remove(self) -> None:
         t = self.ctx.t
+        if self.query_one("#main-tabs", TabbedContent).active == "tab-reports":
+            report = self.selected_report()
+            if report is None:
+                return
+            if report.origin != "tui":
+                self.notify(t("rep.file_delete", name=report.cfg.name, origin=report.origin),
+                            severity="warning", timeout=8)
+                return
+            if await self.app.push_screen_wait(
+                    ConfirmModal(self.ctx, t("rep.confirm_delete", name=report.cfg.name))):
+                self.ctx.repo.delete_report(report.cfg.name)
+                self.notify(t("ext.deleted", name=report.cfg.name))
+                self.fill_reports()
+            return
         if self.query_one("#main-tabs", TabbedContent).active == "tab-extensions":
             loaded = self.selected_collector()
             if loaded is None:
@@ -1346,9 +1442,18 @@ class SnowthApp(App):
                               {"BINDINGS": localized_bindings(t, MainScreen.SPECS)})
         self._device_cls = type("DeviceScreenL10n", (DeviceScreen,),
                                 {"BINDINGS": localized_bindings(t, DeviceScreen.SPECS)})
+        self._report_cls = None
 
     def device_screen(self, row: DeviceRow) -> DeviceScreen:
         return self._device_cls(self.ctx, row)
+
+    def report_screen(self, report):
+        from snowth_my_net.tui.reports import ReportScreen
+
+        if self._report_cls is None:
+            self._report_cls = type("ReportScreenL10n", (ReportScreen,), {
+                "BINDINGS": localized_bindings(self.ctx.t, ReportScreen.SPECS)})
+        return self._report_cls(self.ctx, report)
 
     def on_mount(self) -> None:
         saved = self.ctx.repo.get_meta("tui_theme")

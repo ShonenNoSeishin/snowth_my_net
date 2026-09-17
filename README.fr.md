@@ -77,6 +77,8 @@ anglais).
   * *Testeur d'OID* : préréglages proposés selon le type, ou n'importe quel OID ;
   * *Voisins*, valeurs *Personnalisées*, *Dernière collecte*.
 * **Nœuds** : recherche par MAC, IP, nom DNS, port… ; Entrée explique la position.
+* **Rapports** : construire un rapport avec aperçu en direct (données, colonnes, filtres, tri,
+  format), l'enregistrer, l'exporter.
 * **Liens**, **Extensions** (collecteurs personnalisés), **Collectes**.
 * Collecte d'un équipement ou de tout le parc, avec journal en direct. Aucun secret n'est jamais
   affiché.
@@ -97,6 +99,7 @@ anglais).
 | `probe ADDR [PRÉRÉGLAGE\|OID…]` | Tester des OID à la main (préréglages proposés selon le type) |
 | `device show\|set\|unset\|add\|remove\|export-settings\|import-settings` | Réglages manuels |
 | `custom list\|show\|test\|export\|import\|delete` | Collecteurs personnalisés (OID en plus) |
+| `report list\|fields\|show\|preview\|run\|export\|import\|delete` | Rapports personnalisés (CSV, JSON, Markdown, HTML ; SQL en lecture seule) |
 | `oui-update [--from-file DIR]` | Mettre à jour la base des constructeurs IEEE |
 | `cron print [--format crontab\|cron.d\|supercronic]` | Lignes de planification issues de `schedule:` |
 | `health [--max-age]` | Code 1 si la dernière collecte réussie est trop ancienne |
@@ -123,7 +126,12 @@ vide n'écrase jamais le précédent et n'est jamais poussé.
 
 Lire d'autres OID sans écrire de code : créez un collecteur personnalisé depuis le testeur d'OID,
 ou dans `extensions/*.yml`. Les valeurs peuvent compléter des champs standard comme la version
-du système. Voir [docs/extensions.md](docs/extensions.md) et
+du système.
+
+Construire ses propres rapports : un jeu de données (équipements, interfaces, nœuds, historique
+IP, VLAN, liens, voisins, collectes, valeurs personnalisées), des colonnes, des filtres et un tri,
+ou une requête SQL en lecture seule ; en CSV, JSON, Markdown ou page HTML autonome, à la demande,
+planifié ou envoyé vers une cible. Voir [docs/extensions.md](docs/extensions.md) et
 [examples/extensions](examples/extensions/).
 
 ## Documentation

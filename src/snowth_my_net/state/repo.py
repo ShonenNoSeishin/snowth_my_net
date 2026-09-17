@@ -417,6 +417,23 @@ class Repo:
             self.conn.execute("DELETE FROM custom_runs WHERE collector = ?", (name,))
         return bool(deleted)
 
+    def reports_stored(self) -> dict[str, dict]:
+        return {row[0]: json.loads(row[1]) for row in self.conn.execute(
+            "SELECT name, definition FROM reports ORDER BY name")}
+
+    def save_report(self, name: str, definition: dict, now: int) -> None:
+        with self.conn:
+            self.conn.execute(
+                "INSERT INTO reports(name, definition, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?) ON CONFLICT(name) DO UPDATE SET "
+                "definition = excluded.definition, updated_at = excluded.updated_at",
+                (name, json.dumps(definition, sort_keys=True), now, now))
+
+    def delete_report(self, name: str) -> bool:
+        with self.conn:
+            return bool(self.conn.execute("DELETE FROM reports WHERE name = ?",
+                                          (name,)).rowcount)
+
     def _save_outcomes(self, run_id: int, device_id: int, outcomes) -> None:
         self.conn.executemany(
             "INSERT OR REPLACE INTO collect_status(run_id, device_id, function, status, rows, "

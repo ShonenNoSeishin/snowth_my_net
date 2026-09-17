@@ -35,7 +35,9 @@ class CronLine:
 
 
 def cron_lines(loaded: LoadedConfig, binary: str | None = None,
-               config_path: str | None = None, quiet: bool = True) -> list[CronLine]:
+               config_path: str | None = None, quiet: bool = True,
+               reports: list | None = None) -> list[CronLine]:
+    """``reports``: LoadedReport list (files + TUI); default: the extension files only."""
     cfg = loaded.cfg.schedule
     base = [executable(binary), "--config",
             config_path or str(loaded.paths.config_file.resolve())]
@@ -50,11 +52,16 @@ def cron_lines(loaded: LoadedConfig, binary: str | None = None,
         if not loaded.cfg.push.targets:
             command.append("--no-push")
         lines.append(CronLine(cfg.export_push, command, "export the files and push them"))
+    for report in loaded.reports if reports is None else reports:
+        if report.cfg.schedule:
+            lines.append(CronLine(report.cfg.schedule, [*base, "report", "run", report.cfg.name],
+                                  f"report {report.cfg.name} ({report.origin})"))
     return lines
 
 
 def render_crontab(loaded: LoadedConfig, fmt: str = "crontab", user: str = "snowth",
-                   binary: str | None = None, config_path: str | None = None) -> str:
+                   binary: str | None = None, config_path: str | None = None,
+                   reports: list | None = None) -> str:
     out = [f"# snowth_my_net — generated from {loaded.paths.config_file} (schedule:)",
            "# Regenerate after changing the schedule: snowth_my_net cron print"]
     if fmt == "cron.d":
@@ -63,7 +70,8 @@ def render_crontab(loaded: LoadedConfig, fmt: str = "crontab", user: str = "snow
     timezone = loaded.cfg.schedule.timezone
     if timezone:
         out.append(f"CRON_TZ={timezone}")
-    for line in cron_lines(loaded, binary, config_path, quiet=fmt != "supercronic"):
+    for line in cron_lines(loaded, binary, config_path, quiet=fmt != "supercronic",
+                           reports=reports):
         out.append(f"# {line.comment}")
         command = shlex.join(line.command)
         who = f" {user}" if fmt == "cron.d" else ""

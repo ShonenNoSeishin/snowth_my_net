@@ -35,7 +35,8 @@ log = get_logger("push")
 
 FILE_NAMES = {"devices": "devices.csv", "nodes": "nodes.csv", "links": "links.csv",
               "snapshot": "snapshot.json"}
-CONTENT_TYPES = {".csv": "text/csv", ".json": "application/json"}
+CONTENT_TYPES = {".csv": "text/csv", ".json": "application/json", ".md": "text/markdown",
+                 ".html": "text/html"}
 RETRY_STATUSES = frozenset({429, 502, 503, 504})
 BODY_LOG_LIMIT = 4096
 

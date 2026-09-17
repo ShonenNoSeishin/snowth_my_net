@@ -66,6 +66,8 @@ Details, systemd units, hardening and networking: [docs/deployment.md](docs/depl
   also has an *OID tester* (presets suggested for the type, or any OID), *Neighbors*, *Custom*
   values and *Last collect*.
 * **Nodes**: search a MAC, IP, DNS name, port… Enter explains the position.
+* **Reports**: build a report with a live preview (dataset, columns, filters, sort, format),
+  save it, export it.
 * **Links**, **Extensions** (custom collectors), **Runs**.
 * Collect a device or everything with a live log. Nothing ever shows a secret.
 
@@ -85,6 +87,7 @@ Details, systemd units, hardening and networking: [docs/deployment.md](docs/depl
 | `probe ADDR [PRESET\|OID…]` | Test OIDs by hand (presets suggested for the device type) |
 | `device show\|set\|unset\|add\|remove\|export-settings\|import-settings` | Manual settings |
 | `custom list\|show\|test\|export\|import\|delete` | Custom collectors (extra OIDs) |
+| `report list\|fields\|show\|preview\|run\|export\|import\|delete` | Custom reports (CSV, JSON, Markdown, HTML; read-only SQL) |
 | `oui-update [--from-file DIR]` | Refresh the IEEE vendor database |
 | `cron print [--format crontab\|cron.d\|supercronic]` | Scheduler lines from `schedule:` |
 | `health [--max-age]` | Exit 1 when the last successful collect is too old |
@@ -111,6 +114,10 @@ written over previous ones nor pushed.
 
 Read more OIDs without writing code: create a custom collector from the OID tester, or in
 `extensions/*.yml`. Values can fill standard fields such as the OS version.
+
+Build your own reports: pick a dataset (devices, interfaces, nodes, IP history, VLANs, links,
+neighbours, runs, custom values), columns, filters and sort, or write a read-only SQL query; get
+CSV, JSON, Markdown or a standalone HTML page, on demand, on a schedule, or pushed to a target.
 See [docs/extensions.md](docs/extensions.md) and [examples/extensions](examples/extensions/).
 
 ## Documentation

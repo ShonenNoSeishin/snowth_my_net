@@ -40,7 +40,7 @@ TabPane {
     margin-bottom: 1;
 }
 
-#devices, #runs, #nodes, #links, #neighbors {
+#devices, #runs, #nodes, #links, #neighbors, #reports, #extensions {
     height: 1fr;
 }
 
@@ -222,4 +222,92 @@ ModalScreen {
 .dialog.explain {
     width: 96%;
     height: 90%;
+}
+
+/* report builder ----------------------------------------------------------------------- */
+
+#builder {
+    height: 1fr;
+}
+
+#builder-form {
+    width: 66;
+    padding: 1 1 0 1;
+    border-right: vkey $panel-lighten-2;
+}
+
+#builder-preview {
+    width: 1fr;
+    padding: 1 1 0 1;
+}
+
+#b-status {
+    height: auto;
+    margin-bottom: 1;
+}
+
+#b-preview {
+    height: 1fr;
+}
+
+.bform {
+    grid-size: 2;
+    grid-columns: 20 1fr;
+    grid-rows: 1;
+    grid-gutter: 1 1;
+    height: auto;
+    margin-bottom: 1;
+}
+
+.bform Switch {
+    width: auto;
+    height: 1;
+    border: none;
+    padding: 0;
+}
+
+#b-dataset-part, #b-sql-part, #b-filters {
+    height: auto;
+}
+
+#b-columns {
+    height: auto;
+    max-height: 14;
+}
+
+#b-push {
+    height: auto;
+    max-height: 6;
+}
+
+.filter-row {
+    height: 1;
+    margin-bottom: 1;
+}
+
+.filter-row .f-field {
+    width: 18;
+}
+
+.filter-row .f-op {
+    width: 22;
+    margin: 0 1;
+}
+
+.filter-row .f-value {
+    width: 1fr;
+}
+
+.filter-row .f-remove {
+    width: 3;
+    min-width: 3;
+    margin-left: 1;
+}
+
+#b-add-filter {
+    margin-bottom: 1;
+}
+
+#b-sql {
+    height: 8;
 }

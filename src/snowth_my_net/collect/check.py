@@ -206,4 +206,15 @@ def config_warnings(loaded: LoadedConfig) -> list[str]:
                             "in clear text")
     if cfg.discovery.follow_neighbors and not cfg.discovery.allowed:
         warnings.append("discovery.allowed is empty: only the seeds will ever be polled")
+    targets = {t.name for t in cfg.push.targets}
+    collectors = {c.cfg.name for c in loaded.collectors}
+    for report in loaded.reports:
+        r = report.cfg
+        for name in r.push:
+            if name not in targets:
+                warnings.append(f"report '{r.name}': unknown push target '{name}'")
+        if r.dataset and r.dataset.startswith("custom:") and r.dataset[7:] not in collectors:
+            warnings.append(f"report '{r.name}': dataset {r.dataset} needs the collector "
+                            f"'{r.dataset[7:]}' (not in extension files; fine if it was "
+                            "created in the TUI)")
     return warnings

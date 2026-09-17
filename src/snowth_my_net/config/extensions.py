@@ -28,6 +28,7 @@ from typing import Any, Literal
 
 import yaml
 
+from snowth_my_net.config.reports import LoadedReport, ReportCfg
 from snowth_my_net.config.schema import DeviceType
 from snowth_my_net.config.validate import ConfigError, Duration, Network, build
 
@@ -127,6 +128,7 @@ class CollectorCfg:
 @dataclass
 class ExtensionFile:
     collectors: list[CollectorCfg] = field(default_factory=list)
+    reports: list[ReportCfg] = field(default_factory=list)
     version: Literal[1] = 1
 
 
@@ -142,10 +144,16 @@ def parse_collector(data: Any) -> CollectorCfg:
 
 
 def load_extension_dir(directory: Path | None) -> list[LoadedCollector]:
-    """Every ``*.yml``/``*.yaml`` of the directory; raises ConfigError listing all problems."""
+    """Collectors of every ``*.yml``/``*.yaml`` of the directory (see load_extensions)."""
+    return load_extensions(directory)[0]
+
+
+def load_extensions(directory: Path | None) -> tuple[list[LoadedCollector], list[LoadedReport]]:
+    """Collectors and reports of the directory; raises ConfigError listing all problems."""
     if directory is None or not directory.is_dir():
-        return []
+        return [], []
     loaded: list[LoadedCollector] = []
+    reports: list[LoadedReport] = []
     errors: list[str] = []
     for path in sorted([*directory.glob("*.yml"), *directory.glob("*.yaml")]):
         try:
@@ -158,10 +166,12 @@ def load_extension_dir(directory: Path | None) -> list[LoadedCollector]:
             errors += [f"{path}: {e.removeprefix('<config>: ')}" for e in exc.errors]
             continue
         loaded += [LoadedCollector(c, str(path)) for c in ext.collectors]
-    names = [c.cfg.name for c in loaded]
-    for name in sorted({n for n in names if names.count(n) > 1}):
-        errors.append(f"collector name {name!r} is defined more than once "
-                      f"({', '.join(c.origin for c in loaded if c.cfg.name == name)})")
+        reports += [LoadedReport(r, str(path)) for r in ext.reports]
+    for kind, items in (("collector", loaded), ("report", reports)):
+        names = [c.cfg.name for c in items]
+        for name in sorted({n for n in names if names.count(n) > 1}):
+            errors.append(f"{kind} name {name!r} is defined more than once "
+                          f"({', '.join(c.origin for c in items if c.cfg.name == name)})")
     if errors:
         raise ConfigError(errors)
-    return loaded
+    return loaded, reports

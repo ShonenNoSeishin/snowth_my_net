@@ -1,0 +1,52 @@
+# Custom reports — copy this file into the "extensions" directory next to your configuration and
+# keep what you need. Reports only read the state: run them as often as you like.
+#
+#   snowth_my_net report list                 # every report and where it comes from
+#   snowth_my_net report fields nodes         # the fields of a dataset
+#   snowth_my_net report preview stale-nodes  # first rows in the terminal
+#   snowth_my_net report run stale-nodes      # write output/reports/stale-nodes.csv (and push)
+version: 1
+reports:
+  # Devices that deserve a look: no sure type, so they are only typed by hand.
+  - name: untyped-devices
+    title: Devices without a sure type
+    dataset: devices
+    columns: [name, ip, vendor, sys_object_id, description]
+    filters:
+      - {field: device_type, op: empty}
+    sort: [vendor, name]
+    format: html
+
+  # Nodes not seen for a week, oldest first (e.g. to clean an IPAM).
+  - name: stale-nodes
+    dataset: nodes
+    columns: [mac, vendor, ip, dns_name, device, port, {field: last_seen, label: Last Seen}]
+    filters:
+      - {field: current, op: eq, value: true}
+      - {field: last_seen, op: older_than, value: 7d}
+    sort: [last_seen]
+    format: csv
+    allow_empty: true            # an empty list is good news: write it anyway
+
+  # Access ports with more than one MAC address (hubs, unmanaged switches, VMs…).
+  - name: crowded-access-ports
+    dataset: interfaces
+    columns: [device, port, alias, mac_count, pvid]
+    filters:
+      - {field: role, op: eq, value: access}
+      - {field: mac_count, op: gt, value: 1}
+    sort: [-mac_count, device, port]
+    format: markdown
+
+  # Read-only SQL for what filters cannot say: joins, groups, counts.
+  - name: vendors-per-switch
+    title: Node vendors per switch
+    sql: >
+      SELECT device, vendor, count(*) AS nodes, iso(max(last_seen)) AS last_seen
+      FROM nodes
+      WHERE current AND device <> ''
+      GROUP BY device, vendor
+      ORDER BY device, nodes DESC
+    format: json
+    schedule: "0 6 * * 1"        # added to "cron print"
+    # push: [cmdb]               # a target of push.targets

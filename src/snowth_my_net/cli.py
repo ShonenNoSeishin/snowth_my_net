@@ -307,11 +307,20 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 
 def cmd_cron_print(args: argparse.Namespace) -> int:
+    from snowth_my_net.reports.service import all_reports
     from snowth_my_net.schedule.planning import render_crontab
 
     loaded = load(args)
+    repo = _state_readonly(loaded)
+    try:
+        reports, warnings = all_reports(loaded, repo.reports_stored() if repo else {})
+    finally:
+        if repo:
+            repo.conn.close()
+    for warning in warnings:
+        log.warning("%s", warning)
     sys.stdout.write(render_crontab(loaded, args.format, args.user, args.binary,
-                                    args.config_path))
+                                    args.config_path, reports))
     return EXIT_OK
 
 
@@ -1187,6 +1196,10 @@ def build_parser() -> argparse.ArgumentParser:
     c = csub.add_parser("delete", parents=[common], help="delete a collector created in the TUI")
     c.add_argument("name")
     c.set_defaults(func=cmd_custom_delete)
+
+    from snowth_my_net.reports.commands import add_parser as add_report_parser
+
+    add_report_parser(sub, common)
 
     p = sub.add_parser("tui", parents=[common], help="open the terminal management interface")
     p.set_defaults(func=cmd_tui)

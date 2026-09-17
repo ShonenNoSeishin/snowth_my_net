@@ -1519,9 +1519,9 @@ permet de transformer tes captures réelles en tests de régression.
 
 ## 18. Phases d'implémentation
 
-> **Avancement (2026-09-17)** : phases 1, 1b, 2, 3 et 4 livrées ainsi que l'étape E1
-> (collecteurs personnalisés). Restent E2 (rapports), la phase 5 (drivers) et E3 (extensions
-> Python, hooks).
+> **Avancement (2026-09-17)** : phases 1, 1b, 2, 3 et 4 livrées ainsi que les étapes E1
+> (collecteurs personnalisés) et E2 (rapports personnalisés). Restent la phase 5 (drivers) et
+> E3 (extensions Python, hooks).
 >
 > Écarts de la phase 4 par rapport au texte :
 > - L'image fait environ 200 Mo décompressée : la base Python pèse 126 Mo, Textual et
@@ -1760,6 +1760,36 @@ reports:
   (`v_devices`, `v_interfaces`, `v_nodes`, `v_positions`, `v_custom`…). Connexion SQLite
   `mode=ro` et autorisateur SQLite qui refuse tout sauf `SELECT` sur ces vues. Les vues sont
   versionnées : un rapport SQL ne casse pas quand le schéma interne évolue.
+
+> **Implémenté (E2)**, avec ces écarts par rapport au texte ci-dessus :
+> - Définitions dans `extensions/*.yml` (`reports:`) et rapports créés dans le TUI (table
+>   `reports`, schéma v4). Colonnes renommables (`{field, label}`), `limit`, `allow_empty`.
+> - Jeux de données : `devices`, `interfaces`, `nodes` (une ligne par position, donc pas de
+>   `positions` séparé), `ip_history`, `vlans`, `links`, `neighbors`, `runs`, `custom` et
+>   `custom:<collecteur>`. Les valeurs personnalisées ne sont pas des champs pointés dans les
+>   autres jeux (`custom.poe-ports.x`) mais le jeu `custom:<collecteur>` (une ligne par
+>   équipement ou par ligne de table, index `port` traduit en nom de port) ; la jointure se fait
+>   en SQL. Les jeux reprennent les vues des exports (mêmes noms, rôles de ports, IP
+>   courante) : un rapport ne contredit jamais `nodes.csv`.
+> - Filtres : `eq ne contains not_contains startswith endswith regex gt ge lt le empty
+>   not_empty in not_in older_than newer_than`, texte insensible à la casse, une comparaison
+>   ne correspond jamais à une valeur vide.
+> - SQL : plutôt que des vues SQL sur l'état, la requête tourne dans une base SQLite **en
+>   mémoire** qui contient une copie des jeux qu'elle nomme. Les jeux calculés en Python (rôles,
+>   IP courante, liens) sont ainsi disponibles, les noms de tables et de colonnes sont ceux du
+>   catalogue documenté (`report fields`), et le fichier d'état n'est jamais ouvert par la
+>   requête. Autorisateur (lecture seule), `query_only`, une seule instruction, arrêt après
+>   20 s ou 200 000 lignes ; fonctions `iso()`, `age_days()`, `now()`.
+> - CLI : `report list | fields [JEU] | show | preview | run [--all] | export | import | delete`,
+>   plus des rapports ad hoc (`--dataset --columns --filter --sort` ou `--sql`) vers stdout.
+>   Pas de verrou : les rapports lisent l'état via SQLite (WAL) pendant une collecte.
+> - Planification : une ligne `report run NOM` par rapport planifié dans `cron print` ; un
+>   rapport planifié depuis le TUI demande de régénérer la crontab (ou de redémarrer le
+>   conteneur).
+> - Push : via les cibles existantes (`push:` ou `--target`), fichier nommé `report:<nom>`.
+> - TUI : onglet « Rapports » (`n` nouveau, `x` exporter, suppr) et constructeur avec aperçu
+>   en direct (jeu, colonnes à cocher, filtres, tri, SQL, format, planification, cibles).
+> - Exemples : `examples/extensions/reports.yml` (validés par les tests).
 
 ### 21.3 Niveau 3 — Extensions Python et scripts
 
