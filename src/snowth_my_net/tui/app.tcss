@@ -36,11 +36,11 @@ TabPane {
     padding: 1 1 0 1;
 }
 
-#filter {
+#filter, #node-filter {
     margin-bottom: 1;
 }
 
-#devices, #runs {
+#devices, #runs, #nodes {
     height: 1fr;
 }
 
@@ -211,4 +211,15 @@ ModalScreen {
 #collect-log {
     height: 1fr;
     border: round $panel-lighten-2;
+}
+
+#explain-body {
+    height: 1fr;
+    border: round $panel-lighten-2;
+    padding: 0 1;
+}
+
+.dialog.explain {
+    width: 96%;
+    height: 90%;
 }

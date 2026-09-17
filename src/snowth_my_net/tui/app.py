@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, ClassVar
 
 from rich.table import Table
@@ -91,6 +91,12 @@ class TuiContext:
         if moment.date() == datetime.now().date():
             return moment.strftime("%H:%M")
         return moment.strftime("%d/%m %H:%M")
+
+    def local_time_iso(self, iso: str) -> str:
+        if not iso:
+            return "—"
+        moment = datetime.strptime(iso, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+        return self.local_time(int(moment.timestamp()))
 
     def status_text(self, status: str) -> Text:
         symbol, style = STATUS_STYLE.get(status, ("?", "grey50"))
@@ -237,6 +243,37 @@ class AddDeviceModal(ModalScreen[str | None]):
         self.dismiss(None)
 
 
+class ExplainModal(ModalScreen[None]):
+    BINDINGS: ClassVar = [Binding("escape,q", "close", show=False)]
+    STYLES: ClassVar = {"title": "bold", "ok": "$success", "bad": "$error",
+                        "transit": "$warning", "dim": "$text-muted", "text": ""}
+
+    def __init__(self, ctx: TuiContext, view, query: str) -> None:
+        super().__init__()
+        self.ctx, self.view, self.query_text = ctx, view, query
+
+    def compose(self) -> ComposeResult:
+        from snowth_my_net.merge.explain import explain
+
+        parts = []
+        for text, kind in explain(self.view, self.query_text):
+            style = self.STYLES.get(kind, "")
+            parts.append(f"[{style}]{escape(text)}[/]" if style and text else escape(text))
+        with Vertical(classes="dialog wide tall explain"):
+            yield Label(self.ctx.t("explain.title", mac=self.query_text), classes="dialog-title")
+            with VerticalScroll(id="explain-body"):
+                yield Static("\n".join(parts), id="explain-text")
+            with Horizontal(classes="dialog-buttons"):
+                yield Button(self.ctx.t("collect.close"), id="close", variant="primary")
+
+    def on_mount(self) -> None:
+        self.query_one("#close", Button).focus()
+
+    @on(Button.Pressed, "#close")
+    def action_close(self) -> None:
+        self.dismiss(None)
+
+
 class TuiLogHandler(logging.Handler):
     STYLES: ClassVar = {logging.WARNING: "yellow", logging.ERROR: "bold red",
                         logging.CRITICAL: "bold red"}
@@ -353,6 +390,10 @@ class MainScreen(Screen):
                 yield DataTable(id="devices", cursor_type="row", zebra_stripes=True)
                 yield Static(t("devices.empty"), id="devices-empty", classes="empty")
                 yield Static(t("devices.legend"), classes="legend")
+            with TabPane(t("tab.nodes"), id="tab-nodes"):
+                yield Input(placeholder=t("nodes.placeholder"), id="node-filter")
+                yield DataTable(id="nodes", cursor_type="row", zebra_stripes=True)
+                yield Static("", id="nodes-count", classes="legend")
             with TabPane(t("tab.runs"), id="tab-runs"):
                 yield DataTable(id="runs", cursor_type="row", zebra_stripes=True)
         yield Footer()
@@ -364,6 +405,11 @@ class MainScreen(Screen):
                            ("vendor", "col.vendor"), ("model", "col.model"),
                            ("status", "col.status"), ("seen", "col.seen")):
             devices.add_column(t(label), key=key)
+        nodes = self.query_one("#nodes", DataTable)
+        for key, label in (("mac", "col.mac"), ("vendor", "col.vendor"), ("ip", "col.ip"),
+                           ("dns", "col.dns"), ("switch", "col.switch"), ("port", "col.port"),
+                           ("vlan", "col.vlan"), ("seen", "col.seen")):
+            nodes.add_column(t(label), key=key)
         runs = self.query_one("#runs", DataTable)
         for key, label in (("id", "col.run"), ("command", "col.command"),
                            ("started", "col.started"), ("duration", "col.duration"),
@@ -379,7 +425,52 @@ class MainScreen(Screen):
         self.rows = list_devices(self.ctx.loaded, self.ctx.repo, self.ctx.clock.now())
         self.fill_devices()
         self.fill_runs()
+        self.view = None
+        self.node_rows = None
+        if self.query_one("#main-tabs", TabbedContent).active == "tab-nodes":
+            self.fill_nodes()
         self.query_one(TopBar).refresh_status()
+
+    NODE_LIMIT: ClassVar[int] = 2000
+
+    def ensure_view(self):
+        if getattr(self, "view", None) is None:
+            from snowth_my_net.merge.view import build_view
+
+            self.view = build_view(self.ctx.loaded, self.ctx.repo, self.ctx.clock.now())
+            self.node_rows = self.view.rows()
+        return self.view
+
+    def fill_nodes(self) -> None:
+        self.ensure_view()
+        table = self.query_one("#nodes", DataTable)
+        needle = self.query_one("#node-filter", Input).value.strip().casefold()
+        rows = [r for r in self.node_rows if not needle or any(needle in c.casefold() for c in r)]
+        table.clear()
+        for i, r in enumerate(rows[:self.NODE_LIMIT]):
+            cells = [Text(r[0], style="bold"), r[1] or "—", r[2] or "—", r[3] or "—",
+                     r[4] or Text("—", style="dim"), r[5] or "", r[6] or "",
+                     self.ctx.local_time_iso(r[7])]
+            table.add_row(*cells, key=f"{i}:{r[0]}")
+        text = self.ctx.t("nodes.count", shown=min(len(rows), self.NODE_LIMIT),
+                          total=len(self.node_rows))
+        if len(rows) > self.NODE_LIMIT:
+            text += " · " + self.ctx.t("nodes.truncated", limit=self.NODE_LIMIT)
+        self.query_one("#nodes-count", Static).update(text)
+
+    @on(TabbedContent.TabActivated, "#main-tabs")
+    def tab_activated(self, event: TabbedContent.TabActivated) -> None:
+        if event.pane.id == "tab-nodes":
+            self.fill_nodes()
+
+    @on(Input.Changed, "#node-filter")
+    def node_filter_changed(self) -> None:
+        self.fill_nodes()
+
+    @on(DataTable.RowSelected, "#nodes")
+    def node_selected(self, event: DataTable.RowSelected) -> None:
+        mac = str(event.row_key.value).split(":", 1)[1]
+        self.app.push_screen(ExplainModal(self.ctx, self.ensure_view(), mac))
 
     def fill_devices(self) -> None:
         table = self.query_one("#devices", DataTable)

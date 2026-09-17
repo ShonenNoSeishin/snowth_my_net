@@ -255,8 +255,24 @@ def cmd_show(args: argparse.Namespace) -> int:
                             f"{x['os'] or ''} {x['os_version'] or ''}".strip(),
                             x["device_type"] or "", x["type_rule"] or "",
                             x["last_collect"] or "", x["last_seen"]] for x in data]))
+        elif args.what == "nodes":
+            from snowth_my_net.merge.view import build_view
+
+            headers = ["MAC", "VENDOR", "IP", "DNS", "SWITCH", "PORT", "VLAN", "LAST SEEN"]
+            rows = build_view(loaded, repo, Clock().now()).rows()
+            if args.filter:
+                needle = args.filter.casefold()
+                rows = [r for r in rows if any(needle in c.casefold() for c in r)]
+            if args.limit:
+                rows = rows[:args.limit]
+            if args.json:
+                keys = ["mac", "vendor", "ip", "dns_name", "switch", "port", "vlan", "last_seen"]
+                out_json([dict(zip(keys, r, strict=True)) for r in rows])
+            else:
+                out(table(headers, rows))
+                out(f"{len(rows)} row(s)")
         else:
-            runs = [dict(r) for r in repo.recent_runs(args.limit)]
+            runs = [dict(r) for r in repo.recent_runs(args.limit or 20)]
             if args.json:
                 out_json(runs)
             else:
@@ -654,6 +670,39 @@ def cmd_device_import(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_explain(args: argparse.Namespace) -> int:
+    from snowth_my_net.merge.explain import explain, node_json
+    from snowth_my_net.merge.view import build_view
+
+    loaded = load(args)
+    conn = open_db(loaded.paths.state_file, readonly=True)
+    try:
+        view = build_view(loaded, Repo(conn), Clock().now())
+        nodes = view.find(args.query)
+        if args.json:
+            out_json({"query": args.query, "nodes": [node_json(view, n) for n in nodes]})
+        else:
+            for text, _kind in explain(view, args.query):
+                out(text)
+    finally:
+        conn.close()
+    return EXIT_OK if nodes else EXIT_PARTIAL
+
+
+def cmd_oui_update(args: argparse.Namespace) -> int:
+    from snowth_my_net.enrich.oui import update_database
+
+    loaded = load(args)
+    source = Path(args.from_file) if args.from_file else None
+    try:
+        count = update_database(loaded.paths.oui_file, loaded.cfg.oui.urls, source)
+    except (OSError, ValueError) as exc:
+        log.error("oui-update failed: %s (the current database is kept)", exc)
+        return EXIT_PARTIAL
+    out(f"{loaded.paths.oui_file}: {count} vendor prefixes")
+    return EXIT_OK
+
+
 def cmd_tui(args: argparse.Namespace) -> int:
     loaded = load(args)
     general = loaded.cfg.general
@@ -726,8 +775,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_export)
 
     p = sub.add_parser("show", parents=[common], help="print what the state knows")
-    p.add_argument("what", choices=["devices", "runs"])
-    p.add_argument("--limit", type=int, default=20, help="number of runs to show")
+    p.add_argument("what", choices=["devices", "nodes", "runs"])
+    p.add_argument("--limit", type=int, default=0,
+                   help="maximum rows (default: 20 runs, every device and node)")
+    p.add_argument("--filter", help="only rows containing this text (any column)")
     p.set_defaults(func=cmd_show)
 
     p = sub.add_parser("probe", parents=[common],
@@ -778,6 +829,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("tui", parents=[common], help="open the terminal management interface")
     p.set_defaults(func=cmd_tui)
+
+    p = sub.add_parser("explain", parents=[common],
+                       help="why a MAC (or the MACs of an IP) is where it is")
+    p.add_argument("query", metavar="MAC|IP")
+    p.set_defaults(func=cmd_explain)
+
+    p = sub.add_parser("oui-update", parents=[common],
+                       help="refresh the MAC vendor database from the IEEE")
+    p.add_argument("--from-file", metavar="DIR",
+                   help="use oui.csv, mam.csv and oui36.csv downloaded beforehand")
+    p.set_defaults(func=cmd_oui_update)
 
     p = sub.add_parser("version", parents=[common], help="print the version")
     p.set_defaults(func=cmd_version)

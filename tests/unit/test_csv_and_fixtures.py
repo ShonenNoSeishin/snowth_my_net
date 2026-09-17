@@ -65,7 +65,7 @@ def test_committed_fixtures_match_their_builder(tmp_path):
     builder = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(builder)
     built = builder.build(tmp_path)
-    for name, path in built.items():
-        committed = TESTS / "fixtures" / "snmprec" / name / "public.snmprec"
+    for path in built.values():
+        committed = TESTS / "fixtures" / "snmprec" / path.relative_to(tmp_path)
         assert committed.read_text() == path.read_text(), (
             f"{committed} is stale: run python tests/fixtures/build_snmprec.py")

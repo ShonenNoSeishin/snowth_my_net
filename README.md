@@ -5,8 +5,8 @@ and routers, merges their ARP and MAC tables, and tells you which devices exist,
 where, and how the devices are connected. Output: fixed-format CSV, JSON and maps, optionally
 pushed over HTTP on a schedule.
 
-> Status: under development. Phase 1 (inventory, `devices.csv`) and the terminal management
-> interface are available. See [DESIGN.md](DESIGN.md) (in French) for the architecture and the
+> Status: under development. Phases 1-2 (inventory, MAC/ARP merge, `devices.csv`,
+> `nodes.csv`, `explain`) and the terminal management interface are available. See [DESIGN.md](DESIGN.md) (in French) for the architecture and the
 > decisions. Full documentation comes with phase 4.
 
 ## Quick look
@@ -15,7 +15,9 @@ pushed over HTTP on a schedule.
 snowth_my_net init            # commented example configuration
 snowth_my_net check           # diagnose credentials and MIB support, device by device
 snowth_my_net collect         # poll the devices
-snowth_my_net export          # write devices.csv
+snowth_my_net export          # write devices.csv and nodes.csv
+snowth_my_net explain 00:00:5e:00:53:a0      # why is this MAC on that port?
+snowth_my_net show nodes --filter 192.0.2.
 snowth_my_net                 # open the terminal interface (or: snowth_my_net tui)
 snowth_my_net probe 192.0.2.254 arp-media    # test OIDs by hand
 snowth_my_net device set 192.0.2.254 type=firewall features.arp=force

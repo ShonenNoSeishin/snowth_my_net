@@ -29,6 +29,7 @@
 18. [Phases d'implémentation](#18-phases-dimplémentation)
 19. [Risques et particularités constructeur](#19-risques-et-particularités-constructeur)
 20. [Questions](#20-questions)
+21. [Extensibilité : OID, rapports et scripts personnalisés (proposition)](#21-extensibilité--oid-rapports-et-scripts-personnalisés-proposition)
 
 ---
 
@@ -800,6 +801,22 @@ avertissement au lieu de créer un doublon.
 
 ## 9. Détection des uplinks
 
+> **Implémentation (phase 2), écarts assumés par rapport au texte ci-dessous :**
+> - Les rôles de ports et les filtres de MAC (MAC d'équipements, `ignore_*`) sont calculés **à la
+>   lecture** (export, `show`, `explain`, TUI) et non figés en fin de collecte. Un changement de
+>   config ou de réglage manuel s'applique donc immédiatement, y compris sur l'historique, et
+>   `explain` montre exactement la règle en vigueur.
+> - Le nombre de MAC d'un port est celui du **dernier parcours FDB réussi** de l'équipement :
+>   un parcours en échec ne fait jamais « rétrograder » un trunk, le rôle reste celui du dernier
+>   parcours valide.
+> - Le transit simultané utilise une fenêtre `nodes.transit_window` (30 min par défaut) plutôt
+>   que « le même run » : si le switch d'accès rate une collecte, sa position reste la bonne au
+>   lieu de basculer vers le port de transit.
+> - La collecte ne stocke que des observations brutes (MAC unicast apprises, entrées ARP
+>   valides) ; `fdb_obs` et `arp_obs` sont l'historique.
+> - DNS : les PTR sont résolus à l'export (cache dans l'état, TTL positif et négatif, budget total
+>   `dns.budget`) ; `show`, `explain` et le TUI n'utilisent que le cache.
+
 ### 9.1 Rôle d'un port (calculé en fin de `collect`, persisté dans `interfaces.role`)
 
 Un port est **uplink** si au moins une de ces raisons s'applique (toutes enregistrées dans
@@ -1537,6 +1554,11 @@ permet de transformer tes captures réelles en tests de régression.
 
 ## 20. Questions
 
+### Extensibilité (2026-09-17) — à valider
+
+Voir §21 : les trois mécanismes proposés (OID personnalisés déclaratifs, rapports
+personnalisés, extensions Python et scripts) et leurs limites de sécurité.
+
 **Toutes répondues le 2026-09-15** : les décisions sont au §0. Les questions d'origine sont
 gardées plus bas pour l'historique.
 
@@ -1602,3 +1624,154 @@ paquet), origine citée dans `NOTICE` et `tests/data/README.md`.
     pas de CI pour l'instant]*
 14. **Push.** Te faut-il d'autres authentifications que Bearer (Basic, en-tête personnalisé) ? Un
     proxy HTTP d'entreprise ? *[Bearer + Basic ; proxy via `HTTPS_PROXY`]*
+
+
+---
+
+## 21. Extensibilité : OID, rapports et scripts personnalisés (proposition)
+
+> Statut : **proposition, à valider** (demande du 2026-09-17 : « rapports customisés exportables
+> via l'interface, ajout de scripts dédiés, ajout d'OID custom… bref, scalable »).
+
+Principe : trois niveaux, du plus simple (sans code, depuis le TUI) au plus puissant (Python),
+tous soumis aux mêmes garanties que le cœur :
+- **lecture seule** vers les équipements : les extensions passent par le client SNMP (GET/GETNEXT/
+  GETBULK, cadencement, délais) et n'ont aucun accès à un SET ;
+- une extension **ajoute** des données ou des sorties, elle ne désactive jamais une collecte
+  standard ;
+- une extension en erreur est signalée (`check`, TUI, JSON) sans casser la collecte ;
+- aucun secret n'est exposé aux extensions (elles reçoivent un client SNMP prêt, pas les clés).
+
+### 21.1 Niveau 1 — OID personnalisés, déclaratifs (sans code)
+
+Un « collecteur personnalisé » décrit quoi lire, sur quels équipements, et comment l'interpréter :
+
+```yaml
+# extensions/fortigate.yml  (ou créé depuis le TUI : Testeur d'OID → « Enregistrer comme OID
+# personnalisé »)
+collectors:
+  - name: fortigate-system
+    description: Version FortiOS et nombre de sessions
+    applies_to: {vendors: [Fortinet]}        # ou types:, addresses: (IP/CIDR), sys_object_ids:
+    get:
+      os_version: {oid: 1.3.6.1.4.1.12356.101.4.1.1.0, as: text}
+      sessions:   {oid: 1.3.6.1.4.1.12356.101.4.1.8.0, as: integer}
+    fills:                                   # optionnel : alimente un champ standard
+      os_version: os_version                 # remplace une valeur vide ou générique
+  - name: poe-ports
+    applies_to: {types: [switch]}
+    walk:                                    # colonnes alignées par index
+      index: port                            # port = ifIndex → joint à l'interface
+      columns:
+        poe_status: {oid: 1.3.6.1.2.1.105.1.1.1.6, as: enum, values: {1: disabled, 2: searching, 3: delivering, 4: fault}}
+        poe_class:  {oid: 1.3.6.1.2.1.105.1.1.1.10, as: integer}
+    every: 6h                                # fréquence propre (défaut : à chaque collecte)
+```
+
+- Conversions fournies : `text`, `integer`, `mac`, `ip`, `oid`, `hex`, `enum`, `bits`,
+  `timeticks`, `scale` (ex. dixièmes → unités), `lldp_caps`.
+- `applies_to` sert à **choisir où lire l'OID en plus**, jamais à retirer quelque chose.
+  Sans `applies_to`, l'OID est tenté partout, et une absence n'est pas une erreur (`auto`),
+  sauf `mode: force`.
+- `fills` permet de combler un trou du chemin standard (version, modèle, série, type avec
+  `type_rule: custom`) : c'est un **driver sans Python** pour les cas simples.
+- Stockage : table `custom_values(device_id, collector, index, column, value, first_seen,
+  last_seen)` ; historique borné par la rétention.
+- Visible partout : `snapshot.json` (`devices[].custom`), onglet « Personnalisé » de la fiche
+  équipement du TUI, `show custom`, rapports (§21.2), et `check` indique pour chaque collecteur
+  s'il répond.
+- Origine : fichiers `extensions/*.yml` à côté de la config (lecture seule en conteneur) **et**
+  collecteurs créés dans le TUI, stockés dans l'état, exportables en YAML (comme les réglages
+  manuels).
+
+### 21.2 Niveau 2 — Rapports personnalisés (sans code, depuis le TUI)
+
+Un rapport = un jeu de données + des colonnes + des filtres + un tri + un format :
+
+```yaml
+reports:
+  - name: ports-poe-en-defaut
+    title: Ports PoE en défaut
+    dataset: interfaces                      # devices | interfaces | nodes | positions |
+                                             # ip_history | vlans | links | runs | custom:<collecteur>
+    columns: [device.name, port, alias, custom.poe-ports.poe_status, oper_status, speed_mbps]
+    filters:
+      - {field: custom.poe-ports.poe_status, op: eq, value: fault}
+    sort: [device.name, port]
+    format: csv                              # csv | json | markdown | html (page autonome)
+    output: reports/poe-fault.csv            # relatif au répertoire de sortie
+    schedule: "0 7 * * 1"                    # optionnel : alimente cron print / le conteneur
+    push: [cmdb]                             # optionnel : envoyé comme les autres fichiers
+```
+
+- **Constructeur de rapports dans le TUI** : choisir le jeu de données, cocher les colonnes
+  (liste des champs disponibles, y compris les OID personnalisés), ajouter des filtres (champ,
+  opérateur choisi dans une liste, valeur), prévisualiser en direct, enregistrer, exporter
+  maintenant. Rien à taper en YAML.
+- CLI : `report list`, `report run NAME [--format …] [--output …]`, `report show NAME`.
+- Les rapports sont écrits de façon atomique, avec le même garde-fou « jamais vide par-dessus
+  le précédent » (désactivable par rapport).
+- **Mode avancé (option)** : une requête SQL en **lecture seule** sur des vues stables
+  (`v_devices`, `v_interfaces`, `v_nodes`, `v_positions`, `v_custom`…). Connexion SQLite
+  `mode=ro` et autorisateur SQLite qui refuse tout sauf `SELECT` sur ces vues. Les vues sont
+  versionnées : un rapport SQL ne casse pas quand le schéma interne évolue.
+
+### 21.3 Niveau 3 — Extensions Python et scripts
+
+Pour ce qui ne tient pas dans une déclaration :
+
+- **Extensions Python** (`extensions/*.py` ou paquets installés exposant le point d'entrée
+  `snowth_my_net.extensions`), activées **nommément** dans la config (jamais de chargement
+  implicite). Une API stable et documentée, avec des points d'extension typés :
+  - `collector` : `async def collect(device: DeviceView, snmp: ReadOnlySnmp) -> dict` ;
+  - `driver` (phase 5) : affiner l'identité, ajouter FDB/ARP/clients Wi-Fi ;
+  - `enricher` : ajouter des champs aux nœuds ou aux équipements (ex. inventaire externe) ;
+  - `exporter` : produire un fichier à partir du snapshot ;
+  - `report_dataset` : exposer un jeu de données aux rapports.
+  L'objet `ReadOnlySnmp` n'expose que `get` et `walk`. Les extensions sont testables hors
+  réseau avec un harnais fourni (`snowth_my_net.testing`, varbinds simulés).
+- **Scripts externes (hooks)**, pour brancher n'importe quel langage :
+  ```yaml
+  hooks:
+    after_export:
+      - name: notify
+        command: [/usr/local/bin/notify-inventory, "--snapshot", "{snapshot}"]
+        timeout: 60
+  ```
+  - Événements : `after_collect`, `after_export`, `after_push`.
+  - Exécution **sans shell** (liste d'arguments) et avec délai.
+  - L'environnement est nettoyé : aucune variable secrète, seulement les chemins des fichiers
+    produits et le résumé du run en JSON.
+  - Un échec est signalé (code 1) sans annuler le reste.
+  - C'est la seule exception à la règle « aucun `subprocess` » : un unique module `hooks.py`,
+    autorisé nommément par le test de sécurité, et inactif sans configuration.
+- **Contrat de données pour les scripts** : `snapshot.json` a un schéma versionné
+  (`schema: snowth_my_net/snapshot/1`) et `--json` sur toutes les commandes `show`/`explain`/
+  `report run`. Un script externe peut donc lire sans jamais toucher à la base.
+
+### 21.4 TUI
+
+- Écran **Extensions** : collecteurs et rapports chargés, leur origine (fichier, TUI, Python),
+  leur état (ok / erreur avec le message) et le résultat du dernier passage.
+- Fiche équipement : onglet **Personnalisé** (valeurs des OID personnalisés, historique).
+- Testeur d'OID : bouton **« Enregistrer comme OID personnalisé »** après un test réussi,
+  avec la conversion devinée, modifiable.
+- Écran **Rapports** : liste, constructeur, prévisualisation, export immédiat.
+
+### 21.5 Découpage proposé
+
+| Étape | Contenu | Quand |
+|---|---|---|
+| E1 | Collecteurs déclaratifs (YAML + TUI « Enregistrer comme OID »), `custom_values`, onglet Personnalisé, `check` | après la phase 3 (les rapports profitent des liens) |
+| E2 | Rapports : jeux de données, constructeur TUI, CSV/JSON/Markdown/HTML, planification et push | avec la phase 4 (push, cron) |
+| E3 | Extensions Python (API stable, point d'entrée, harnais de test) et hooks | avec la phase 5 (les drivers utilisent la même API) |
+
+### 21.6 Questions
+
+1. Les trois niveaux et leur découpage te conviennent-ils, ou veux-tu E1/E2 plus tôt (avant la
+   phase 3) ?
+2. Rapports : les formats CSV/JSON/Markdown/HTML suffisent-ils (pas de PDF/XLSX, qui demanderaient
+   des dépendances lourdes) ?
+3. Le mode SQL en lecture seule pour les rapports avancés : utile pour toi, ou superflu ?
+4. Hooks : OK pour cette unique exception contrôlée (commande sans shell, délai, environnement
+   nettoyé) ?

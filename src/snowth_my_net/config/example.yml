@@ -91,6 +91,8 @@ nodes:
   retention_days: 30
   prefer_ipv4: true
   current_ip_window: 24h
+  transit_window: 30m             # a MAC seen on two access ports within this window stays
+                                   # on the one with the fewest MACs (the other is a transit)
   ignore_macs: []
   # ignore_mac_prefixes defaults to the VRRP and HSRP virtual MAC ranges.
 

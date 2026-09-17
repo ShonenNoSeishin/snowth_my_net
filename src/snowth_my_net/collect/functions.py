@@ -8,6 +8,8 @@ block, so rows received before a timeout are kept (the caller then marks the fun
 from __future__ import annotations
 
 from snowth_my_net.collect.model import DeviceResult
+from snowth_my_net.collect.tables import arp as arp_tables
+from snowth_my_net.collect.tables import bridge
 from snowth_my_net.collect.tables.entity import TEXT_COLUMNS, build_chassis, rows_to_fetch
 from snowth_my_net.collect.tables.interfaces import build_interfaces
 from snowth_my_net.collect.tables.ipaddr import (
@@ -16,7 +18,7 @@ from snowth_my_net.collect.tables.ipaddr import (
     parse_ip_address_table,
 )
 from snowth_my_net.snmp import oids
-from snowth_my_net.snmp.client import SnmpClient
+from snowth_my_net.snmp.client import SnmpClient, SnmpError
 from snowth_my_net.snmp.values import Oid
 
 GET_BATCH = 16
@@ -132,3 +134,103 @@ async def ipaddr(client: SnmpClient, r: DeviceResult, rows: Rows) -> None:
         )
         rows.key = ("adIf" if len(rows.column("adIf")) >= len(rows.column("addrIf"))
                     else "addrIf")
+
+
+async def fdb(client: SnmpClient, r: DeviceResult, rows: Rows) -> None:
+    """MAC tables: Q-BRIDGE, else BRIDGE-MIB, plus Cisco per-VLAN instances when they exist.
+
+    ``vlan_indexing: auto`` walks the per-VLAN instances only when CISCO-VTP-MIB answers with
+    operational VLANs AND the standard Q-BRIDGE table is empty — a decision taken on what the
+    agent actually serves, never on what it announces.
+    """
+    rows.key = "entries"
+    found: dict[tuple[str, int, int], bridge.FdbEntry] = {}
+
+    def publish(entries: list[bridge.FdbEntry]) -> None:
+        for entry in entries:
+            found[(entry.mac, entry.ifindex, entry.vlan)] = entry
+
+    try:
+        await walk_into(client, rows, "baseport", oids.DOT1D_BASE_PORT_IF_INDEX)
+        ports = bridge.base_ports(rows.column("baseport"))
+        r.bridge_ports = ports
+        await walk_into(client, rows, "pvid", oids.DOT1Q_PVID)
+        port_pvid = bridge.pvids(rows.column("pvid"))
+        r.pvid.update({ports.get(bp, bp): vlan for bp, vlan in port_pvid.items()})
+        await walk_into(client, rows, "qport", oids.DOT1Q_TP_FDB_PORT)
+        qbridge = bool(rows.column("qport"))
+        if qbridge:
+            await walk_into(client, rows, "qstatus", oids.DOT1Q_TP_FDB_STATUS)
+            await walk_into(client, rows, "vlanfdb", oids.DOT1Q_VLAN_FDB_ID)
+            await walk_into(client, rows, "vlanname", oids.DOT1Q_VLAN_STATIC_NAME)
+            r.vlans.update(bridge.vlan_names(rows.column("vlanname")))
+            publish(bridge.parse_qbridge(rows.column("qport"), rows.column("qstatus"),
+                                         bridge.fdb_id_to_vlan(rows.column("vlanfdb")), ports,
+                                         port_pvid))
+        else:
+            await walk_into(client, rows, "dport", oids.DOT1D_TP_FDB_PORT)
+            if rows.column("dport"):
+                await walk_into(client, rows, "dstatus", oids.DOT1D_TP_FDB_STATUS)
+                publish(bridge.parse_dot1d(rows.column("dport"), rows.column("dstatus"), ports,
+                                           port_pvid))
+
+        indexing = r.settings.vlan_indexing
+        if indexing == "off":
+            return
+        await walk_into(client, rows, "vtp", oids.VTP_VLAN_STATE)
+        vlans = bridge.operational_vlans(rows.column("vtp"))
+        if not vlans or (qbridge and indexing != "cisco"):
+            return
+        await walk_into(client, rows, "vtpname", oids.VTP_VLAN_NAME)
+        r.vlans.update(bridge.vlan_names(rows.column("vtpname"), index_len=2))
+        await walk_into(client, rows, "vmvlan", oids.VM_VLAN)
+        r.pvid.update({s[0]: v for s, v in rows.column("vmvlan").items()
+                       if len(s) == 1 and isinstance(v, int) and v > 0})
+        # The default context of a VLAN-indexed bridge only shows VLAN 1: start over.
+        found.clear()
+        failed: list[str] = []
+        for vlan in vlans:
+            vlan_client = client.for_vlan(vlan)
+            vport: Column = {}
+            vstatus: Column = {}
+            vbase: Column = {}
+            try:
+                for column, base in ((vport, oids.DOT1D_TP_FDB_PORT),
+                                     (vstatus, oids.DOT1D_TP_FDB_STATUS),
+                                     (vbase, oids.DOT1D_BASE_PORT_IF_INDEX)):
+                    async for oid, value in vlan_client.walk(base):
+                        column[oid[len(base):]] = value
+            except SnmpError as exc:
+                failed.append(f"VLAN {vlan}: {exc.kind if exc.kind == 'timeout' else exc}")
+            vlan_ports = bridge.base_ports(vbase) or ports
+            publish(bridge.parse_dot1d(vport, vstatus, vlan_ports, {}, vlan=vlan,
+                                       method="cisco_vlan"))
+        if failed:
+            raise SnmpError("per-VLAN bridge instances failed: " + "; ".join(failed[:5])
+                            + (f" (+{len(failed) - 5} more)" if len(failed) > 5 else ""))
+    finally:
+        r.fdb = list(found.values())
+        rows.columns["entries"] = {(i,): e for i, e in enumerate(r.fdb)}
+
+
+async def arp(client: SnmpClient, r: DeviceResult, rows: Rows) -> None:
+    """Both neighbour caches, always: ipNetToPhysicalTable and the legacy ipNetToMediaTable."""
+    rows.key = "entries"
+    try:
+        await walk_into(client, rows, "pphys", oids.IP_NET_TO_PHYSICAL_PHYS_ADDRESS)
+        if rows.column("pphys"):
+            await walk_into(client, rows, "ptype", oids.IP_NET_TO_PHYSICAL_TYPE)
+            await walk_into(client, rows, "pstate", oids.IP_NET_TO_PHYSICAL_STATE)
+        await walk_into(client, rows, "mphys", oids.IP_NET_TO_MEDIA_PHYS_ADDRESS)
+        if rows.column("mphys"):
+            await walk_into(client, rows, "mtype", oids.IP_NET_TO_MEDIA_TYPE)
+    finally:
+        r.arp = arp_tables.merge_tables(
+            arp_tables.parse_net_to_physical(rows.column("pphys"), rows.column("ptype"),
+                                             rows.column("pstate")),
+            arp_tables.parse_net_to_media(rows.column("mphys"), rows.column("mtype")),
+        )
+        rows.columns["entries"] = {(i,): e for i, e in enumerate(r.arp)}
+
+
+Column = dict[tuple[int, ...], object]

@@ -122,6 +122,27 @@ class Repo:
                     [(address, k) for k in keys])
         return cur.rowcount
 
+    def dns_names(self, now: int) -> dict[str, str]:
+        """Cached PTR names that are still valid."""
+        return {r[0]: r[1] for r in self.conn.execute(
+            "SELECT address, name FROM dns_cache WHERE status = 'ok' AND expires_at >= ?",
+            (now,))}
+
+    def dns_fresh(self, now: int) -> set[str]:
+        return {r[0] for r in self.conn.execute(
+            "SELECT address FROM dns_cache WHERE expires_at >= ?", (now,))}
+
+    def save_dns(self, results: dict, now: int, positive_ttl: int, negative_ttl: int) -> None:
+        with self.conn:
+            self.conn.executemany(
+                "INSERT INTO dns_cache(address, name, status, resolved_at, expires_at) "
+                "VALUES (?, ?, ?, ?, ?) ON CONFLICT(address) DO UPDATE SET name = excluded.name, "
+                "status = excluded.status, resolved_at = excluded.resolved_at, "
+                "expires_at = excluded.expires_at",
+                [(ip, name, status, now,
+                  now + (positive_ttl if status == "ok" else negative_ttl))
+                 for ip, (name, status) in results.items()])
+
     def last_outcomes(self, device_id: int) -> list[sqlite3.Row]:
         return self.conn.execute(
             "SELECT s.*, r.started_at FROM collect_status s JOIN runs r ON r.id = s.run_id "
@@ -238,6 +259,7 @@ class Repo:
                     f"UPDATE devices SET {assignments} WHERE id = ?",  # noqa: S608
                     [*fields.values(), device_id])
             self._save_details(device_id, r, now)
+            self._save_observations(device_id, r, now, run_id)
             self._save_outcomes(run_id, device_id, r.outcomes.values())
             self._target_ok(str(r.target), now, device_id, r.credential, is_alias=False)
         return device_id
@@ -286,6 +308,37 @@ class Repo:
                   i.oper_status, i.speed_mbps, i.phys_mac, i.lag_ifindex, now)
                  for i in r.interfaces.values()])
 
+    def _save_observations(self, device_id: int, r: DeviceResult, now: int, run_id: int) -> None:
+        c = self.conn
+        if r.outcome_status("fdb") in (OK, PARTIAL):
+            c.executemany(
+                "INSERT INTO fdb_obs(mac, device_id, ifindex, vlan, vlan_source, method, "
+                "first_seen, last_seen, last_run_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(mac, device_id, ifindex, vlan) DO UPDATE SET "
+                "vlan_source = excluded.vlan_source, method = excluded.method, "
+                "last_seen = excluded.last_seen, last_run_id = excluded.last_run_id",
+                [(e.mac, device_id, e.ifindex, e.vlan, e.vlan_source, e.method, now, now, run_id)
+                 for e in r.fdb])
+            c.executemany(
+                "UPDATE interfaces SET bridge_port = ? WHERE device_id = ? AND ifindex = ?",
+                [(bp, device_id, ifx) for bp, ifx in r.bridge_ports.items()])
+            c.executemany("UPDATE interfaces SET pvid = ? WHERE device_id = ? AND ifindex = ?",
+                          [(vlan, device_id, ifx) for ifx, vlan in r.pvid.items()])
+            c.executemany(
+                "INSERT INTO vlans(device_id, vlan_id, name, last_seen) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(device_id, vlan_id) DO UPDATE SET name = excluded.name, "
+                "last_seen = excluded.last_seen",
+                [(device_id, vlan, name, now) for vlan, name in r.vlans.items()])
+        if r.outcome_status("arp") in (OK, PARTIAL):
+            c.executemany(
+                "INSERT INTO arp_obs(mac, address, family, device_id, ifindex, source_table, "
+                "first_seen, last_seen, last_run_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(mac, address, device_id) DO UPDATE SET ifindex = excluded.ifindex, "
+                "source_table = excluded.source_table, last_seen = excluded.last_seen, "
+                "last_run_id = excluded.last_run_id",
+                [(e.mac, e.ip, e.family, device_id, e.ifindex, e.table, now, now, run_id)
+                 for e in r.arp])
+
     def _save_outcomes(self, run_id: int, device_id: int, outcomes) -> None:
         self.conn.executemany(
             "INSERT OR REPLACE INTO collect_status(run_id, device_id, function, status, rows, "
@@ -331,10 +384,17 @@ class Repo:
 
     # ------------------------------------------------------------------ retention
 
-    def purge(self, now: int, retention_days: int, forget_after_days: int) -> dict[str, int]:
+    def purge(self, now: int, retention_days: int, forget_after_days: int,
+              nodes_retention_days: int = 30) -> dict[str, int]:
         c = self.conn
         counts = {}
         with c:
+            horizon = now - nodes_retention_days * DAY
+            counts["fdb"] = c.execute("DELETE FROM fdb_obs WHERE last_seen < ?",
+                                      (horizon,)).rowcount
+            counts["arp"] = c.execute("DELETE FROM arp_obs WHERE last_seen < ?",
+                                      (horizon,)).rowcount
+            c.execute("DELETE FROM dns_cache WHERE expires_at < ?", (now - 30 * DAY,))
             counts["devices"] = c.execute(
                 "DELETE FROM devices WHERE last_seen < ?", (now - retention_days * DAY,)).rowcount
             counts["targets"] = c.execute(

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from snowth_my_net.collect.tables.arp import ArpEntry
+from snowth_my_net.collect.tables.bridge import FdbEntry
 from snowth_my_net.collect.tables.entity import Chassis
 from snowth_my_net.collect.tables.interfaces import Interface
 from snowth_my_net.collect.tables.ipaddr import DeviceAddress
@@ -61,6 +63,11 @@ class DeviceResult:
     interfaces: dict[int, Interface] = field(default_factory=dict)
     addresses: list[DeviceAddress] = field(default_factory=list)
     evidence: TypeEvidence = field(default_factory=TypeEvidence)
+    fdb: list[FdbEntry] = field(default_factory=list)
+    arp: list[ArpEntry] = field(default_factory=list)
+    vlans: dict[int, str] = field(default_factory=dict)          # vlan -> name
+    pvid: dict[int, int] = field(default_factory=dict)           # ifIndex -> access/PVID vlan
+    bridge_ports: dict[int, int] = field(default_factory=dict)   # bridge port -> ifIndex
     ident: Identification | None = None
     outcomes: dict[str, Outcome] = field(default_factory=dict)
     error: str | None = None

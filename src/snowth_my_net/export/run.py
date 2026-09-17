@@ -10,7 +10,7 @@ from snowth_my_net.collect.identify import effective_type
 from snowth_my_net.config.effective import settings_for
 from snowth_my_net.config.loader import LoadedConfig
 from snowth_my_net.export.atomic import atomic_write
-from snowth_my_net.export.csvout import EmptyExport, devices_csv
+from snowth_my_net.export.csvout import NODES_HEADER, EmptyExport, devices_csv, render_csv
 from snowth_my_net.export.naming import NameInput, assign_names
 from snowth_my_net.logs import get_logger
 from snowth_my_net.snmp.target import split_host_port
@@ -19,7 +19,7 @@ from snowth_my_net.state.repo import DAY, Repo
 log = get_logger("export")
 
 # Outputs implemented so far; the others arrive with their phase.
-IMPLEMENTED = {"devices"}
+IMPLEMENTED = {"devices", "nodes"}
 
 
 @dataclass
@@ -56,12 +56,50 @@ def exported_devices(loaded: LoadedConfig, repo: Repo, now: int) -> tuple[list, 
     return devices, names
 
 
+def refresh_dns(loaded: LoadedConfig, repo: Repo, ips: list[str], now: int,
+                ptr_lookup=None) -> int:
+    """Look up the PTR names missing from (or expired in) the cache. Returns the count."""
+    import asyncio
+
+    from snowth_my_net.enrich.dns import dnspython_ptr, resolve_ptrs
+
+    dns_cfg = loaded.cfg.dns
+    if not dns_cfg.enabled:
+        return 0
+    fresh = repo.dns_fresh(now)
+    wanted = sorted({ip for ip in ips if ip and ip not in fresh})
+    if not wanted:
+        return 0
+    lookup = ptr_lookup or dnspython_ptr(dns_cfg)
+    results = asyncio.run(resolve_ptrs(wanted, dns_cfg, lookup, dns_cfg.budget))
+    repo.save_dns(results, now, dns_cfg.cache_ttl, dns_cfg.negative_ttl)
+    if len(results) < len(wanted):
+        log.warning("DNS budget spent: %d of %d PTR lookups done, the rest at the next export",
+                    len(results), len(wanted))
+    return len(results)
+
+
+def nodes_csv(loaded: LoadedConfig, repo: Repo, now: int, ptr_lookup=None) -> bytes:
+    from snowth_my_net.merge.view import build_view
+
+    cfg = loaded.cfg
+    view = build_view(loaded, repo, now)
+    ips = [n.current_ip.ip for n in view.nodes if n.current_ip]
+    if refresh_dns(loaded, repo, ips, now, ptr_lookup):
+        view.dns = repo.dns_names(now)
+    rows = view.rows()
+    if not rows and "nodes" not in cfg.export.allow_empty:
+        raise EmptyExport("nodes.csv would have no data row")
+    return render_csv(NODES_HEADER, rows, cfg.export.csv.line_terminator)
+
+
 def export(loaded: LoadedConfig, repo: Repo, clock: Clock,
-           only: list[str] | None = None) -> ExportResult:
+           only: list[str] | None = None, ptr_lookup=None) -> ExportResult:
     cfg = loaded.cfg
     out_dir = loaded.paths.output_dir
     result = ExportResult()
-    devices, names = exported_devices(loaded, repo, clock.now())
+    now = clock.now()
+    devices, names = exported_devices(loaded, repo, now)
     for name in only or cfg.export.files:
         if name not in IMPLEMENTED:
             result.pending.append(name)
@@ -72,6 +110,9 @@ def export(loaded: LoadedConfig, repo: Repo, clock: Clock,
                                    cfg.export.csv.line_terminator,
                                    allow_empty="devices" in cfg.export.allow_empty)
                 path = out_dir / "devices.csv"
+            elif name == "nodes":
+                data = nodes_csv(loaded, repo, now, ptr_lookup)
+                path = out_dir / "nodes.csv"
             else:  # pragma: no cover - guarded by IMPLEMENTED
                 continue
         except EmptyExport as exc:

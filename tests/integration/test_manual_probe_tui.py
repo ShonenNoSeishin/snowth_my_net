@@ -137,7 +137,7 @@ async def test_tui_lists_filters_and_sets_a_type_by_hand(lab, collected, monkeyp
     async with app.run_test(size=(150, 45)) as pilot:
         await wait(app, pilot)
         table = devices_table(app)
-        assert table.row_count == 9                           # 8 devices + the silent one
+        assert table.row_count == 10                          # 9 devices + the silent one
         app.screen.query_one("#filter", Input).value = "sophos"
         await pilot.pause()
         assert table.row_count == 1
@@ -178,7 +178,7 @@ async def test_tui_oid_tester_and_collect(lab, collected):
         await pilot.pause()
         screen.run_probe("arp-media")
         await wait(app, pilot)
-        assert screen.query_one("#results", DataTable).row_count == 3
+        assert screen.query_one("#results", DataTable).row_count == 5
         screen.query_one("#oid", Input).value = "1.3.6.1.2.1.1.5.0"
         screen.oid_submitted()
         await wait(app, pilot)
@@ -212,4 +212,27 @@ async def test_tui_adds_a_device(lab, collected):
     origin = repo.conn.execute("SELECT origin FROM targets WHERE address = '192.0.2.77'").fetchone()
     assert origin[0] == "manual"
     repo.conn.close()
+    ctx.close()
+
+
+async def test_tui_nodes_tab_search_and_explain(lab, collected):
+    from snowth_my_net.tui.app import ExplainModal
+
+    ctx = TuiContext(load_config(collected))
+    app = SnowthApp(ctx)
+    async with app.run_test(size=(160, 45)) as pilot:
+        await wait(app, pilot)
+        app.screen.query_one("#main-tabs", TabbedContent).active = "tab-nodes"
+        await wait(app, pilot)
+        nodes = app.screen.query_one("#nodes", DataTable)
+        assert nodes.row_count == 15
+        app.screen.query_one("#node-filter", Input).value = "192.0.2.50"
+        await pilot.pause()
+        assert nodes.row_count == 1
+        nodes.focus()
+        await pilot.press("enter")
+        await wait(app, pilot)
+        assert isinstance(app.screen, ExplainModal)
+        body = str(app.screen.query_one("#explain-text").render())
+        assert "sw-access-01 1/1/3" in body and "transit" in body
     ctx.close()

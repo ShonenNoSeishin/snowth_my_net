@@ -155,15 +155,68 @@ def ip_net_to_media(rows: list[tuple[int, str, str]]) -> list[Record]:
     return recs
 
 
+def _mac_index(mac: str) -> str:
+    return ".".join(str(int(part, 16)) for part in mac.split(":"))
+
+
+def base_ports(mapping: dict[int, int]) -> list[Record]:
+    return [integer(f"1.3.6.1.2.1.17.1.4.1.2.{bp}", ifx) for bp, ifx in mapping.items()]
+
+
+def qbridge_fdb(entries: list[tuple[int, str, int, int]], vlan_fdb: dict[int, int],
+                names: dict[int, str], pvid: dict[int, int]) -> list[Record]:
+    """entries: (fdb id, mac, bridge port, status)."""
+    recs = []
+    for fdb_id, mac, port, status in entries:
+        idx = f"{fdb_id}.{_mac_index(mac)}"
+        recs += [integer(f"1.3.6.1.2.1.17.7.1.2.2.1.2.{idx}", port),
+                 integer(f"1.3.6.1.2.1.17.7.1.2.2.1.3.{idx}", status)]
+    recs += [gauge(f"1.3.6.1.2.1.17.7.1.4.2.1.3.0.{vlan}", fdb) for vlan, fdb in vlan_fdb.items()]
+    recs += [text(f"1.3.6.1.2.1.17.7.1.4.3.1.1.{vlan}", name) for vlan, name in names.items()]
+    recs += [gauge(f"1.3.6.1.2.1.17.7.1.4.5.1.1.{bp}", vlan) for bp, vlan in pvid.items()]
+    return recs
+
+
+def dot1d_fdb(entries: list[tuple[str, int]], status: int = 3) -> list[Record]:
+    recs = []
+    for mac, port in entries:
+        idx = _mac_index(mac)
+        recs += [integer(f"1.3.6.1.2.1.17.4.3.1.2.{idx}", port),
+                 integer(f"1.3.6.1.2.1.17.4.3.1.3.{idx}", status)]
+    return recs
+
+
+def ip_net_to_physical(rows: list[tuple[int, str, str, int]]) -> list[Record]:
+    """rows: (ifIndex, address, mac, state)."""
+    recs = []
+    for ifindex, address, hw, state in rows:
+        ip = ipaddress.ip_address(address)
+        kind = 1 if ip.version == 4 else 2
+        idx = f"{ifindex}.{kind}.{len(ip.packed)}.{'.'.join(str(b) for b in ip.packed)}"
+        recs += [mac(f"1.3.6.1.2.1.4.35.1.4.{idx}", hw),
+                 integer(f"1.3.6.1.2.1.4.35.1.6.{idx}", 3),
+                 integer(f"1.3.6.1.2.1.4.35.1.7.{idx}", state)]
+    return recs
+
+
+def filler_macs(prefix: str, count: int) -> list[str]:
+    return [f"{prefix}:{i:02x}" for i in range(1, count + 1)]
+
+
+# Hosts (documentation MAC range): a0/a1 on sw-access, b0 behind its trunk, c0 on sw-generic,
+# c1 only in the firewall ARP table, d0/d1 on the Cisco per-VLAN switch.
+A0, A1, B0 = "00:00:5e:00:53:a0", "00:00:5e:00:53:a1", "00:00:5e:00:53:b0"
+C0, C1, D0, D1 = "00:00:5e:00:53:c0", "00:00:5e:00:53:c1", "00:00:5e:00:53:d0", "00:00:5e:00:53:d1"
+
 # --------------------------------------------------------------------------- agents
 
 
 def _ports(prefix_descr: str, count: int, base_mac: str, name_fmt: str | None = None,
            start: int = 1) -> list[dict]:
-    head = base_mac[:-2]
+    device = int(base_mac[-2:], 16)   # port MACs live in 00:00:5e:<device>:01:<port>
     return [{"index": start + n, "descr": prefix_descr.format(n + 1),
              "name": (name_fmt or prefix_descr).format(n + 1),
-             "mac": f"{head}{(int(base_mac[-2:], 16) + n + 1) % 256:02x}",
+             "mac": f"00:00:5e:{device:02x}:01:{n + 1:02x}",
              "oper": 1 if n % 3 else 2} for n in range(count)]
 
 
@@ -184,6 +237,17 @@ def agents() -> dict[str, list[Record]]:
         *interfaces(_ports("1/1/{}", 12, sw_mac)
                     + [{"index": 1000, "descr": "vlan1", "type": 136, "mac": sw_mac}]),
         *ip_addresses([("192.0.2.11", 1000, 24)]),
+        *base_ports({bp: bp for bp in range(1, 13)}),
+        # FDB ids 5 and 6 are internal ids of VLANs 10 and 20 (not the VLAN numbers).
+        *qbridge_fdb(
+            [(5, A0, 3, 3), (6, A1, 4, 3),
+             (5, "00:00:5e:00:53:14", 5, 3),           # a polled device (the printer)
+             (5, "00:00:5e:00:01:0a", 6, 3),           # VRRP virtual MAC
+             (5, sw_mac, 12, 4),                       # "self" entry
+             (5, B0, 12, 3),
+             *[(5, m, 12, 3) for m in filler_macs("00:00:5e:00:54", 5)]],   # trunk: 6 MACs
+            vlan_fdb={10: 5, 20: 6}, names={10: "USERS", 20: "VOICE"},
+            pvid={**{bp: 10 for bp in range(1, 12)}, 12: 1}),
     ]
 
     # Unknown vendor, bridge-only LLDP capabilities: the type must stay EMPTY.
@@ -194,6 +258,13 @@ def agents() -> dict[str, list[Record]]:
         *bridge_address(gen_mac), *lldp_local(gen_mac, "20"),
         *interfaces(_ports("Port {}", 4, gen_mac, name_fmt="{}")),
         *ip_addresses([("192.0.2.12", 1, 24)]),
+        # BRIDGE-MIB only (no Q-BRIDGE FDB); PVID 30 on port 1. Port 2 leads to sw-access
+        # without LLDP: a0 and a1 are seen there too (transit), with 3 local hosts.
+        *base_ports({1: 1, 2: 2, 3: 3, 4: 4}),
+        gauge("1.3.6.1.2.1.17.7.1.4.5.1.1.1", 30),
+        *dot1d_fdb([(C0, 1), (A0, 2), (A1, 2),
+                    *[(m, 2) for m in filler_macs("00:00:5e:00:55", 3)]]),
+        *dot1d_fdb([("00:00:00:00:00:00", 3)]),        # garbage entry, dropped
     ]
 
     # Sophos-like firewall: no layer 3 in sysServices, no ENTITY-MIB, no bridge, v2c only,
@@ -207,7 +278,8 @@ def agents() -> dict[str, list[Record]]:
         *ip_addresses([("192.0.2.1", 1, 24), ("198.51.100.1", 2, 24)]),
         *ip_net_to_media([(1, "192.0.2.50", "00:00:5e:00:53:a0"),
                           (1, "192.0.2.51", "00:00:5e:00:53:a1"),
-                          (2, "198.51.100.20", "00:00:5e:00:53:b0")]),
+                          (2, "198.51.100.20", "00:00:5e:00:53:b0"),
+                          (1, "192.0.2.40", C0), (1, "192.0.2.60", C1)]),
     ]
 
     # Printer of an unknown vendor: typed by the standard Printer-MIB only.
@@ -233,6 +305,8 @@ def agents() -> dict[str, list[Record]]:
         *interfaces([{"index": 1, "descr": "lo", "type": 24},
                      {"index": 2, "descr": "ens18", "mac": "00:00:5e:00:53:16"}]),
         *ip_addresses([("192.0.2.16", 2, 24)]),
+        *ip_net_to_physical([(2, "2001:db8::50", A0, 1), (2, "fe80::50", A0, 2),
+                             (2, "192.0.2.99", "00:00:5e:00:53:e0", 7)]),   # incomplete
     ]
 
     # One switch answering on two addresses (two endpoints of the same agent).
@@ -256,7 +330,37 @@ def agents() -> dict[str, list[Record]]:
         *lldp_local(ap_mac, "30"),
         *interfaces([{"index": 1, "descr": "eth0", "mac": ap_mac}]),
     ]
+    # Cisco IOS switch with per-VLAN bridge instances (community@vlan, context vlan-N): the
+    # default instance only shows VLAN 1. Extra instances are returned by vlan_instances().
+    cisco_mac = "00:00:5e:00:53:21"
+    a["sw-cisco"] = [
+        *system("Cisco IOS Software, C2960X Software (C2960X-UNIVERSALK9-M), Version 15.2(7)E4, "
+                "RELEASE SOFTWARE (fc2)", "1.3.6.1.4.1.9.1.1208", "sw-cisco-03.example.net",
+                services=2),
+        *bridge_address(cisco_mac),
+        *interfaces([{"index": 10100 + n, "descr": f"GigabitEthernet1/0/{n}",
+                      "name": f"Gi1/0/{n}", "mac": f"00:00:5e:00:56:{n:02x}"}
+                     for n in range(1, 5)]),
+        *ip_addresses([("192.0.2.21", 10101, 24)]),
+        *base_ports({n: 10100 + n for n in range(1, 5)}),
+        *dot1d_fdb([(D1, 2)]),
+        integer("1.3.6.1.4.1.9.9.46.1.3.1.1.2.1.1", 1),
+        integer("1.3.6.1.4.1.9.9.46.1.3.1.1.2.1.10", 1),
+        integer("1.3.6.1.4.1.9.9.46.1.3.1.1.2.1.1002", 1),
+        text("1.3.6.1.4.1.9.9.46.1.3.1.1.4.1.1", "default"),
+        text("1.3.6.1.4.1.9.9.46.1.3.1.1.4.1.10", "OFFICE"),
+        integer("1.3.6.1.4.1.9.9.68.1.2.2.1.2.10101", 10),
+    ]
     return a
+
+
+def vlan_instances() -> dict[str, dict[int, list[Record]]]:
+    """Per-VLAN bridge instances: agent -> {vlan: records}."""
+    ports = base_ports({n: 10100 + n for n in range(1, 5)})
+    return {"sw-cisco": {
+        1: [*ports, *dot1d_fdb([(D1, 2)])],
+        10: [*ports, *dot1d_fdb([(D0, 1)])],
+    }}
 
 
 def render(records: list[Record]) -> str:
@@ -271,6 +375,10 @@ def build(out: Path = OUT) -> dict[str, Path]:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(render(records), encoding="ascii")
         written[name] = path
+        for vlan, vlan_records in vlan_instances().get(name, {}).items():
+            vlan_path = out / name / f"public@{vlan}.snmprec"
+            vlan_path.write_text(render(vlan_records), encoding="ascii")
+            written[f"{name}@{vlan}"] = vlan_path
     return written
 
 

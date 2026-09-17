@@ -39,6 +39,7 @@ LAB = {
     "linux": (["127.0.0.16"], True),
     "dual": (["127.0.0.17", "127.0.0.18"], True),
     "ap": (["127.0.0.20"], True),
+    "sw-cisco": (["127.0.0.21"], True),
 }
 DEAD = "127.0.0.19"
 
@@ -123,6 +124,11 @@ def start_lab(root: Path, port: int | None = None, timeout: float = 60) -> Runni
         data = root / name / "data"
         shutil.copytree(FIXTURES / name, data)
         (data / "public.snmprec").rename(data / f"{COMMUNITY}.snmprec")
+        # Per-VLAN bridge instances: community@vlan (v2c) and context vlan-N (v3).
+        for instance in sorted(data.glob("public@*.snmprec")):
+            vlan = instance.stem.split("@", 1)[1]
+            shutil.copy(instance, data / f"vlan-{vlan}.snmprec")
+            instance.rename(data / f"{COMMUNITY}@{vlan}.snmprec")
         # snmpsim unregisters the default SNMPv3 context and registers it again only for a
         # data file named "self.snmprec" (empty context name), which real agents use.
         shutil.copy(data / f"{COMMUNITY}.snmprec", data / "self.snmprec")
@@ -181,7 +187,11 @@ discovery:
 devices:
   - address: {DEAD}
     tolerate_failure: {'true' if tolerate_dead else 'false'}
+  - address: 127.0.0.11
+    uplink_mac_threshold: 5
 {extra_devices}
+dns:
+  enabled: false
 export:
   files: {files}
 """)

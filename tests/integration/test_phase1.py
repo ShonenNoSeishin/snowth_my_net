@@ -47,7 +47,7 @@ def test_collect_polls_everything_and_tolerates_the_dead_device(lab, collected):
     assert code == 0, report
     devices = by_address(report)
     assert devices[lab.address(DEAD)]["status"] == "failed"
-    assert report["stats"]["reachable"] == 8
+    assert report["stats"]["reachable"] == 9
     fw = devices[lab.agent("fw")]
     assert fw["credential"] == "v2c-lab"               # v3 refused, then v2c accepted
     assert fw["attempts"][0][0] == "v3-main" and fw["attempts"][-1] == ["v2c-lab", "ok"]
@@ -64,6 +64,7 @@ def test_types_are_only_set_on_sure_evidence(lab, collected):
         "sw-access": ("switch", "catalog"), "sw-generic": ("", ""), "fw": ("firewall", "catalog"),
         "printer": ("printer", "function_mib"), "ups": ("facility", "function_mib"),
         "linux": ("", ""), "dual": ("switch", "catalog"), "ap": ("wireless", "lldp_caps"),
+        "sw-cisco": ("", ""),
     }
     for agent, (device_type, rule) in expected.items():
         d = devices[lab.agent(agent)]

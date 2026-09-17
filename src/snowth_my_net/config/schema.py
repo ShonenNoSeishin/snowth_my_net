@@ -277,6 +277,7 @@ class NodesCfg:
     retention_days: int = 30
     prefer_ipv4: bool = True
     current_ip_window: Duration = 86400
+    transit_window: Duration = 1800
     ignore_macs: list[str] = field(default_factory=list)
     ignore_mac_prefixes: list[str] = field(default_factory=lambda: list(DEFAULT_IGNORED_PREFIXES))
 
@@ -300,6 +301,7 @@ class DnsCfg:
     concurrency: int = 20
     cache_ttl: Duration = 86400
     negative_ttl: Duration = 3600
+    budget: Duration = 120                  # total time allowed for lookups per export
     strip_domain: bool = False
 
     def check(self) -> list[str]:

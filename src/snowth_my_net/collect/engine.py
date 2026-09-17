@@ -216,7 +216,8 @@ class Collector:
 
         if repo:
             report.stats["purged"] = repo.purge(now, self.cfg.general.retention_days,
-                                                self.cfg.discovery.forget_after_days)
+                                                self.cfg.discovery.forget_after_days,
+                                                self.cfg.nodes.retention_days)
         owners = [r for r in report.results if r.alias_of is None]
         failing = [r for r in owners if r.status != "ok" and not r.settings.tolerate_failure]
         reachable = [r for r in owners if r.reachable]
@@ -366,7 +367,8 @@ class Collector:
             return
         if self.mode == "discover":
             return
-        for name, func in (("interfaces", functions.interfaces), ("ipaddr", functions.ipaddr)):
+        for name, func in (("interfaces", functions.interfaces), ("ipaddr", functions.ipaddr),
+                           ("fdb", functions.fdb), ("arp", functions.arp)):
             if r.superseded:
                 return
             await run_function(r, name, client, deadline, func)
