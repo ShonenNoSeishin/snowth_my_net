@@ -87,6 +87,9 @@ concurrency = ["thread"]
 
 [tool.coverage.report]
 show_missing = true
+# Every line is exercised; the few branch arcs left are loop exits and states the schema
+# forbids. A lower total means new code without tests.
+fail_under = 99
 skip_covered = true
 exclude_also = [
     "if TYPE_CHECKING:",

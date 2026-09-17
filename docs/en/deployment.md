@@ -85,9 +85,34 @@ Persistent=true
 WantedBy=timers.target
 ```
 
-Same pair for export and push: `ExecStart=… run --no-collect`, `OnCalendar=*-*-* 11,18:00:00`
-(append a time zone such as `Europe/Brussels` if needed). Add the output directory to
-`ReadWritePaths` when it is not under the state directory.
+The same pair for export and push is shown below (append a time zone such as `Europe/Brussels`
+to `OnCalendar` if needed). Add the output directory to `ReadWritePaths` when it is not under the
+state directory.
+
+```ini
+# /etc/systemd/system/snowth-export.service
+[Unit]
+Description=snowth_my_net export and push
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=snowth
+Group=snowth
+ExecStart=/usr/local/bin/snowth_my_net --config /etc/snowth_my_net/config.yml -q run --no-collect
+# same hardening lines as snowth-collect.service
+```
+
+```ini
+# /etc/systemd/system/snowth-export.timer       (= "0 11,18 * * *")
+[Timer]
+OnCalendar=*-*-* 11,18:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
 
 ```bash
 sudo systemctl daemon-reload

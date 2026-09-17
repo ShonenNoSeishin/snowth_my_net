@@ -16,7 +16,7 @@ import ipaddress
 
 from snowth_my_net.collect.model import DeviceResult
 from snowth_my_net.collect.tables.arp import ArpEntry
-from snowth_my_net.drivers.base import Driver, SyntheticDevice, text
+from snowth_my_net.drivers.base import Driver, SyntheticDevice, index_mac, text
 from snowth_my_net.snmp.client import SnmpClient
 from snowth_my_net.snmp.values import normalize_mac, parse_oid
 
@@ -65,7 +65,7 @@ class CiscoWlc(Driver):
         try:
             for index, row in (await self._table(client, AP_ENTRY, AP_COLUMNS, rows,
                                                  "ap")).items():
-                mac = normalize_mac(bytes(index)) if len(index) == 6 else None
+                mac = index_mac(index)
                 name = text(row.get("name"))
                 if mac is None or not name:
                     continue
@@ -79,7 +79,7 @@ class CiscoWlc(Driver):
         finally:
             r.synthetic = list(aps.values())
         for index, row in stations.items():
-            mac = normalize_mac(bytes(index)) if len(index) == 6 else None
+            mac = index_mac(index)
             ap_value = row.get("ap")
             ap = aps.get(normalize_mac(ap_value) if isinstance(ap_value, bytes) else "")
             if mac is None or ap is None:

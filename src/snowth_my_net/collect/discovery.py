@@ -160,11 +160,21 @@ def neighbor_targets(cfg: Config, neighbors: list, depth: int, known_hosts: set[
     scope = Scope(d.allowed, d.exclude, set())
     for n in neighbors:
         label = n.sys_name or n.chassis_id or "?"
-        if not n.mgmt_addresses:
+        addresses = []
+        for text in n.mgmt_addresses:
+            try:
+                addresses.append(ipaddress.ip_address(text))
+            except ValueError:
+                continue
+        if not addresses:
             continue
-        address = n.mgmt_addresses[0]
-        if address in known_hosts:
+        # A neighbour may announce several addresses (loopback, out-of-band, IPv6): explore the
+        # first one that is in scope, IPv4 before IPv6, in numeric order.
+        addresses.sort(key=lambda ip: (ip.version, ip))
+        if any(str(ip) in known_hosts for ip in addresses):
             continue
+        in_scope = [ip for ip in addresses if scope.check(ip) is None]
+        address = str(in_scope[0] if in_scope else addresses[0])
         if depth + 1 > d.max_depth:
             notes.append(f"neighbor {label} ({address}): skipped (max_depth {d.max_depth})")
             continue
@@ -172,18 +182,15 @@ def neighbor_targets(cfg: Config, neighbors: list, depth: int, known_hosts: set[
             caps = ",".join(sorted(n.caps)) or "none"
             notes.append(f"neighbor {label} ({address}): skipped (capabilities {caps})")
             continue
-        try:
-            ip = ipaddress.ip_address(address)
-        except ValueError:
-            continue
-        reason = scope.check(ip)
-        if reason:
-            notes.append(f"neighbor {label} ({address}): skipped ({reason})")
+        if not in_scope:
+            reasons = sorted({str(scope.check(ip)) for ip in addresses})
+            notes.append(f"neighbor {label} ({', '.join(map(str, addresses))}): skipped "
+                         f"({'; '.join(reasons)})")
             continue
         if settings_for(cfg, address, manual).disabled:
             notes.append(f"neighbor {label} ({address}): skipped (disabled)")
             continue
         known_hosts.add(address)
-        result.append(PlannedTarget(Target(str(ip), cfg.general.snmp.port), "neighbor",
+        result.append(PlannedTarget(Target(address, cfg.general.snmp.port), "neighbor",
                                     depth + 1))
     return result, notes

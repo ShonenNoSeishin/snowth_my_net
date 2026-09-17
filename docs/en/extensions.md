@@ -161,7 +161,7 @@ Booleans accept `true`/`false` (also `yes`/`no`).
 * The query runs in a private in-memory SQLite database holding copies of the datasets it names,
   never on the state file. Only one `SELECT` (or `WITH … SELECT`) is accepted; an authorizer
   refuses everything else (`ATTACH`, `PRAGMA`, writes, loading extensions), and a query is stopped
-  after 20 seconds or 200 000 rows.
+  after 20 seconds; a result of more than 200 000 rows is refused (add a `LIMIT`).
 * `columns`, `filters` and `sort` do not apply: write them in the query.
 
 ### Commands
@@ -218,7 +218,7 @@ same read-only SNMP access as everything else (`get` and `walk`), with the devic
 timeouts and pacing, but nothing technically prevents Python code from doing other things.
 
 ```python
-from snowth_my_net.api import Extension, Field, number, text
+from snowth_my_net.api import Extension, Field, text
 
 extension = Extension("host_storage")              # module-level, required
 
@@ -260,8 +260,8 @@ returns `[(index, value)]` with the index relative to the walked OID. Values are
 such object); `text()`, `number()`, `mac()` and `ip()` convert them.
 
 A collector that raises, or returns something else than declared, is recorded as an error for
-that device (exit code 1 when `mode="force"` or when the collect fails otherwise), like an SNMP
-error; it never stops the collect. A dataset that raises makes the report fail; an exporter that
+that device, like an SNMP error: the device is `partial` and the collect exits with code 1
+(unless `devices[].tolerate_failure`); it never stops the collect. A dataset that raises makes the report fail; an exporter that
 raises is reported by `export` (exit code 1) and the other files are still written.
 
 **Loading:** `<extensions_dir>/<name>.py` first, then an installed distribution declaring the
@@ -288,8 +288,10 @@ snmp = testing.FakeSnmp({"1.3.6.1.2.1.25.2.3.1.3.31": b"/", "1.3.6.1.2.1.25.2.3.
 rows = testing.run_collector(ext, "host-storage", snmp, vendor="Linux")   # stored values
 usage = testing.run_dataset(ext, "disk-usage", {"custom:host-storage": rows})
 data = testing.export(ext, "metrics/snowth_my_net.prom", {"devices": [], "nodes": []})
-identity, observations = testing.run_driver(ext, "acme-os", snmp)
 ```
+
+A driver declared by an extension (see [drivers](drivers.md#writing-a-driver)) is tested the same
+way: `identity, observations = testing.run_driver(ext, "acme-os", snmp)`.
 
 Then, on a real device and without storing anything: `snowth_my_net custom test host-storage
 192.0.2.16`.

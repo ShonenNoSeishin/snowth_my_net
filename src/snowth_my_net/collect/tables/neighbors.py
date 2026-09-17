@@ -145,7 +145,8 @@ def parse_lldp(rem: dict[int, Column], man_addr: Column) -> list[Neighbor]:
         if neighbor is not None and address and address not in neighbor.mgmt_addresses:
             neighbor.mgmt_addresses.append(address)
     for neighbor in neighbors.values():
-        neighbor.mgmt_addresses.sort(key=lambda a: (ipaddress.ip_address(a).version, a))
+        neighbor.mgmt_addresses.sort(key=lambda a: (ipaddress.ip_address(a).version,
+                                                    ipaddress.ip_address(a)))
     return [neighbors[k] for k in sorted(neighbors)]
 
 

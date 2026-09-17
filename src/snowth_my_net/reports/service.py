@@ -23,14 +23,10 @@ class EmptyReport(ReportError):
 
 
 def parse_report(data) -> ReportCfg:
-    """Validate one report definition (from the TUI or an import); raises ConfigError."""
-    from snowth_my_net.config.validate import ConfigError
+    """Validate one report definition (from the TUI or an import); raises ConfigError.
 
-    cfg = build(ReportCfg, data)
-    problems = cfg.check()
-    if problems:
-        raise ConfigError(problems)
-    return cfg
+    ``build`` runs ``ReportCfg.check()``, so a returned definition is complete and valid."""
+    return build(ReportCfg, data)
 
 
 def report_definition(cfg: ReportCfg) -> dict:

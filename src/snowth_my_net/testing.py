@@ -113,12 +113,12 @@ def run_dataset(extension: Extension, name: str,
     return declared.func(_Context(datasets or {}, now or int(time.time())))
 
 
-def run_driver(extension: Extension, name: str, snmp: FakeSnmp | None = None,
+def run_driver(extension: Extension, driver: str, snmp: FakeSnmp | None = None,
                view: DeviceView | None = None, **device_fields: str) -> tuple[dict, Any]:
     """Run a driver's identity and observations functions: ``(identity, Observations)``."""
-    declared = next((d for d in extension.drivers if d.name == name), None)
+    declared = next((d for d in extension.drivers if d.name == driver), None)
     if declared is None:
-        raise KeyError(f"no driver {name!r} in extension {extension.name!r}")
+        raise KeyError(f"no driver {driver!r} in extension {extension.name!r}")
     view = view or device(**device_fields)
     snmp = snmp or FakeSnmp({})
 

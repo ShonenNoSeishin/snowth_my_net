@@ -122,7 +122,7 @@ Content-Disposition: form-data; name="<extra field>"      (optional extra_fields
 value
 --boundary
 Content-Disposition: form-data; name="file"; filename="devices.csv"
-Content-Type: text/csv                                     (application/json for snapshot)
+Content-Type: text/csv            (application/json: snapshot, JSON reports; text/markdown, text/html: reports)
 
 <file content>
 --boundary--

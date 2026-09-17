@@ -24,19 +24,23 @@ def open_db(path: Path, readonly: bool = False) -> sqlite3.Connection:
         conn = sqlite3.connect(path, timeout=30)
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys=ON")
-    version = conn.execute("PRAGMA user_version").fetchone()[0]
-    if readonly:
-        if version < SCHEMA_VERSION:
-            raise StateError(f"state schema v{version} at {path} is older than this version "
-                             f"(v{SCHEMA_VERSION}); run any writing command (e.g. collect) "
-                             "to upgrade it")
-        if version > SCHEMA_VERSION:
-            raise StateError(f"state schema v{version} at {path} is newer than this version "
-                             f"of snowth_my_net (v{SCHEMA_VERSION}); upgrade the tool")
-    else:
-        migrate(conn, version)
+    try:
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys=ON")
+        version = conn.execute("PRAGMA user_version").fetchone()[0]
+        if readonly:
+            if version < SCHEMA_VERSION:
+                raise StateError(f"state schema v{version} at {path} is older than this version "
+                                 f"(v{SCHEMA_VERSION}); run any writing command (e.g. collect) "
+                                 "to upgrade it")
+            if version > SCHEMA_VERSION:
+                raise StateError(f"state schema v{version} at {path} is newer than this version "
+                                 f"of snowth_my_net (v{SCHEMA_VERSION}); upgrade the tool")
+        else:
+            migrate(conn, version)
+    except BaseException:
+        conn.close()              # never leave a connection (and its file handle) behind
+        raise
     return conn
 
 

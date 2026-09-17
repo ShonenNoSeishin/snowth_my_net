@@ -172,10 +172,17 @@ La documentation détaillée existe en français (`docs/fr/`) et en anglais (`do
 ```bash
 uv venv --python 3.13 && uv pip install -e ".[dev]"
 .venv/bin/python -m pytest          # tests unitaires et d'intégration (simulateurs SNMP sur 127.0.0.x)
+.venv/bin/python -m pytest --cov=snowth_my_net   # avec la couverture (échoue sous 99 %)
 .venv/bin/ruff check src tests
 docker compose --profile test run --rm tests
 python -m tests.support.lab         # un labo local d'équipements simulés, affiche une configuration
 ```
+
+Les tests couvrent tous les modules (100 % des lignes, 99 % des branches) : tests unitaires avec
+des imitations de SNMP, HTTP, DNS et des processus, tests de l'interface avec le pilote Textual,
+tests d'intégration contre des simulateurs SNMP, fichiers de référence pour les CSV, et
+vérification que les documentations française et anglaise restent alignées (mêmes pages, même
+structure, chaque clé de configuration, aucun lien cassé).
 
 ## Licence
 

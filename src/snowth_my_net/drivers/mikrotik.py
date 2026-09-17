@@ -12,9 +12,9 @@ from typing import ClassVar
 
 from snowth_my_net.collect.model import DeviceResult, Identification
 from snowth_my_net.collect.tables.bridge import FdbEntry
-from snowth_my_net.drivers.base import VERSION_RE, Driver, text
+from snowth_my_net.drivers.base import VERSION_RE, Driver, index_mac, text
 from snowth_my_net.snmp.client import SnmpClient, Value
-from snowth_my_net.snmp.values import normalize_mac, parse_oid
+from snowth_my_net.snmp.values import parse_oid
 
 WL_RTAB_IFACE = parse_oid("1.3.6.1.4.1.14988.1.1.1.2.1.2")
 
@@ -49,7 +49,7 @@ class MikroTik(Driver):
                 index = oid[len(WL_RTAB_IFACE):]
                 if len(index) != 7:
                     continue
-                mac = normalize_mac(bytes(index[:6]))
+                mac = index_mac(index[:6])
                 ifindex = value if isinstance(value, int) else index[6]
                 if mac is None or (mac, ifindex) in seen:
                     continue

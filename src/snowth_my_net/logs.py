@@ -88,6 +88,11 @@ def setup_logging(level: str = "info", log_file: str | None = None, quiet: bool 
         file_handler.setFormatter(RedactingFormatter())
         root.addHandler(file_handler)
 
+    if not root.handlers:
+        # Without any handler, Python would print warnings to stderr through its "last resort"
+        # handler, over the terminal interface. The TUI shows logs in its own panels instead.
+        root.addHandler(logging.NullHandler())
+
     # pysnmp's own debug output can contain community strings: keep it quiet whatever happens.
     logging.getLogger("pysnmp").setLevel(logging.WARNING)
 

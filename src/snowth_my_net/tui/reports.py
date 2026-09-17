@@ -66,7 +66,7 @@ class FilterRow(Horizontal):
     def compose(self) -> ComposeResult:
         field = self.values.get("field")
         yield Select([(f, f) for f in self.fields], value=field if field in self.fields
-                     else Select.BLANK, prompt=self.t("rep.field"), compact=True,
+                     else Select.NULL, prompt=self.t("rep.field"), compact=True,
                      classes="f-field")
         yield Select([(self.t(f"op.{op}"), op) for op in OPS],
                      value=self.values.get("op", "eq"), allow_blank=False, compact=True,
@@ -79,9 +79,10 @@ class FilterRow(Horizontal):
         yield Button("✕", classes="f-remove", compact=True)
 
     def definition(self) -> dict | None:
-        field = self.query_one(".f-field", Select).value
-        if field is Select.BLANK:
+        select = self.query_one(".f-field", Select)
+        if select.is_blank():
             return None
+        field = select.value
         op = str(self.query_one(".f-op", Select).value)
         item: dict[str, Any] = {"field": str(field), "op": op}
         if op not in NO_VALUE_OPS:

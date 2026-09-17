@@ -14,3 +14,8 @@ dist/
 /config/snowth_my_net.yml
 .env
 /config/extensions/
+
+# Test coverage data
+.coverage
+.coverage.*
+htmlcov/

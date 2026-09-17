@@ -8,7 +8,7 @@ from typing import ClassVar
 
 from snowth_my_net.collect.model import DeviceResult, Identification
 from snowth_my_net.snmp.client import SnmpClient, Value
-from snowth_my_net.snmp.values import Oid, decode_text, one_line, parse_oid
+from snowth_my_net.snmp.values import Oid, decode_text, normalize_mac, one_line, parse_oid
 
 IFTYPE_80211 = 71
 
@@ -28,6 +28,13 @@ class SyntheticDevice:
     type_reason: str = ""
     ports: dict[int, str] = field(default_factory=dict)          # pseudo ifIndex -> name
     stations: list[tuple[str, int, int]] = field(default_factory=list)   # (mac, port, vlan)
+
+
+def index_mac(index: tuple[int, ...]) -> str | None:
+    """A MAC address encoded as the 6 sub-identifiers of a table index, else None."""
+    if len(index) != 6 or not all(0 <= part <= 255 for part in index):
+        return None
+    return normalize_mac(bytes(index))
 
 
 def text(value: Value) -> str:

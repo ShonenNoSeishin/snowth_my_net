@@ -65,10 +65,7 @@ def parse_filter(text: str) -> FilterCfg:
         flt = build(FilterCfg, {"field": parts[0], "op": parts[1], "value": value})
     except ConfigError as exc:
         raise ManualError(f"--filter {text!r}: {'; '.join(exc.errors)}") from None
-    problems = flt.check()
-    if problems:
-        raise ManualError("; ".join(problems))
-    return flt
+    return flt                     # build() has already run FilterCfg.check()
 
 
 def _adhoc(args) -> ReportCfg | None:
