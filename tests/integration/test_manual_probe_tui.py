@@ -250,6 +250,7 @@ async def test_tui_links_tab_and_device_neighbors(lab, collected):
         app.screen.query_one("#main-tabs", TabbedContent).active = "tab-devices"
         await wait(app, pilot)
         select_row(devices_table(app), "sw-access-01")
+        devices_table(app).focus()
         await pilot.press("enter")
         await wait(app, pilot)
         neighbors = app.screen.query_one("#neighbors", DataTable)
