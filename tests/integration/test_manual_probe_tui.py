@@ -208,8 +208,12 @@ async def test_tui_adds_a_device(lab, collected):
         await wait(app, pilot)
         assert any("192.0.2.77" in str(devices_table(app).get_row_at(i)[1])
                    for i in range(devices_table(app).row_count))
-    repo = Repo(open_db(load_config(collected).paths.state_file))
-    origin = repo.conn.execute("SELECT origin FROM targets WHERE address = '192.0.2.77'").fetchone()
+    loaded = load_config(collected)
+    repo = Repo(open_db(loaded.paths.state_file))
+    # the address was typed without a port: it gets general.snmp.port, like the seeds
+    stored = f"192.0.2.77:{loaded.cfg.general.snmp.port}"
+    origin = repo.conn.execute("SELECT origin FROM targets WHERE address = ?",
+                               (stored,)).fetchone()
     assert origin[0] == "manual"
     repo.conn.close()
     ctx.close()

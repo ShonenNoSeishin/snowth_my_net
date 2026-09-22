@@ -605,3 +605,21 @@ def test_remaining_branches(cfg, capsys, tmp_path, monkeypatch):
     monkeypatch.setattr(custom, "run_collector", nothing)
     assert run(cfg, "custom", "test", "sysname", "192.0.2.77") == 1
     assert capsys.readouterr().out == "sysname on 192.0.2.77: 0 value(s)\n"
+
+
+def test_cli_addresses_use_the_configured_snmp_port(tmp_path, capsys, monkeypatch):
+    """An address typed without a port reaches the same port as the seeds."""
+    assert (parse_target("192.0.2.1").port, parse_target("192.0.2.1", 1161).port) == (161, 1161)
+    assert parse_target("192.0.2.1:2161", 1161).port == 2161        # an explicit port wins
+    assert parse_target("[2001:db8::1]", 1161).port == 1161
+
+    monkeypatch.setenv("SNOWTH_COV_COMMUNITY", "cov-community")
+    cfg = base_config(tmp_path)
+    cfg.write_text(cfg.read_text().replace("  lock_wait:", "  snmp: {port: 1161}\n  lock_wait:"))
+    assert run(cfg, "device", "add", "192.0.2.42") == 0
+    capsys.readouterr()
+    repo = state(tmp_path)
+    try:
+        assert [row["address"] for row in repo.targets()] == ["192.0.2.42:1161"]
+    finally:
+        repo.conn.close()

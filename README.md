@@ -28,6 +28,9 @@ schedule to any tool. A terminal interface lets you browse, set things by hand a
 
 ## Quick start
 
+Step by step, from an empty directory to the first scan:
+[docs/en/getting-started.md](docs/en/getting-started.md).
+
 ### With pipx (host cron or systemd)
 
 ```bash
@@ -134,6 +137,7 @@ See [docs/en/extensions.md](docs/en/extensions.md) and [examples/extensions](exa
 
 Detailed documentation exists in English (`docs/en/`) and French (`docs/fr/`):
 
+* [Getting started](docs/en/getting-started.md): declare your devices and run a scan, step by step
 * [Configuration reference](docs/en/config.md), with every key and its default
 * [Output formats and HTTP push](docs/en/formats.md)
 * [Deployment: pipx + cron/systemd, Docker Compose](docs/en/deployment.md)

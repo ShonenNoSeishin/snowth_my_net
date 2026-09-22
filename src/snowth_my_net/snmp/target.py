@@ -61,9 +61,15 @@ def has_explicit_port(text: str) -> bool:
     return (t.startswith("[") and "]:" in t) or (not t.startswith("[") and t.count(":") == 1)
 
 
-def parse_target(text: str) -> Target:
-    """Parse an address whose host part is an IP literal."""
+def parse_target(text: str, default_port: int = DEFAULT_PORT) -> Target:
+    """Parse an address whose host part is an IP literal.
+
+    ``default_port`` is used when the address carries none, so that an address typed on the
+    command line reaches the same port as the seeds (``general.snmp.port``).
+    """
     host, port = split_host_port(text)
+    if not has_explicit_port(text):
+        port = default_port
     try:
         ip = ipaddress.ip_address(host)
     except ValueError:

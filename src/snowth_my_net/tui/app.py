@@ -227,7 +227,7 @@ class AddDeviceModal(ModalScreen[str | None]):
         text = self.query_one("#address", Input).value
         message = self.query_one("#add-message", Static)
         try:
-            target = parse_target(text)
+            target = parse_target(text, self.ctx.cfg.general.snmp.port)
         except AddressError as exc:
             message.update(Text(t("add.invalid", error=exc), style="red"))
             return

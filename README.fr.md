@@ -36,6 +36,9 @@ la main et de tester des OID.
 
 ## Démarrage rapide
 
+Pas à pas, d'un répertoire vide au premier scan :
+[docs/fr/getting-started.md](docs/fr/getting-started.md).
+
 ### Avec pipx (cron ou systemd de l'hôte)
 
 ```bash
@@ -148,6 +151,7 @@ propres programmes après une collecte, un export, un push ou un rapport. Voir
 
 La documentation détaillée existe en français (`docs/fr/`) et en anglais (`docs/en/`) :
 
+* [Prise en main](docs/fr/getting-started.md) : déclarer vos équipements et lancer un scan, pas à pas
 * [Référence de configuration](docs/fr/config.md), avec chaque clé et sa valeur par défaut
 * [Formats de sortie et push HTTP](docs/fr/formats.md)
 * [Déploiement : pipx + cron/systemd, Docker Compose](docs/fr/deployment.md)

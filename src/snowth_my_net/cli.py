@@ -532,7 +532,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     if only:
         listed = {str(p.target) for p in planned}
         for address in args.addresses:
-            target = parse_target(address)
+            target = parse_target(address, cfg.general.snmp.port)
             if str(target) not in listed:
                 planned.append(PlannedTarget(target, "cli"))
     state_repo = _state_readonly(loaded)
@@ -641,7 +641,7 @@ def cmd_probe(args: argparse.Namespace) -> int:
 
     loaded = load(args)
     creds = resolved_credentials(loaded)
-    target = parse_target(args.address)
+    target = parse_target(args.address, loaded.cfg.general.snmp.port)
     repo = _state_readonly(loaded)
     manual, remembered, stored = _state_facts(repo, target)
     if repo:
@@ -744,7 +744,8 @@ def cmd_device_show(args: argparse.Namespace) -> int:
     loaded = load(args)
     host = normalize_address(args.address)
     repo = _state_readonly(loaded)
-    manual, _cred, stored = _state_facts(repo, parse_target(args.address))
+    manual, _cred, stored = _state_facts(
+        repo, parse_target(args.address, loaded.cfg.general.snmp.port))
     if repo:
         repo.conn.close()
     rows = _settings_rows(loaded, host, manual)
@@ -811,7 +812,7 @@ def cmd_device_unset(args: argparse.Namespace) -> int:
 
 def cmd_device_add(args: argparse.Namespace) -> int:
     loaded = load(args)
-    target = parse_target(args.address)
+    target = parse_target(args.address, loaded.cfg.general.snmp.port)
     excluded = [n for n in loaded.cfg.discovery.exclude
                 if n and n.version == target.ip.version and target.ip in n]
     if excluded:
@@ -829,7 +830,7 @@ def cmd_device_add(args: argparse.Namespace) -> int:
 
 def cmd_device_remove(args: argparse.Namespace) -> int:
     loaded = load(args)
-    target = parse_target(args.address)
+    target = parse_target(args.address, loaded.cfg.general.snmp.port)
     repo = _state_rw(loaded)
     try:
         repo.remove_target(str(target))
@@ -997,7 +998,7 @@ def cmd_custom_test(args: argparse.Namespace) -> int:
     creds = resolved_credentials(loaded)
     repo = _state_readonly(loaded)
     collectors = {c.cfg.name: c.cfg for c in _collectors(loaded, repo)}
-    target = parse_target(args.address)
+    target = parse_target(args.address, loaded.cfg.general.snmp.port)
     manual, remembered, stored = _state_facts(repo, target)
     if repo:
         repo.conn.close()
