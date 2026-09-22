@@ -69,6 +69,7 @@ phone keeps its position. Phones are never probed during exploration and are not
 |---|---|
 | Cisco IOS/IOS-XE | Per-VLAN bridge instances (above); `lldpLocPortNum` is not the ifIndex (mapped by name); HSRP virtual MACs ignored. |
 | Cisco NX-OS | CDP device IDs `hostname(SERIAL)` are cleaned. |
+| Cisco, VRFs | The default context only shows the global routing table. The VRFs the device lists are read in their own SNMP context (`devices[].vrfs`); the context name must match the VRF name on the device. |
 | Juniper EX/QFX | FDB ids are not VLAN numbers: `dot1qVlanFdbId` is used. MACs learnt on logical units (`ge-0/0/5.0`) are attributed to the physical port. |
 | HPE Aruba AOS-CX, ProVision | Standard MIBs; bridge ports equal ifIndexes on ProVision. |
 | Fortinet, Sophos | ARP through IP-MIB; ENTITY-MIB often absent: the `fortinet` and `sophos` drivers read serial, version (and model for Sophos) from the private MIBs. |
@@ -76,3 +77,4 @@ phone keeps its position. Phones are never probed during exploration and are not
 | MikroTik RouterOS | Partial BRIDGE-MIB depending on the version; the `mikrotik` driver adds identity and the stations of its wireless interfaces. |
 | Cisco AireOS controllers | `cisco-wlc` driver: synthetic APs and client positions. |
 | Ubiquiti UniFi/EdgeSwitch | Generic SNMP stack identifiers: vendor from the MAC OUI. |
+| Agents serving LLDP-V2-MIB | Read as a fallback when LLDP-MIB answers nothing; its index names the local ifIndex, so ports need no mapping. |

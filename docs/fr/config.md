@@ -43,7 +43,7 @@ priment sur les entrées `devices:`, clé par clé (voir `devices`).
 | `general.python_extensions` | `[]` | Extensions Python à charger, par nom : `<extensions_dir>/<name>.py` ou un point d'entrée installé. Rien n'est importé sans être listé. |
 | `general.log_file` | aucun | Journalise aussi dans ce fichier (rotation 10 Mo × 5). Les journaux vont toujours sur stderr. |
 | `general.log_level` | `info` | `debug`, `info`, `warning`, `error`. |
-| `general.language` | `auto` | Langue de l'interface en terminal : `auto` (d'après `LANG`), `fr`, `en`. |
+| `general.language` | `auto` | Langue de l'interface en terminal, et de l'explication qu'elle affiche pour un nœud : `auto` (d'après `LANG`), `fr`, `en`. La CLI (`explain`, journaux, `--json`) reste en anglais. |
 | `general.device_name.strip_domain` | `first_dot` | Noms des équipements : `first_dot` garde ce qui précède le premier point (sauf si le sysName est une IP), `suffixes` retire les `domain_suffixes`, `none` garde le sysName. |
 | `general.device_name.domain_suffixes` | `[]` | Suffixes retirés avec `strip_domain: suffixes`. |
 | `general.device_name.duplicate_names` | `suffix_ip` | Deux équipements de même nom reçoivent le suffixe ` (IP)` (`keep` le désactive). Le nom est la clé de jointure de `nodes.csv` et `links.csv`. |
@@ -118,9 +118,10 @@ standard sont toujours tentées, sauf si une fonction est `off`.
 | `devices[].features.ipaddr` | `auto` | Adresses de l'équipement (IP-MIB). |
 | `devices[].features.fdb` | `auto` | Tables MAC (Q-BRIDGE, BRIDGE, Cisco par VLAN). |
 | `devices[].features.arp` | `auto` | Tables ARP/NDP (les deux tables IP-MIB, toujours). |
-| `devices[].features.lldp` | `auto` | Voisins LLDP. |
+| `devices[].features.lldp` | `auto` | Voisins LLDP : LLDP-MIB, ou LLDP-V2-MIB (802.1AB-2009) quand l'agent sert celle-ci à la place. |
 | `devices[].features.cdp` | `auto` | Voisins CDP. |
 | `devices[].vlan_indexing` | `auto` | Instances de bridge Cisco par VLAN (`community@vlan`, contexte SNMPv3 `vlan-N`) : `auto` les utilise quand CISCO-VTP-MIB répond et que Q-BRIDGE est vide ; `cisco` toujours ; `off` jamais. |
+| `devices[].vrfs` | `auto` | Caches ARP des VRF non globales, lus dans leur propre contexte SNMP : `auto` lit les VRF que l'équipement déclare (CISCO-VRF-MIB, puis MPLS-L3VPN-STD-MIB), `off` ne lit que la table globale, ou donnez les noms de contextes à lire (`[blue, dmz]`). Le nom de contexte doit correspondre au nom de la VRF ; en SNMPv2c, la communauté `community@vrf` est utilisée. |
 | `devices[].uplinks` | `[]` | Ports (par nom) toujours traités comme uplinks. |
 | `devices[].access_ports` | `[]` | Ports toujours traités comme ports d'accès (par exemple un bond LACP de serveur). |
 | `devices[].uplink_mac_threshold` | `nodes.uplink_mac_threshold` | Seuil propre à l'équipement. |

@@ -65,7 +65,8 @@ Details, systemd units, hardening and networking: [docs/en/deployment.md](docs/e
   (`auto` / `force` / `off`) and SNMP tuning, and the source of every value is shown. The sheet
   also has an *OID tester* (presets suggested for the type, or any OID), *Neighbors*, *Custom*
   values and *Last collect*.
-* **Nodes**: search a MAC, IP, DNS name, port… Enter explains the position.
+* **Nodes**: search a MAC, IP, DNS name, port… Enter explains the position, in the interface's
+  language.
 * **Reports**: build a report with a live preview (dataset, columns, filters, sort, format),
   save it, export it.
 * **Links**, **Extensions** (custom collectors), **Runs**.

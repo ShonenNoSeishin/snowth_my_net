@@ -66,6 +66,9 @@ DOT1Q_PVID = _o("1.3.6.1.2.1.17.7.1.4.5.1.1")
 
 # CISCO-VTP-MIB / CISCO-VLAN-MEMBERSHIP-MIB
 VTP_VLAN_STATE = _o("1.3.6.1.4.1.9.9.46.1.3.1.1.2")
+# VRF names, to read the ARP of non-global VRFs in their own SNMP context.
+CV_VRF_NAME = _o("1.3.6.1.4.1.9.9.711.1.1.1.1.2")            # CISCO-VRF-MIB cvVrfName
+MPLS_L3VPN_VRF_OPER_STATUS = _o("1.3.6.1.2.1.10.166.11.1.2.2.1.6")   # index = the VRF name
 VTP_VLAN_NAME = _o("1.3.6.1.4.1.9.9.46.1.3.1.1.4")
 VM_VLAN = _o("1.3.6.1.4.1.9.9.68.1.2.2.1.2")
 
@@ -82,6 +85,11 @@ LLDP_LOC_PORT_ID = _o("1.0.8802.1.1.2.1.3.7.1.3")
 LLDP_LOC_PORT_DESC = _o("1.0.8802.1.1.2.1.3.7.1.4")
 LLDP_REM_ENTRY = _o("1.0.8802.1.1.2.1.4.1.1")
 LLDP_REM_MAN_ADDR_IF_SUBTYPE = _o("1.0.8802.1.1.2.1.4.2.1.3")
+
+# LLDP-V2-MIB (IEEE 802.1AB-2009), served instead of LLDP-MIB by some agents. The remote table
+# is indexed by timeMark.localIfIndex.destMAC(6).index, so the local port needs no mapping.
+LLDP_V2_REM_ENTRY = _o("1.3.111.2.802.1.1.13.1.4.1.1")
+LLDP_V2_REM_MAN_ADDR_IF_SUBTYPE = _o("1.3.111.2.802.1.1.13.1.4.2.1.3")
 
 # CISCO-CDP-MIB cdpCacheTable
 CDP_CACHE_ENTRY = _o("1.3.6.1.4.1.9.9.23.1.2.1.1")

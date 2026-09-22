@@ -17,7 +17,7 @@ from typing import Any
 from snowth_my_net.config.schema import Config, DeviceOverride, SnmpCfg
 
 FEATURES = ("entity", "interfaces", "ipaddr", "fdb", "arp", "lldp", "cdp")
-SIMPLE_FIELDS = ("name", "type", "credential", "vlan_indexing", "uplinks", "access_ports",
+SIMPLE_FIELDS = ("name", "type", "credential", "vlan_indexing", "vrfs", "uplinks", "access_ports",
                  "uplink_mac_threshold", "driver", "tolerate_failure", "ha_mode", "disabled")
 SNMP_FIELDS = ("timeout", "retries", "max_repetitions", "use_bulk", "per_device_concurrency",
                "pace_ms", "table_timeout", "device_timeout", "max_rows_per_table")
@@ -32,6 +32,7 @@ class DeviceSettings:
     credential: str | None = None
     features: dict[str, str] = field(default_factory=lambda: dict.fromkeys(FEATURES, "auto"))
     vlan_indexing: str = "auto"
+    vrfs: str | list[str] = "auto"
     uplinks: list[str] = field(default_factory=list)
     access_ports: list[str] = field(default_factory=list)
     uplink_mac_threshold: int = 50

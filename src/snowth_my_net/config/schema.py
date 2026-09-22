@@ -247,6 +247,7 @@ class DeviceOverride:
     credential: str | None = None
     features: FeaturesCfg = field(default_factory=FeaturesCfg)
     vlan_indexing: Literal["auto", "cisco", "off"] | None = None
+    vrfs: Literal["auto", "off"] | list[str] | None = None
     uplinks: list[str] | None = None
     access_ports: list[str] | None = None
     uplink_mac_threshold: int | None = None
@@ -258,6 +259,11 @@ class DeviceOverride:
 
     def check(self) -> list[str]:
         errs = _positive("uplink_mac_threshold", self.uplink_mac_threshold)
+        if isinstance(self.vrfs, list):
+            from snowth_my_net.collect.functions import VRF_NAME_RE
+
+            errs += [f"vrfs: {name!r} is not a VRF name" for name in self.vrfs
+                     if not VRF_NAME_RE.match(name)]
         if self.driver is not None and not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,62}", self.driver):
             errs.append(f"driver: {self.driver!r} is not a driver name")
         return errs   # names are checked once Python extensions are loaded (loader)

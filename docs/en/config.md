@@ -39,7 +39,7 @@ precedence over `devices:` entries, key by key (see `devices`).
 | `general.python_extensions` | `[]` | Python extensions to load, by name: `<extensions_dir>/<name>.py` or an installed entry point. Nothing is imported unless listed. |
 | `general.log_file` | none | Also log to this file (rotated 10 MB × 5). Logs always go to stderr. |
 | `general.log_level` | `info` | `debug`, `info`, `warning`, `error`. |
-| `general.language` | `auto` | Terminal interface language: `auto` (from `LANG`), `fr`, `en`. |
+| `general.language` | `auto` | Language of the terminal interface, and of the explanation it shows for a node: `auto` (from `LANG`), `fr`, `en`. The CLI (`explain`, logs, `--json`) stays in English. |
 | `general.device_name.strip_domain` | `first_dot` | Device names: `first_dot` keeps what precedes the first dot (unless the sysName is an IP), `suffixes` removes `domain_suffixes`, `none` keeps the sysName. |
 | `general.device_name.domain_suffixes` | `[]` | Suffixes removed when `strip_domain: suffixes`. |
 | `general.device_name.duplicate_names` | `suffix_ip` | Two devices with the same name get ` (IP)` appended (`keep` disables it). The name is the join key of `nodes.csv` and `links.csv`. |
@@ -114,9 +114,10 @@ function is `off`.
 | `devices[].features.ipaddr` | `auto` | Device addresses (IP-MIB). |
 | `devices[].features.fdb` | `auto` | MAC tables (Q-BRIDGE, BRIDGE, Cisco per-VLAN). |
 | `devices[].features.arp` | `auto` | ARP/NDP tables (both IP-MIB tables, always). |
-| `devices[].features.lldp` | `auto` | LLDP neighbours. |
+| `devices[].features.lldp` | `auto` | LLDP neighbours: LLDP-MIB, or LLDP-V2-MIB (802.1AB-2009) when the agent serves that one instead. |
 | `devices[].features.cdp` | `auto` | CDP neighbours. |
 | `devices[].vlan_indexing` | `auto` | Cisco per-VLAN bridge instances (`community@vlan`, SNMPv3 context `vlan-N`): `auto` uses them when CISCO-VTP-MIB answers and Q-BRIDGE is empty; `cisco` always; `off` never. |
+| `devices[].vrfs` | `auto` | ARP caches of non-global VRFs, read in their own SNMP context: `auto` reads the VRFs the device lists (CISCO-VRF-MIB, then MPLS-L3VPN-STD-MIB), `off` reads only the global table, or give the context names to read (`[blue, dmz]`). The context name must match the VRF name; with SNMPv2c the community `community@vrf` is used. |
 | `devices[].uplinks` | `[]` | Ports (by name) always treated as uplinks. |
 | `devices[].access_ports` | `[]` | Ports always treated as access ports (e.g. a server LACP bond). |
 | `devices[].uplink_mac_threshold` | `nodes.uplink_mac_threshold` | Per-device threshold. |

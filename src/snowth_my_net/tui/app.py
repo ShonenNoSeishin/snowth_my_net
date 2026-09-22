@@ -256,7 +256,7 @@ class ExplainModal(ModalScreen[None]):
         from snowth_my_net.merge.explain import explain
 
         parts = []
-        for text, kind in explain(self.view, self.query_text):
+        for text, kind in explain(self.view, self.query_text, self.ctx.t):
             style = self.STYLES.get(kind, "")
             parts.append(f"[{style}]{escape(text)}[/]" if style and text else escape(text))
         with Vertical(classes="dialog wide tall explain"):

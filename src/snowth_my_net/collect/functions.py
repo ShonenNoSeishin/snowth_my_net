@@ -7,6 +7,9 @@ block, so rows received before a timeout are kept (the caller then marks the fun
 
 from __future__ import annotations
 
+import dataclasses
+import re
+
 from snowth_my_net.collect.model import DeviceResult
 from snowth_my_net.collect.tables import arp as arp_tables
 from snowth_my_net.collect.tables import bridge
@@ -20,7 +23,7 @@ from snowth_my_net.collect.tables.ipaddr import (
 )
 from snowth_my_net.snmp import oids
 from snowth_my_net.snmp.client import SnmpClient, SnmpError
-from snowth_my_net.snmp.values import Oid
+from snowth_my_net.snmp.values import Oid, decode_text
 
 GET_BATCH = 16
 
@@ -214,9 +217,18 @@ async def fdb(client: SnmpClient, r: DeviceResult, rows: Rows) -> None:
         rows.columns["entries"] = {(i,): e for i, e in enumerate(r.fdb)}
 
 
+VRF_NAME_RE = re.compile(r"^[A-Za-z0-9][\w.:@/-]{0,31}$")
+MAX_VRFS = 64
+
+
 async def arp(client: SnmpClient, r: DeviceResult, rows: Rows) -> None:
-    """Both neighbour caches, always: ipNetToPhysicalTable and the legacy ipNetToMediaTable."""
+    """Both neighbour caches, always: ipNetToPhysicalTable and the legacy ipNetToMediaTable.
+
+    On a router that keeps VRFs, the default context only shows the global routing table: the
+    caches of the other VRFs are read in their own SNMP context (``devices[].vrfs``).
+    """
     rows.key = "entries"
+    failed: list[str] = []
     try:
         await walk_into(client, rows, "pphys", oids.IP_NET_TO_PHYSICAL_PHYS_ADDRESS)
         if rows.column("pphys"):
@@ -225,19 +237,82 @@ async def arp(client: SnmpClient, r: DeviceResult, rows: Rows) -> None:
         await walk_into(client, rows, "mphys", oids.IP_NET_TO_MEDIA_PHYS_ADDRESS)
         if rows.column("mphys"):
             await walk_into(client, rows, "mtype", oids.IP_NET_TO_MEDIA_TYPE)
+        vrfs = await vrf_names(client, r.settings.vrfs)
+        for name in vrfs:
+            try:
+                r.vrf_arp += await _vrf_arp(client.for_context(name), name)
+            except SnmpError as exc:
+                failed.append(f"VRF {name}: {exc.kind if exc.kind == 'timeout' else exc}")
+        if failed:
+            raise SnmpError("VRF contexts failed: " + "; ".join(failed[:5])
+                            + (f" (+{len(failed) - 5} more)" if len(failed) > 5 else ""))
     finally:
         r.arp = arp_tables.merge_tables(
             arp_tables.parse_net_to_physical(rows.column("pphys"), rows.column("ptype"),
                                              rows.column("pstate")),
             arp_tables.parse_net_to_media(rows.column("mphys"), rows.column("mtype")),
+            r.vrf_arp,
         )
         rows.columns["entries"] = {(i,): e for i, e in enumerate(r.arp)}
 
 
+async def vrf_names(client: SnmpClient, setting) -> list[str]:
+    """VRFs whose ARP cache is worth reading: the configured list, or what the device serves.
+
+    ``auto`` asks CISCO-VRF-MIB, then MPLS-L3VPN-STD-MIB (whose index is the VRF name); a
+    device without VRFs answers neither and nothing more is read.
+    """
+    if setting == "off":
+        return []
+    if isinstance(setting, list):
+        return [n for n in setting if VRF_NAME_RE.match(n)][:MAX_VRFS]
+    names: list[str] = []
+    async for _oid, value in client.walk(oids.CV_VRF_NAME):
+        name = decode_text(value) if isinstance(value, bytes | str) else ""
+        if VRF_NAME_RE.match(name) and name not in names:
+            names.append(name)
+    if not names:
+        base = oids.MPLS_L3VPN_VRF_OPER_STATUS
+        async for oid, _value in client.walk(base):
+            index = oid[len(base):]
+            name = "".join(chr(c) for c in index[1:]) if index and index[0] == len(index) - 1 \
+                else ""
+            if VRF_NAME_RE.match(name) and name not in names:
+                names.append(name)
+    return names[:MAX_VRFS]
+
+
+async def _vrf_arp(client: SnmpClient, vrf: str) -> list:
+    """The two neighbour caches inside one VRF context, tagged with the VRF name."""
+    columns: dict[str, dict] = {}
+    for key, base in (("pphys", oids.IP_NET_TO_PHYSICAL_PHYS_ADDRESS),
+                      ("ptype", oids.IP_NET_TO_PHYSICAL_TYPE),
+                      ("pstate", oids.IP_NET_TO_PHYSICAL_STATE),
+                      ("mphys", oids.IP_NET_TO_MEDIA_PHYS_ADDRESS),
+                      ("mtype", oids.IP_NET_TO_MEDIA_TYPE)):
+        column = columns[key] = {}
+        if key in ("ptype", "pstate") and not columns["pphys"]:
+            continue
+        if key == "mtype" and not columns["mphys"]:
+            continue
+        async for oid, value in client.walk(base):
+            column[oid[len(base):]] = value
+    entries = arp_tables.merge_tables(
+        arp_tables.parse_net_to_physical(columns["pphys"], columns["ptype"], columns["pstate"]),
+        arp_tables.parse_net_to_media(columns["mphys"], columns["mtype"]),
+    )
+    return [dataclasses.replace(e, table=f"{e.table}@{vrf}") for e in entries]
+
+
 async def lldp(client: SnmpClient, r: DeviceResult, rows: Rows) -> None:
-    """LLDP-MIB remote systems, their management addresses and the local port mapping."""
+    """LLDP-MIB remote systems, their management addresses and the local port mapping.
+
+    An agent that serves LLDP-V2-MIB (IEEE 802.1AB-2009) instead answers nothing under
+    LLDP-MIB: the V2 table is then read as a fallback, on what the agent actually serves.
+    """
     rows.key = "entries"
     rem_columns = (4, 5, 6, 7, 8, 9, 10, 12)
+    found: list = []
     try:
         await walk_into(client, rows, "rem9", oids.LLDP_REM_ENTRY + (9,))
         await walk_into(client, rows, "rem5", oids.LLDP_REM_ENTRY + (5,))
@@ -249,14 +324,31 @@ async def lldp(client: SnmpClient, r: DeviceResult, rows: Rows) -> None:
             for column, base in ((2, oids.LLDP_LOC_PORT_ID_SUBTYPE), (3, oids.LLDP_LOC_PORT_ID),
                                  (4, oids.LLDP_LOC_PORT_DESC)):
                 await walk_into(client, rows, f"loc{column}", base)
+            found = nb.parse_lldp({c: rows.column(f"rem{c}") for c in rem_columns},
+                                  rows.column("manaddr"))
+            mapping = nb.map_local_ports({c: rows.column(f"loc{c}") for c in (2, 3, 4)},
+                                         r.interfaces, r.bridge_ports)
+            nb.assign_local_ports(found, mapping)
+        else:
+            found = await _lldp_v2(client, rows)
     finally:
-        found = nb.parse_lldp({c: rows.column(f"rem{c}") for c in rem_columns},
-                              rows.column("manaddr"))
-        mapping = nb.map_local_ports({c: rows.column(f"loc{c}") for c in (2, 3, 4)},
-                                     r.interfaces, r.bridge_ports)
-        nb.assign_local_ports(found, mapping)
         r.neighbors = [n for n in r.neighbors if n.protocol != "lldp"] + found
         rows.columns["entries"] = {(i,): n for i, n in enumerate(found)}
+
+
+async def _lldp_v2(client: SnmpClient, rows: Rows) -> list:
+    """LLDP-V2-MIB remote table; its index already names the local ifIndex."""
+    columns = tuple(nb.V2_COLUMNS.values())
+    await walk_into(client, rows, "v2rem10", oids.LLDP_V2_REM_ENTRY + (10,))
+    await walk_into(client, rows, "v2rem6", oids.LLDP_V2_REM_ENTRY + (6,))
+    if not (rows.column("v2rem10") or rows.column("v2rem6")):
+        return []
+    for column in columns:
+        if column not in (6, 10):
+            await walk_into(client, rows, f"v2rem{column}", oids.LLDP_V2_REM_ENTRY + (column,))
+    await walk_into(client, rows, "v2manaddr", oids.LLDP_V2_REM_MAN_ADDR_IF_SUBTYPE)
+    return nb.parse_lldp_v2({c: rows.column(f"v2rem{c}") for c in columns},
+                            rows.column("v2manaddr"))
 
 
 async def cdp(client: SnmpClient, r: DeviceResult, rows: Rows) -> None:

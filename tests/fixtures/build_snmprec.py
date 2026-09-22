@@ -456,6 +456,27 @@ def if_stack(pairs: list[tuple[int, int]]) -> list[Record]:
     return [integer(f"1.3.6.1.2.1.31.1.2.1.3.{hi}.{lo}", 1) for hi, lo in pairs]
 
 
+def lldp_v2_remote(entries: list[dict]) -> list[Record]:
+    """LLDP-V2-MIB remote table: index timeMark.localIfIndex.destMAC(6).index."""
+    base = "1.3.111.2.802.1.1.13.1.4.1.1"
+    dest = _mac_index("01:80:c2:00:00:0e")        # nearest bridge group address
+    recs = []
+    for e in entries:
+        idx = f"{e.get('time_mark', 1)}.{e['ifindex']}.{dest}.{e.get('index', 1)}"
+        recs += [integer(f"{base}.5.{idx}", 4), mac(f"{base}.6.{idx}", e["chassis"]),
+                 integer(f"{base}.7.{idx}", e["port_subtype"]),
+                 text(f"{base}.8.{idx}", e["port_id"]),
+                 text(f"{base}.9.{idx}", e.get("port_desc", "")),
+                 text(f"{base}.10.{idx}", e["sys_name"]),
+                 text(f"{base}.11.{idx}", e.get("sys_descr", "")),
+                 octets(f"{base}.12.{idx}", bytes.fromhex(e["caps"])),
+                 octets(f"{base}.13.{idx}", bytes.fromhex(e["caps"]))]
+        if e.get("address"):
+            recs.append(integer(
+                f"1.3.111.2.802.1.1.13.1.4.2.1.3.{idx}.1.4.{e['address']}", 2))
+    return recs
+
+
 def driver_agents() -> dict[str, list[Record]]:
     """Agents for vendor drivers (phase 5), served by the lab but not part of all_seeds()."""
     a: dict[str, list[Record]] = {}
@@ -535,7 +556,48 @@ def driver_agents() -> dict[str, list[Record]]:
         *lldp_remote([{"port": 2, "chassis": "00:00:5e:00:53:99", "port_subtype": 5,
                        "port_id": "xe-0/0/1", "sys_name": "core-unpolled", "caps": CAP_BRIDGE}]),
     ]
+    # A router whose non-global VRFs keep their ARP in their own SNMP context.
+    vrf_mac = "00:00:5e:00:53:29"
+    a["vrf-router"] = [
+        *system("Cisco IOS XE Software, Version 17.09.04a", "1.3.6.1.4.1.9.1.2338",
+                "rtr-vrf", services=78),
+        *interfaces([{"index": 1, "descr": "GigabitEthernet0/0/0", "mac": vrf_mac},
+                     {"index": 2, "descr": "GigabitEthernet0/0/1",
+                      "mac": "00:00:5e:29:01:02"}]),
+        *ip_addresses([("192.0.2.27", 1, 24)]),
+        *ip_net_to_media([(1, "192.0.2.200", "00:00:5e:00:58:01")]),      # global table
+        text("1.3.6.1.4.1.9.9.711.1.1.1.1.2.1", "blue"),
+        text("1.3.6.1.4.1.9.9.711.1.1.1.1.2.2", "dmz"),
+    ]
+
+    # An agent that serves LLDP-V2-MIB (802.1AB-2009) and nothing under LLDP-MIB.
+    v2_mac = "00:00:5e:00:53:28"
+    a["lldp-v2"] = [
+        *system("ExampleOS 4.2 stackable switch", "1.3.6.1.4.1.99998.1.1", "sw-v2",
+                services=2),
+        *bridge_address(v2_mac),
+        *interfaces(_ports("1:{}", 4, v2_mac, start=1001)),
+        *ip_addresses([("192.0.2.26", 1001, 24)]),
+        *base_ports({1: 1001, 2: 1002, 3: 1003, 4: 1004}),
+        *dot1d_fdb([("00:00:5e:00:57:01", 1)]),
+        *lldp_v2_remote([
+            {"ifindex": 1002, "chassis": "00:00:5e:00:53:11", "port_subtype": 5,
+             "port_id": "1/1/9", "port_desc": "to sw-v2", "sys_name": "sw-access-01",
+             "caps": CAP_BRIDGE, "address": "127.0.0.11"},
+            {"ifindex": 1003, "chassis": "00:00:5e:00:53:7a", "port_subtype": 5,
+             "port_id": "eth0", "sys_name": "ap-v2", "caps": CAP_AP},
+        ]),
+    ]
     return a
+
+
+def vrf_instances() -> dict[str, dict[str, list[Record]]]:
+    """agent -> SNMP context name -> records served in that context."""
+    return {"vrf-router": {
+        "blue": ip_net_to_media([(2, "10.10.0.5", "00:00:5e:00:58:02"),
+                                 (2, "10.10.0.6", "00:00:5e:00:58:03")]),
+        "dmz": ip_net_to_media([(2, "198.51.100.5", "00:00:5e:00:58:04")]),
+    }}
 
 
 def vlan_instances() -> dict[str, dict[int, list[Record]]]:
@@ -563,6 +625,10 @@ def build(out: Path = OUT) -> dict[str, Path]:
             vlan_path = out / name / f"public@{vlan}.snmprec"
             vlan_path.write_text(render(vlan_records), encoding="ascii")
             written[f"{name}@{vlan}"] = vlan_path
+        for context, context_records in vrf_instances().get(name, {}).items():
+            context_path = out / name / f"public@{context}.snmprec"
+            context_path.write_text(render(context_records), encoding="ascii")
+            written[f"{name}@{context}"] = context_path
     return written
 
 

@@ -214,11 +214,19 @@ class SnmpClient:
 
     def for_vlan(self, vlan: int) -> SnmpClient:
         """Client for a Cisco per-VLAN bridge instance: ``community@vlan`` or context ``vlan-N``."""
+        return self.for_context(f"vlan-{vlan}", str(vlan))
+
+    def for_context(self, context: str, community_suffix: str | None = None) -> SnmpClient:
+        """Same device, same credential, in another SNMP context.
+
+        SNMPv3 names the context directly; v2c has no context, so the agent's convention of a
+        ``community@suffix`` is used instead (``suffix`` defaults to the context name).
+        """
         v3 = self.credential.cfg.version == "3"
         return SnmpClient(
             self.engine, self.credential, self.target, self.params,
-            context_name=f"vlan-{vlan}" if v3 else "",
-            community_suffix=None if v3 else str(vlan),
+            context_name=context if v3 else "",
+            community_suffix=None if v3 else (community_suffix or context),
             _state=self._state,
         )
 

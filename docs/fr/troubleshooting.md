@@ -72,6 +72,7 @@ l'exploration et ne sont pas dans `links.csv` (sauf avec `include_endpoints`).
 |---|---|
 | Cisco IOS/IOS-XE | Instances de bridge par VLAN (ci-dessus) ; `lldpLocPortNum` n'est pas l'ifIndex (correspondance par nom) ; MAC virtuelles HSRP ignorées. |
 | Cisco NX-OS | Les identifiants CDP `hostname(SERIAL)` sont nettoyés. |
+| Cisco, VRF | Le contexte par défaut ne montre que la table de routage globale. Les VRF déclarées par l'équipement sont lues dans leur propre contexte SNMP (`devices[].vrfs`) ; le nom du contexte doit correspondre au nom de la VRF sur l'équipement. |
 | Juniper EX/QFX | Les identifiants de FDB ne sont pas des numéros de VLAN : `dot1qVlanFdbId` est utilisé. Les MAC apprises sur des unités logiques (`ge-0/0/5.0`) sont attribuées au port physique. |
 | HPE Aruba AOS-CX, ProVision | MIB standard ; sur ProVision, les ports de bridge sont égaux aux ifIndex. |
 | Fortinet, Sophos | ARP via IP-MIB ; ENTITY-MIB souvent absente : les drivers `fortinet` et `sophos` lisent le numéro de série, la version (et le modèle pour Sophos) dans les MIB privées. |
@@ -79,3 +80,4 @@ l'exploration et ne sont pas dans `links.csv` (sauf avec `include_endpoints`).
 | MikroTik RouterOS | BRIDGE-MIB partielle selon la version ; le driver `mikrotik` ajoute l'identité et les stations de ses interfaces sans fil. |
 | Contrôleurs Cisco AireOS | Driver `cisco-wlc` : AP synthétiques et positions des clients. |
 | Ubiquiti UniFi/EdgeSwitch | Identifiants de pile SNMP générique : constructeur d'après l'OUI de la MAC. |
+| Agents qui servent LLDP-V2-MIB | Lue en repli quand LLDP-MIB ne répond rien ; son index nomme l'ifIndex local, donc aucun rapprochement de port n'est nécessaire. |

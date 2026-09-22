@@ -134,7 +134,9 @@ def test_exclusions():
     assert [n.mac for n in nodes] == ["02:11:22:33:44:55"]              # device MAC and VRRP out
     assert nodes[0].random_mac
     ctx = MergeContext(data, NodesCfg(), NOW)
-    assert "polled device (sw1)" in resolve_mac(ctx, "00:00:5e:00:53:11").excluded
+    excluded = resolve_mac(ctx, "00:00:5e:00:53:11").excluded
+    assert (excluded.code, excluded.detail) == ("device_mac", "sw1")
+    assert str(excluded) == "MAC of a polled device (sw1)"
     assert resolve_nodes(data, NodesCfg(include_device_macs=True, ignore_mac_prefixes=[]),
                          NOW)[0].mac == "00:00:5e:00:01:01"
 

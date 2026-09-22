@@ -49,6 +49,8 @@ DRIVER_LAB = {
     "mikrotik": (["127.0.0.23"], True),
     "wlc": (["127.0.0.24"], True),
     "ex-units": (["127.0.0.25"], True),
+    "lldp-v2": (["127.0.0.26"], True),
+    "vrf-router": (["127.0.0.27"], True),
 }
 ALL_AGENTS = {**LAB, **DRIVER_LAB}
 
@@ -133,11 +135,12 @@ def start_lab(root: Path, port: int | None = None, timeout: float = 60) -> Runni
         data = root / name / "data"
         shutil.copytree(FIXTURES / name, data)
         (data / "public.snmprec").rename(data / f"{COMMUNITY}.snmprec")
-        # Per-VLAN bridge instances: community@vlan (v2c) and context vlan-N (v3).
+        # Per-VLAN bridge instances and VRF contexts: community@suffix (v2c), context (v3).
         for instance in sorted(data.glob("public@*.snmprec")):
-            vlan = instance.stem.split("@", 1)[1]
-            shutil.copy(instance, data / f"vlan-{vlan}.snmprec")
-            instance.rename(data / f"{COMMUNITY}@{vlan}.snmprec")
+            suffix = instance.stem.split("@", 1)[1]
+            context = f"vlan-{suffix}" if suffix.isdigit() else suffix
+            shutil.copy(instance, data / f"{context}.snmprec")
+            instance.rename(data / f"{COMMUNITY}@{suffix}.snmprec")
         # snmpsim unregisters the default SNMPv3 context and registers it again only for a
         # data file named "self.snmprec" (empty context name), which real agents use.
         shutil.copy(data / f"{COMMUNITY}.snmprec", data / "self.snmprec")

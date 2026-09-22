@@ -139,11 +139,24 @@ class IpSighting:
     superseded_by: str | None = None     # MAC that claimed this IP later
 
 
+@dataclass(frozen=True)
+class Exclusion:
+    """Why a MAC is not a node: a code (translated by ``explain``) and its detail."""
+
+    code: str                            # multicast | device_mac | ignored_mac | ignored_prefix
+    detail: str = ""
+
+    def __str__(self) -> str:
+        from snowth_my_net.i18n import Translator
+
+        return Translator("en")(f"xp.excl.{self.code}", detail=self.detail)
+
+
 @dataclass
 class Node:
     mac: str
     random_mac: bool
-    excluded: str | None = None
+    excluded: Exclusion | None = None
     sightings: list[Sighting] = field(default_factory=list)
     positions: list[Sighting] = field(default_factory=list)   # most recent first
     position_kind: str = "none"          # access | behind_uplink | none
@@ -176,6 +189,7 @@ def classify_port(port: PortInfo | None, mac_count: int, device: DeviceInfo,
     # A radio (ifType ieee80211) serves stations directly: many MACs are expected there.
     if mac_count > device.uplink_mac_threshold and not (port and port.if_type == IFTYPE_80211):
         soft.append(("mac_count", f"{mac_count} MACs > {device.uplink_mac_threshold}"))
+
     if hard or soft:
         return PortRole("uplink", tuple(hard + soft), HARD if hard else SOFT)
     return PortRole("access", ())
@@ -221,17 +235,17 @@ class MergeContext:
                                              self.inputs.neighbor_reasons.get(key, ()))
         return self._roles[key]
 
-    def exclusion(self, mac: str) -> str | None:
+    def exclusion(self, mac: str) -> Exclusion | None:
         if is_multicast(mac):
-            return "multicast or broadcast address"
+            return Exclusion("multicast")
         if not self.cfg.include_device_macs and mac in self.inputs.device_macs:
             owner = self.inputs.devices.get(self.inputs.device_macs[mac])
-            return f"MAC of a polled device ({owner.name if owner else 'unknown'})"
+            return Exclusion("device_mac", owner.name if owner else "unknown")
         if mac in self.ignored_macs:
-            return "listed in nodes.ignore_macs"
+            return Exclusion("ignored_mac")
         for prefix in self.ignored_prefixes:
             if mac_matches_prefix(mac, prefix):
-                return f"matches nodes.ignore_mac_prefixes ({prefix})"
+                return Exclusion("ignored_prefix", prefix)
         return None
 
     def all_macs(self) -> list[str]:

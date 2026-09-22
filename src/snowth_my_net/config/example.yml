@@ -75,6 +75,7 @@ devices: []
   #   snmp: {max_repetitions: 10, pace_ms: 50}
   # - address: 192.0.2.0/26
   #   vlan_indexing: auto          # auto | cisco | off (Cisco per-VLAN bridge tables)
+  #   vrfs: auto                   # auto | off | [blue, dmz] (ARP of non-global VRFs)
   #   uplinks: [Te1/1/1]           # ports that are always uplinks
   #   access_ports: [Po10]         # ports that are always access ports (server LACP bond)
   #   uplink_mac_threshold: 200

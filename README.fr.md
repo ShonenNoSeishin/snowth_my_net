@@ -75,7 +75,8 @@ Détails, unités systemd, durcissement et réseau : [docs/fr/deployment.md](doc
     réglages SNMP, avec la source de chaque valeur ;
   * *Testeur d'OID* : préréglages proposés selon le type, ou n'importe quel OID ;
   * *Voisins*, valeurs *Personnalisées*, *Dernière collecte*.
-* **Nœuds** : recherche par MAC, IP, nom DNS, port… ; Entrée explique la position.
+* **Nœuds** : recherche par MAC, IP, nom DNS, port… ; Entrée explique la position, dans la
+  langue de l'interface.
 * **Rapports** : construire un rapport avec aperçu en direct (données, colonnes, filtres, tri,
   format), l'enregistrer, l'exporter.
 * **Liens**, **Extensions** (collecteurs personnalisés), **Collectes**.

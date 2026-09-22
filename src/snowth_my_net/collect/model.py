@@ -66,6 +66,7 @@ class DeviceResult:
     evidence: TypeEvidence = field(default_factory=TypeEvidence)
     fdb: list[FdbEntry] = field(default_factory=list)
     arp: list[ArpEntry] = field(default_factory=list)
+    vrf_arp: list[ArpEntry] = field(default_factory=list)   # read in non-global VRF contexts
     vlans: dict[int, str] = field(default_factory=dict)          # vlan -> name
     pvid: dict[int, int] = field(default_factory=dict)           # ifIndex -> access/PVID vlan
     bridge_ports: dict[int, int] = field(default_factory=dict)   # bridge port -> ifIndex

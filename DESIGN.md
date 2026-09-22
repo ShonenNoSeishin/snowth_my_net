@@ -1905,6 +1905,16 @@ Pour ce qui ne tient pas dans une déclaration :
 
 ## 22. Pour aller plus loin (non planifié)
 
-- LLDP-V2-MIB (`1.3.111.2.802.1.1.13`) en repli de LLDP-MIB.
-- Contextes VRF Cisco pour l'ARP des VRF non globales.
-- Traduction française du texte d'`explain` dans le TUI (aujourd'hui en anglais comme la CLI).
+> **Livré le 2026-09-22** : les trois points de cette section sont implémentés.
+> - LLDP-V2-MIB (`1.3.111.2.802.1.1.13`) en repli quand LLDP-MIB ne répond rien. Son index
+>   porte l'ifIndex local : aucun rapprochement de port n'est nécessaire.
+> - ARP des VRF non globales dans leur propre contexte SNMP (`devices[].vrfs` :
+>   `auto` | `off` | liste). Les noms viennent de CISCO-VRF-MIB puis de MPLS-L3VPN-STD-MIB
+>   (dont l'index est le nom) ; un contexte qui échoue rend l'ARP `partial` sans perdre le
+>   reste. En v2c, la communauté `community@vrf` est utilisée.
+> - `explain` est traduit : anglais dans la CLI, langue de l'interface dans le TUI. La table
+>   de chaînes a été déplacée dans `snowth_my_net/i18n.py` (partagée), les raisons de rôle et
+>   les exclusions portent désormais un code traduisible et un détail.
+
+Restent hors périmètre, faute de matériel ou de captures : contrôleurs Catalyst 9800 et autres
+contrôleurs Wi-Fi, VDOM FortiGate.

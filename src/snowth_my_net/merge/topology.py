@@ -144,12 +144,12 @@ def uplink_reason(rn: ResolvedNeighbor, index: DeviceIndex,
     if "telephone" in caps:
         return None
     if rn.remote_device_id is not None and index.devices[rn.remote_device_id].has_fdb:
-        return "neighbor_managed", f"neighbor {rn.remote_name} ({proto})", HARD
+        return "neighbor_managed", f"{rn.remote_name} ({proto})", HARD
     if "wlan_ap" in caps and "router" not in caps and ap_ports_are_access:
         return None
     if caps & {"bridge", "router"}:
-        return "neighbor_infra", f"neighbor {rn.remote_name} ({proto}, " \
-                                 f"{'/'.join(sorted(caps & {'bridge', 'router'}))})", SOFT
+        return "neighbor_infra", (f"{rn.remote_name} ({proto}, "
+                                  f"{'/'.join(sorted(caps & {'bridge', 'router'}))})"), SOFT
     return None
 
 

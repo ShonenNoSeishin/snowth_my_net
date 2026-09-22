@@ -114,20 +114,26 @@ def _man_addr(parts: tuple[int, ...]) -> str | None:
 
 def parse_lldp(rem: dict[int, Column], man_addr: Column) -> list[Neighbor]:
     """``rem`` maps an lldpRemEntry column number to its values."""
+    return _build_lldp(rem, man_addr, _split_rem_index, man_addr_offset=3)
+
+
+def _build_lldp(rem: dict[int, Column], man_addr: Column, split, man_addr_offset: int
+                ) -> list[Neighbor]:
+    """Shared by LLDP-MIB and LLDP-V2-MIB: ``split`` reads (local port, index) from an index."""
     neighbors: dict[tuple[int, int], Neighbor] = {}
     sys_names = rem.get(9, {})
     keys = set()
     for column in (4, 5, 6, 7, 9):
         keys |= set(rem.get(column, {}))
     for suffix in keys:
-        split = _split_rem_index(suffix)
-        if split is None:
+        parts = split(suffix)
+        if parts is None:
             continue
         port_id, is_mac = decode_port_id(rem.get(6, {}).get(suffix), rem.get(7, {}).get(suffix))
         caps_raw = rem.get(12, {}).get(suffix)
-        neighbors[split] = Neighbor(
+        neighbors[parts] = Neighbor(
             protocol="lldp",
-            local_port_num=split[0],
+            local_port_num=parts[0],
             chassis_id=decode_chassis_id(rem.get(4, {}).get(suffix), rem.get(5, {}).get(suffix)),
             port_id=port_id,
             port_is_mac=is_mac,
@@ -138,16 +144,42 @@ def parse_lldp(rem: dict[int, Column], man_addr: Column) -> list[Neighbor]:
                                                        else None))),
         )
     for suffix in man_addr:
-        if len(suffix) < 4:
+        if len(suffix) < man_addr_offset + 1:
             continue
-        neighbor = neighbors.get((suffix[1], suffix[2]))
-        address = _man_addr(suffix[3:])
+        parts = split(suffix[:man_addr_offset])
+        neighbor = neighbors.get(parts) if parts else None
+        address = _man_addr(suffix[man_addr_offset:])
         if neighbor is not None and address and address not in neighbor.mgmt_addresses:
             neighbor.mgmt_addresses.append(address)
     for neighbor in neighbors.values():
         neighbor.mgmt_addresses.sort(key=lambda a: (ipaddress.ip_address(a).version,
                                                     ipaddress.ip_address(a)))
     return [neighbors[k] for k in sorted(neighbors)]
+
+
+def _split_v2_index(suffix: tuple[int, ...]) -> tuple[int, int] | None:
+    """lldpV2RemTable index: timeMark.localIfIndex.destMAC(6 sub-ids).index."""
+    if len(suffix) != 9:
+        return None
+    return suffix[1], suffix[8]
+
+
+# lldpV2RemEntry columns hold the same values as lldpRemEntry, one number further along.
+V2_COLUMNS = {4: 5, 5: 6, 6: 7, 7: 8, 8: 9, 9: 10, 10: 11, 12: 13}
+
+
+def parse_lldp_v2(rem: dict[int, Column], man_addr: Column) -> list[Neighbor]:
+    """Same neighbours as :func:`parse_lldp`, read from LLDP-V2-MIB.
+
+    The index carries the local ifIndex, so every neighbour is mapped to its port without the
+    guesswork of ``map_local_ports``.
+    """
+    as_v1 = {v1: rem.get(v2, {}) for v1, v2 in V2_COLUMNS.items()}
+    neighbors = _build_lldp(as_v1, man_addr, _split_v2_index, man_addr_offset=9)
+    for neighbor in neighbors:
+        neighbor.local_ifindex = neighbor.local_port_num
+        neighbor.local_method = "lldpv2_ifindex"
+    return neighbors
 
 
 def map_local_ports(loc: dict[int, Column], interfaces: dict[int, Interface],
