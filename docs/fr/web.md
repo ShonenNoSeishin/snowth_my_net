@@ -67,6 +67,41 @@ pour une exécution.
   `nodes.csv`, `links.csv`, `snapshot.json`, `map.html`, `map.dot`, `map.mmd`) : aucun chemin
   venant d'une requête n'atteint le système de fichiers.
 
+## La garder en fonctionnement (installation sur l'hôte)
+
+```ini
+# /etc/systemd/system/snowth-web.service
+[Unit]
+Description=snowth_my_net web interface (read-only)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=snowth
+Group=snowth
+ExecStart=/usr/local/bin/snowth_my_net --config /etc/snowth_my_net/config.yml web
+Restart=on-failure
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/snowth_my_net
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now snowth-web.service
+```
+
+Le répertoire d'état est accessible en écriture parce que SQLite en a besoin même pour lire
+(`-shm`, `-wal`) ; l'interface, elle, n'écrit jamais.
+
 ## Derrière un proxy inverse
 
 Les pages utilisent des liens absolus depuis la racine (`/nodes`, `/static/style.css`) :

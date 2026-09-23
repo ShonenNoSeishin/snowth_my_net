@@ -62,6 +62,41 @@ The Nodes page sends at most `node_limit` rows and says so when it truncates; th
   `links.csv`, `snapshot.json`, `map.html`, `map.dot`, `map.mmd`): no path from a request ever
   reaches the file system.
 
+## Keep it running (host install)
+
+```ini
+# /etc/systemd/system/snowth-web.service
+[Unit]
+Description=snowth_my_net web interface (read-only)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=snowth
+Group=snowth
+ExecStart=/usr/local/bin/snowth_my_net --config /etc/snowth_my_net/config.yml web
+Restart=on-failure
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/snowth_my_net
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now snowth-web.service
+```
+
+The state directory is writable because SQLite needs it even to read (`-shm`, `-wal`); the
+interface itself never writes.
+
 ## Behind a reverse proxy
 
 The pages use absolute links from the root (`/nodes`, `/static/style.css`), so serve it at the
