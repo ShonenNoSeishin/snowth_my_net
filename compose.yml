@@ -1,6 +1,6 @@
 # snowth_my_net — Docker Compose
 #
-#   cp .env.example .env               # adjust SNOWTH_UID/GID, TZ
+#   cp .env.example .env               # uncomment and adjust SNOWTH_UID/GID, TZ
 #   mkdir -p config data output secrets
 #   docker compose run --rm snowth init --output /tmp/example.yml   (or copy the example)
 #   docker compose run --rm snowth check

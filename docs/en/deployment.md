@@ -130,7 +130,7 @@ maintain on the host — and runs one collect.
 
 ```bash
 git clone git@github.com:ShonenNoSeishin/snowth_my_net.git && cd snowth_my_net
-cp .env.example .env                          # set SNOWTH_UID/SNOWTH_GID to "id -u"/"id -g"
+cp .env.example .env                          # uncomment SNOWTH_UID/SNOWTH_GID = "id -u"/"id -g"
 mkdir -p config/extensions data output secrets
 docker compose build
 # commented example configuration, written into ./config (then edit it)

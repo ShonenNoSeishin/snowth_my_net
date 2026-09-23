@@ -134,7 +134,7 @@ Un seul service, `snowth`, fait tourner [supercronic](https://github.com/aptible
 
 ```bash
 git clone git@github.com:ShonenNoSeishin/snowth_my_net.git && cd snowth_my_net
-cp .env.example .env                          # régler SNOWTH_UID/SNOWTH_GID sur "id -u"/"id -g"
+cp .env.example .env                          # décommenter SNOWTH_UID/SNOWTH_GID = "id -u"/"id -g"
 mkdir -p config/extensions data output secrets
 docker compose build
 # configuration d'exemple commentée, écrite dans ./config (puis l'adapter)
