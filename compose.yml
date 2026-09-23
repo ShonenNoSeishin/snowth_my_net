@@ -36,9 +36,11 @@ services:
       - ./data:/var/lib/snowth_my_net
       - ./output:/output
     secrets:
-      - snmp_v3_auth
-      - snmp_v3_priv
-      - cmdb_token
+      - community_sw_office
+      - community_defaut
+      #- snmp_v3_auth
+      #- snmp_v3_priv
+      #- cmdb_token
     restart: unless-stopped
     logging:
       driver: json-file
@@ -90,12 +92,16 @@ services:
     networks: [testnet]
 
 secrets:
-  snmp_v3_auth:
-    file: ./secrets/snmp_v3_auth
-  snmp_v3_priv:
-    file: ./secrets/snmp_v3_priv
-  cmdb_token:
-    file: ./secrets/cmdb_token
+  community_sw_office:
+    file: ./secrets/community_sw_office
+  community_defaut:
+    file: ./secrets/community_defaut
+  #snmp_v3_auth:
+    #file: ./secrets/snmp_v3_auth
+  #snmp_v3_priv:
+    #file: ./secrets/snmp_v3_priv
+  #cmdb_token:
+    #file: ./secrets/cmdb_token
 
 volumes:
   certs: {}
