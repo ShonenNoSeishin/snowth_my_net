@@ -202,6 +202,15 @@ Devices, Nodes, Links, Reports, Extensions and Runs are tabs; `?` shows the keys
 collect one device or everything with a live log, set a type or a per-device setting by hand,
 test an OID, and build a report. Nothing there ever shows a secret.
 
+## 12. Or in a browser
+
+```bash
+snowth_my_net web                # http://127.0.0.1:8080
+```
+
+The same four views, read-only, with a filter and sortable columns; a MAC opens its
+explanation. Details: [web interface](web.md).
+
 ## If something does not work
 
 * `check` says `no answer`: the credential, an ACL on the device, or a firewall on the way.

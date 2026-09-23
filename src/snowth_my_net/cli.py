@@ -1135,6 +1135,13 @@ def cmd_hooks_test(args: argparse.Namespace) -> int:
     return hooks_exit(EXIT_OK, results)
 
 
+def cmd_web(args: argparse.Namespace) -> int:
+    from snowth_my_net.web.server import serve
+
+    loaded = load(args)
+    return serve(loaded, args.bind, args.port)
+
+
 def cmd_tui(args: argparse.Namespace) -> int:
     loaded = load(args)
     general = loaded.cfg.general
@@ -1334,6 +1341,12 @@ def build_parser() -> argparse.ArgumentParser:
                    help="status passed to the hooks (default ok)")
     h.add_argument("--dry-run", action="store_true", help="print the commands only")
     h.set_defaults(func=cmd_hooks_test)
+
+    p = sub.add_parser("web", parents=[common],
+                       help="serve the read-only web interface (web: in the configuration)")
+    p.add_argument("--bind", help="address to listen on (default web.bind: 127.0.0.1)")
+    p.add_argument("--port", type=int, help="port to listen on (default web.port: 8080)")
+    p.set_defaults(func=cmd_web)
 
     p = sub.add_parser("tui", parents=[common], help="open the terminal management interface")
     p.set_defaults(func=cmd_tui)

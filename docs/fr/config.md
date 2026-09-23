@@ -235,6 +235,17 @@ l'hôte, le planificateur du conteneur au démarrage.
 | `schedule.timezone` | fuseau du processus | Sert uniquement à interpréter la planification (`CRON_TZ`) ; toutes les sorties sont en UTC. |
 | `schedule.health_max_age` | `auto` | Âge admis de la dernière collecte réussie pour `health` ; `auto` = deux fois le plus long intervalle de `schedule.collect`. |
 
+## `web`
+
+Interface web en lecture seule (`snowth_my_net web`, ou le service `web` de Compose), voir
+[interface web](web.md).
+
+| Clé | Défaut | Description |
+|---|---|---|
+| `web.bind` | `127.0.0.1` | Adresse d'écoute. Elle n'a pas d'authentification : `0.0.0.0` seulement derrière un proxy inverse. |
+| `web.port` | `8080` | Port d'écoute. Avec Docker, le conteneur écoute toujours sur 8080 et `SNOWTH_WEB_PORT` choisit le port de l'hôte. |
+| `web.node_limit` | `2000` | Lignes envoyées au navigateur sur la page Nœuds ; la page le signale quand elle tronque. |
+
 ## `hooks`
 
 Programmes externes lancés après une commande, pour tout ce que snowth_my_net ne fait pas

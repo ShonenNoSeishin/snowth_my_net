@@ -516,6 +516,25 @@ class ScheduleCfg:
         return errs
 
 
+# --------------------------------------------------------------------------- web
+
+
+@dataclass
+class WebCfg:
+    """Read-only web interface (``snowth_my_net web``)."""
+
+    bind: str = "127.0.0.1"          # loopback: it has no login of its own
+    port: int = 8080
+    node_limit: int = 2000           # rows sent to the browser on the Nodes page
+
+    def check(self) -> list[str]:
+        errs = []
+        if not 1 <= self.port <= 65535:
+            errs.append(f"web.port: {self.port} is not a port number")
+        errs += _positive("web.node_limit", self.node_limit)
+        return errs
+
+
 # --------------------------------------------------------------------------- hooks
 
 HOOK_COMMON_FIELDS = ("event", "status", "run_id", "output_dir", "state_dir", "summary")
@@ -605,6 +624,7 @@ class Config:
     export: ExportCfg = field(default_factory=ExportCfg)
     push: PushCfg = field(default_factory=PushCfg)
     schedule: ScheduleCfg = field(default_factory=ScheduleCfg)
+    web: WebCfg = field(default_factory=WebCfg)
     hooks: HooksCfg = field(default_factory=HooksCfg)
 
     def check(self) -> list[str]:

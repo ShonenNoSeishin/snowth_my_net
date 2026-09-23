@@ -108,6 +108,7 @@ Détails, unités systemd, durcissement et réseau : [docs/fr/deployment.md](doc
 | `cron print [--format crontab\|cron.d\|supercronic]` | Lignes de planification issues de `schedule:` |
 | `health [--max-age]` | Code 1 si la dernière collecte réussie est trop ancienne |
 | `tui` | Interface en terminal |
+| `web [--bind] [--port]` | Interface web en lecture seule (équipements, nœuds, liens, collectes, fichiers) |
 
 Toutes les commandes acceptent `--json` (scripts), `--config`, `--log-level`, `--log-file`, `-q`.
 Les journaux vont sur stderr. Codes de sortie : **0** OK, **1** échec partiel, **2** erreur de
@@ -156,6 +157,7 @@ La documentation détaillée existe en français (`docs/fr/`) et en anglais (`do
 * [Formats de sortie et push HTTP](docs/fr/formats.md)
 * [Déploiement : pipx + cron/systemd, Docker Compose](docs/fr/deployment.md)
 * [Dépannage et notes par constructeur](docs/fr/troubleshooting.md)
+* [Interface web](docs/fr/web.md)
 * [Drivers constructeur](docs/fr/drivers.md)
 * [Extensions](docs/fr/extensions.md)
 * [Notes de conception](DESIGN.md) (en français)

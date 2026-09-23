@@ -69,7 +69,8 @@ RUN /opt/venv/bin/pip install ".[test]" \
 COPY tests ./tests
 COPY examples ./examples
 COPY docs ./docs
-COPY README.fr.md DESIGN.md ./
+COPY README.fr.md DESIGN.md compose.yml .env.example ./
+COPY Dockerfile ./Dockerfile
 COPY tools ./tools
 ENV PATH=/opt/venv/bin:$PATH HOME=/tmp PYTHONDONTWRITEBYTECODE=1
 # /certs: shared with the fake push server; a named volume inherits this ownership.

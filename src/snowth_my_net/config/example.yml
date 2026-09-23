@@ -145,6 +145,12 @@ schedule:
   # timezone: Europe/Brussels      # only used to interpret this schedule; outputs are UTC
   health_max_age: auto             # auto = twice the longest gap between two collects
 
+# Read-only web interface: snowth_my_net web (in Docker: the "web" service of compose.yml).
+# web:
+#   bind: 127.0.0.1                # 0.0.0.0 only behind a reverse proxy: it has no login
+#   port: 8080
+#   node_limit: 2000               # rows sent to the browser on the Nodes page
+
 # External programs run after a stage: argument list (never a shell), timeout, clean environment.
 # hooks:
 #   after_export:

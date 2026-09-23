@@ -211,6 +211,10 @@ STRINGS: dict[str, tuple[str, str]] = {
     "col.vendor": ("VENDOR", "CONSTRUCTEUR"),
     "col.model": ("MODEL", "MODÈLE"),
     "col.status": ("STATUS", "ÉTAT"),
+    "col.os": ("OS", "SYSTÈME"),
+    "col.file": ("FILE", "FICHIER"),
+    "col.size": ("BYTES", "OCTETS"),
+    "col.written": ("WRITTEN", "ÉCRIT LE"),
     "col.seen": ("LAST SEEN", "VU LE"),
     "filter.placeholder": ("Filter by name, IP, type, vendor, model…",
                            "Filtrer par nom, IP, type, constructeur, modèle…"),
@@ -398,6 +402,34 @@ STRINGS: dict[str, tuple[str, str]] = {
 }
 
 
+WEB = {
+    # web interface: read-only, it shows the same views as the exports
+    "web.title": ("snowth_my_net", "snowth_my_net"),
+    "web.search": ("Filter… (/)", "Filtrer… (/)"),
+    "web.shown": ("{shown} of {total}", "{shown} sur {total}"),
+    "web.count": ("{total} row(s)", "{total} ligne(s)"),
+    "web.truncated": ("first {limit} shown; use the exported file for the rest",
+                      "les {limit} premières ; le fichier exporté contient le reste"),
+    "web.tab.files": ("Files", "Fichiers"),
+    "web.no_devices": ("No device yet. Run a collect, then reload this page.",
+                       "Aucun équipement. Lancez une collecte, puis rechargez cette page."),
+    "web.no_nodes": ("No node yet: the MAC and ARP tables are read during a collect.",
+                     "Aucun nœud : les tables MAC et ARP sont lues pendant une collecte."),
+    "web.no_links": ("No link found: LLDP or CDP must be enabled on the devices.",
+                     "Aucun lien : LLDP ou CDP doit être actif sur les équipements."),
+    "web.no_runs": ("No run yet.", "Aucune collecte pour l'instant."),
+    "web.no_files": ("No exported file yet. Run an export.",
+                     "Aucun fichier exporté. Lancez un export."),
+    "web.node_title": ("Node {mac}", "Nœud {mac}"),
+    "web.back": ("Back", "Retour"),
+    "web.read_only": ("Read-only view. Collect and export from the command line or the terminal "
+                      "interface.",
+                      "Vue en lecture seule. Collecte et export depuis la ligne de commande ou "
+                      "l'interface en terminal."),
+    "web.not_found": ("Nothing here.", "Rien ici."),
+}
+STRINGS.update(WEB)
+
 EXPLAIN = {
     # explain <mac|ip>: the same text in the CLI (English) and in the interface (its language)
     "xp.not_found": ("{query}: not seen in any MAC or ARP table within the retention period",
@@ -443,6 +475,7 @@ EXPLAIN = {
                            "transit (au même moment sur {where}, moins de MAC)"),
     "xp.verdict_uplink": ("uplink: {reasons}", "uplink : {reasons}"),
     "xp.arp_title": ("ARP sightings", "Observations ARP"),
+    "xp.last": ("last", "vue"),
     "xp.current_ip": ("← current IP", "← IP actuelle"),
     "xp.superseded": ("superseded (now {mac})", "remplacée (maintenant {mac})"),
     "xp.dns": ("DNS  {name}", "DNS  {name}"),

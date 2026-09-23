@@ -97,6 +97,7 @@ Details, systemd units, hardening and networking: [docs/en/deployment.md](docs/e
 | `cron print [--format crontab\|cron.d\|supercronic]` | Scheduler lines from `schedule:` |
 | `health [--max-age]` | Exit 1 when the last successful collect is too old |
 | `tui` | Terminal interface |
+| `web [--bind] [--port]` | Read-only web interface (devices, nodes, links, runs, files) |
 
 Every command accepts `--json` (scripts), `--config`, `--log-level`, `--log-file`, `-q`. Logs go
 to stderr. Exit codes: **0** OK, **1** partial failure, **2** configuration error, **3** state
@@ -142,6 +143,7 @@ Detailed documentation exists in English (`docs/en/`) and French (`docs/fr/`):
 * [Output formats and HTTP push](docs/en/formats.md)
 * [Deployment: pipx + cron/systemd, Docker Compose](docs/en/deployment.md)
 * [Troubleshooting and vendor notes](docs/en/troubleshooting.md)
+* [Web interface](docs/en/web.md)
 * [Vendor drivers](docs/en/drivers.md)
 * [Extensions](docs/en/extensions.md)
 * [Design notes](DESIGN.md) (in French)

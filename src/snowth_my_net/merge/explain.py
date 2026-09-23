@@ -71,7 +71,7 @@ def explain_node(view: NodeView, node: Node, t: Text = ENGLISH) -> list[Line]:
     for s in node.sightings:
         vlan = f"vlan {s.vlan:<4}" if s.vlan else "vlan -   "
         base = (f"{view.sighting_label(s):<28} {vlan} macs={s.mac_count:<4} "
-                f"last {iso_z(s.last_seen)}")
+                f"{t('xp.last')} {iso_z(s.last_seen)}")
         if s.verdict == "position":
             label = t("xp.verdict_current" if s is current else "xp.verdict_previous")
             lines.append((f"  ✔ {base}  {label}", "ok"))
@@ -91,7 +91,7 @@ def explain_node(view: NodeView, node: Node, t: Text = ENGLISH) -> list[Line]:
         lines.append((t("xp.none"), "dim"))
     for ip in node.ips:
         sources = ", ".join(f"{view.device_name(d)} ({table})" for d, table, _s in ip.sources[:3])
-        base = f"{ip.ip:<39} {sources:<34} last {iso_z(ip.last_seen)}"
+        base = f"{ip.ip:<39} {sources:<34} {t('xp.last')} {iso_z(ip.last_seen)}"
         if node.current_ip is ip:
             lines.append((f"  {base}  " + t("xp.current_ip"), "ok"))
         elif ip.superseded_by:

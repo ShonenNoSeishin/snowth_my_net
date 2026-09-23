@@ -56,6 +56,37 @@ services:
     # No "ports:": nothing is exposed. SNMP (UDP/161) and HTTPS are outgoing only and leave
     # through the host's address (allow it in the SNMP ACLs of the devices).
 
+  # Read-only web interface. It never writes: the scheduler above owns the state lock.
+  web:
+    <<: *hardening
+    build:
+      context: .
+      target: runtime
+    image: snowth_my_net:${SNOWTH_VERSION:-latest}
+    user: "${SNOWTH_UID:-10001}:${SNOWTH_GID:-10001}"
+    command: ["web", "--bind", "0.0.0.0", "--port", "8080"]
+    environment:
+      TZ: ${TZ:-UTC}
+    volumes:
+      - ./config/snowth_my_net.yml:/etc/snowth_my_net/config.yml:ro
+      - ./config/extensions:/etc/snowth_my_net/extensions:ro
+      - ./data:/var/lib/snowth_my_net          # read-only queries, but SQLite needs the mount
+      - ./output:/output:ro
+    secrets:
+      - community_sw_office
+      - community_defaut
+    # Published on the loopback only: the interface has no login of its own. Put a reverse
+    # proxy in front of it (and change 127.0.0.1) to reach it from another machine.
+    ports:
+      - "127.0.0.1:${SNOWTH_WEB_PORT:-8080}:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz')"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+
   # ------------------------------------------------------------------ test profile
   sim-access:
     profiles: [test]

@@ -209,6 +209,15 @@ touches. Vous pouvez collecter un équipement ou tout le parc avec un journal en
 un type ou un réglage par équipement à la main, tester un OID et construire un rapport. Aucun
 secret n'y est jamais affiché.
 
+## 12. Ou dans un navigateur
+
+```bash
+snowth_my_net web                # http://127.0.0.1:8080
+```
+
+Les mêmes vues, en lecture seule, avec un filtre et des colonnes triables ; une MAC ouvre son
+explication. Détails : [interface web](web.md).
+
 ## Si quelque chose ne fonctionne pas
 
 * `check` répond `no answer` : l'identifiant, une ACL sur l'équipement, ou un pare-feu sur le

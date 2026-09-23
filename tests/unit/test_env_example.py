@@ -21,7 +21,7 @@ def documented() -> dict[str, str]:
 def test_every_compose_variable_is_documented_with_its_default():
     used = dict(USED.findall(COMPOSE))
     assert set(used) == {"SNOWTH_VERSION", "SNOWTH_UID", "SNOWTH_GID", "TZ",
-                         "SNOWTH_COLLECT_ON_START"}
+                         "SNOWTH_COLLECT_ON_START", "SNOWTH_WEB_PORT"}
     known = documented()
     assert [name for name in used if name not in known] == []
     mismatched = {name: (default, known[name]) for name, default in used.items()

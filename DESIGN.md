@@ -1918,3 +1918,25 @@ Pour ce qui ne tient pas dans une déclaration :
 
 Restent hors périmètre, faute de matériel ou de captures : contrôleurs Catalyst 9800 et autres
 contrôleurs Wi-Fi, VDOM FortiGate.
+
+## 23. Interface web (2026-09-23)
+
+Le §0 disait « pas d'interface web sauf si nécessaire » et le TUI a été livré d'abord. À la
+demande de l'utilisateur, une interface web est ajoutée, avec trois garde-fous pour qu'elle
+reste fidèle à l'esprit du projet :
+
+- **Lecture seule par construction.** Seul `GET` est servi, l'état est ouvert en lecture seule,
+  aucune page ne propose d'action. Le verrou d'état, les identifiants et toutes les écritures
+  restent dans la CLI et le TUI. Cela supprime d'un coup l'authentification en écriture, le
+  CSRF et la concurrence avec une collecte.
+- **Aucune dépendance nouvelle.** `http.server` de la bibliothèque standard, rendu HTML côté
+  serveur, une feuille de style et un script d'une cinquantaine de lignes pour le filtre et le
+  tri. Pas de cadriciel, pas d'étape de construction, pas de ressource externe.
+- **Pas d'authentification, donc écoute sur la boucle locale** (`web.bind`), et le conteneur
+  publie sur `127.0.0.1`. Exposer l'interface demande un proxy inverse ; c'est documenté.
+
+Vues : Équipements, Nœuds, Liens, Collectes, Fichiers, plus l'explication d'un nœud (le même
+texte qu'`explain`, dans la langue de l'interface). Les libellés réutilisent la table `col.*`
+du TUI. `web.node_limit` borne la page Nœuds ; le CSV exporté reste la source complète.
+`GET /healthz` sert de sonde. Port du conteneur fixe (8080), port de l'hôte réglable par
+`SNOWTH_WEB_PORT`.

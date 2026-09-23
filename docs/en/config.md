@@ -231,6 +231,17 @@ container's scheduler at start-up.
 | `schedule.timezone` | process time zone | Only used to interpret the schedule (`CRON_TZ`); every output is UTC. |
 | `schedule.health_max_age` | `auto` | Allowed age of the last successful collect for `health`; `auto` = twice the longest gap of `schedule.collect`. |
 
+## `web`
+
+Read-only web interface (`snowth_my_net web`, or the `web` service of Compose), see
+[web](web.md).
+
+| Key | Default | Description |
+|---|---|---|
+| `web.bind` | `127.0.0.1` | Address it listens on. It has no login: use `0.0.0.0` only behind a reverse proxy. |
+| `web.port` | `8080` | Port it listens on. In Docker the container always listens on 8080 and `SNOWTH_WEB_PORT` chooses the host port. |
+| `web.node_limit` | `2000` | Rows sent to the browser on the Nodes page; the page says when it truncates. |
+
 ## `hooks`
 
 External programs run after a command, for anything snowth_my_net does not do itself (notify, copy
