@@ -245,6 +245,11 @@ Interface web en lecture seule (`snowth_my_net web`, ou le service `web` de Comp
 | `web.bind` | `127.0.0.1` | Adresse d'écoute. Elle n'a pas d'authentification : `0.0.0.0` seulement derrière un proxy inverse. |
 | `web.port` | `8080` | Port d'écoute. Avec Docker, le conteneur écoute toujours sur 8080 et `SNOWTH_WEB_PORT` choisit le port de l'hôte. |
 | `web.node_limit` | `2000` | Lignes envoyées au navigateur sur la page Nœuds ; la page le signale quand elle tronque. |
+| `web.auth.users` | `[]` | Comptes de l'interface. Vide : aucune authentification, ce qui n'est sûr que sur la boucle locale. |
+| `web.auth.users[].name` | obligatoire | Nom d'utilisateur saisi dans le formulaire. |
+| `web.auth.users[].password_file` | | Fichier contenant l'empreinte affichée par `snowth_my_net web --hash-password` (relatif à `general.secrets_dir`). |
+| `web.auth.users[].password_env` | | La même empreinte, depuis une variable d'environnement. Exactement une des deux formes. |
+| `web.auth.session_hours` | `12` | Durée d'une session ; les sessions vivent dans le processus et sont perdues au redémarrage. |
 
 ## `hooks`
 

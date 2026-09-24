@@ -427,6 +427,13 @@ WEB = {
                       "Vue en lecture seule. Collecte et export depuis la ligne de commande ou "
                       "l'interface en terminal."),
     "web.not_found": ("Nothing here.", "Rien ici."),
+    "web.user": ("User", "Utilisateur"),
+    "web.password": ("Password", "Mot de passe"),
+    "web.sign_in": ("Sign in", "Se connecter"),
+    "web.sign_out": ("Sign out", "Se déconnecter"),
+    "web.bad_login": ("Wrong user or password.", "Utilisateur ou mot de passe incorrect."),
+    "web.too_many": ("Too many attempts. Try again in {seconds} s.",
+                     "Trop de tentatives. Réessayez dans {seconds} s."),
 }
 STRINGS.update(WEB)
 

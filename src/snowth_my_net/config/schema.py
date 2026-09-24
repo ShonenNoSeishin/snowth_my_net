@@ -520,12 +520,47 @@ class ScheduleCfg:
 
 
 @dataclass
+class WebUserCfg:
+    """One account of the web interface. The file holds a hash, never a password."""
+
+    __forbidden_keys__ = {
+        "password": "put a hash in a file: snowth_my_net web --hash-password > FILE, then "
+                    "password_file: FILE",
+        "password_hash": _SECRET_HINT.format("password"),
+    }
+
+    name: str
+    password_file: str | None = None
+    password_env: str | None = None
+
+    def check(self) -> list[str]:
+        if bool(self.password_file) == bool(self.password_env):
+            return [f"web user '{self.name}': set exactly one of password_file or password_env"]
+        return []
+
+
+@dataclass
+class WebAuthCfg:
+    users: list[WebUserCfg] = field(default_factory=list)   # empty: no login at all
+    session_hours: int = 12
+
+    def check(self) -> list[str]:
+        errs = _positive("web.auth.session_hours", self.session_hours)
+        names = [u.name for u in self.users if u]
+        for name in sorted({n for n in names if names.count(n) > 1}):
+            errs.append(f"web.auth: duplicate user name '{name}'")
+        errs += ["web.auth: a user name must not be empty" for n in names if not n.strip()]
+        return errs
+
+
+@dataclass
 class WebCfg:
     """Read-only web interface (``snowth_my_net web``)."""
 
-    bind: str = "127.0.0.1"          # loopback: it has no login of its own
+    bind: str = "127.0.0.1"          # loopback unless there are accounts (see auth)
     port: int = 8080
     node_limit: int = 2000           # rows sent to the browser on the Nodes page
+    auth: WebAuthCfg = field(default_factory=WebAuthCfg)
 
     def check(self) -> list[str]:
         errs = []

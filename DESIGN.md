@@ -1932,8 +1932,14 @@ reste fidèle à l'esprit du projet :
 - **Aucune dépendance nouvelle.** `http.server` de la bibliothèque standard, rendu HTML côté
   serveur, une feuille de style et un script d'une cinquantaine de lignes pour le filtre et le
   tri. Pas de cadriciel, pas d'étape de construction, pas de ressource externe.
-- **Pas d'authentification, donc écoute sur la boucle locale** (`web.bind`), et le conteneur
-  publie sur `127.0.0.1`. Exposer l'interface demande un proxy inverse ; c'est documenté.
+- **Authentification optionnelle** (`web.auth.users`), ajoutée le 2026-09-24 à la demande de
+  l'utilisateur : les pages montrent la topologie, les MAC et les IP. Empreintes scrypt dans un
+  fichier de secrets (jamais de mot de passe dans le YAML ; la commande
+  `web --hash-password` produit l'empreinte), sessions opaques en mémoire, témoin `HttpOnly` +
+  `SameSite=Strict` (+ `Secure` derrière un proxy TLS), cinq échecs puis une minute d'attente
+  par adresse. Sans compte : aucune authentification, et l'écoute reste sur la boucle locale
+  (`web.bind`) ; `check` avertit si `bind` s'ouvre sans compte. Le POST n'existe que pour les
+  formulaires de connexion et de déconnexion ; tout le reste reste en GET.
 
 Vues : Équipements, Nœuds, Liens, Collectes, Fichiers, plus l'explication d'un nœud (le même
 texte qu'`explain`, dans la langue de l'interface). Les libellés réutilisent la table `col.*`

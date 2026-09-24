@@ -1138,8 +1138,25 @@ def cmd_hooks_test(args: argparse.Namespace) -> int:
 def cmd_web(args: argparse.Namespace) -> int:
     from snowth_my_net.web.server import serve
 
+    if args.hash_password:
+        return _hash_web_password()
     loaded = load(args)
     return serve(loaded, args.bind, args.port)
+
+
+def _hash_web_password() -> int:
+    """Ask for a password twice and print its hash, to be saved in a file."""
+    import getpass
+
+    from snowth_my_net.web.auth import hash_password
+
+    password = getpass.getpass("Password: ")
+    if not password:
+        raise ManualError("empty password")
+    if password != getpass.getpass("Password (again): "):
+        raise ManualError("the two passwords differ")
+    out(hash_password(password))
+    return EXIT_OK
 
 
 def cmd_tui(args: argparse.Namespace) -> int:
@@ -1346,6 +1363,8 @@ def build_parser() -> argparse.ArgumentParser:
                        help="serve the read-only web interface (web: in the configuration)")
     p.add_argument("--bind", help="address to listen on (default web.bind: 127.0.0.1)")
     p.add_argument("--port", type=int, help="port to listen on (default web.port: 8080)")
+    p.add_argument("--hash-password", action="store_true",
+                   help="print the hash of a password, for web.auth.users[].password_file")
     p.set_defaults(func=cmd_web)
 
     p = sub.add_parser("tui", parents=[common], help="open the terminal management interface")

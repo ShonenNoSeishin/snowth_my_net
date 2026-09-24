@@ -224,6 +224,11 @@ def config_warnings(loaded: LoadedConfig) -> list[str]:
     if cfg.discovery.follow_neighbors and not cfg.discovery.allowed:
         warnings.append("discovery.allowed is empty: only the seeds will ever be polled")
     warnings += hook_warnings(loaded)
+    web = cfg.web
+    if not web.auth.users and web.bind not in ("127.0.0.1", "::1", "localhost"):
+        warnings.append(f"web.bind is {web.bind} with no account in web.auth.users: anyone who "
+                        "reaches that address sees the whole inventory")
+    warnings += web.auth.check()
     targets = {t.name for t in cfg.push.targets}
     collectors = {c.cfg.name for c in loaded.collectors}
     for report in loaded.reports:

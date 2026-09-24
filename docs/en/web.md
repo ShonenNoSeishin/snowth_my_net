@@ -37,11 +37,45 @@ and no page offers an action: no collect, no export, no setting. That is deliber
 lock, the SNMP credentials and every write stay in the CLI and in the terminal interface
 (`snowth_my_net tui`), which is also where you set a device type by hand or build a report.
 
+## Login
+
+Without accounts there is no login, and the interface only listens on the loopback. Add an
+account and every page asks for it:
+
+```bash
+snowth_my_net web --hash-password > /etc/snowth_my_net/secrets/web_alice
+chmod 600 /etc/snowth_my_net/secrets/web_alice
+```
+
+```yaml
+web:
+  auth:
+    session_hours: 12
+    users:
+      - name: alice
+        password_file: web_alice      # relative to general.secrets_dir
+```
+
+The command asks for the password twice and prints a scrypt hash: the password itself is never
+written anywhere. `password_env` works too, for a hash coming from the environment.
+
+* The session is an opaque token in a cookie (`HttpOnly`, `SameSite=Strict`, and `Secure` when
+  the request arrived through a TLS proxy). It lasts `session_hours` and lives in the process:
+  restarting the interface signs everybody out.
+* After five failures an address waits a minute, right password or not; failures are logged with
+  the address.
+* `/healthz` and the page's own stylesheet stay open, so that a probe needs no account.
+* `check` warns when `web.bind` is not the loopback and no account is configured.
+
+With Docker, the hash is a secret like the others: write it to `./secrets/web_alice`, declare it
+under `secrets:` in `compose.yml` and list it in the `web` service; inside the container it is
+read from `/run/secrets`, so `password_file: web_alice` is enough.
+
 ## Configuration
 
 ```yaml
 web:
-  bind: 127.0.0.1        # 0.0.0.0 only behind a reverse proxy
+  bind: 127.0.0.1        # 0.0.0.0 only behind a reverse proxy, or with accounts
   port: 8080
   node_limit: 2000       # rows sent to the browser on the Nodes page
 ```
@@ -51,9 +85,9 @@ The Nodes page sends at most `node_limit` rows and says so when it truncates; th
 
 ## Security
 
-* **No login.** It binds to `127.0.0.1` by default and the container publishes it on the
-  loopback of the host. To reach it from another machine, put a reverse proxy in front of it
-  (TLS plus the authentication of your choice) and keep the interface itself on the loopback.
+* **Login optional, loopback by default.** Without `web.auth.users` there is no login at all,
+  which is only safe on `127.0.0.1`. Over a network, add accounts *and* TLS: the login form and
+  the session cookie travel in clear over plain HTTP, so put a TLS reverse proxy in front.
 * **No secret is ever rendered**: the state holds credential names, never their values.
 * Answers carry `X-Content-Type-Options: nosniff`, a `Content-Security-Policy` that allows only
   the page's own stylesheet and script, and `Referrer-Policy: no-referrer`. There is no form,

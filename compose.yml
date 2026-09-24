@@ -75,6 +75,8 @@ services:
     secrets:
       - community_sw_office
       - community_defaut
+      # Accounts of the interface (web.auth.users[].password_file), see docs/en/web.md:
+      #- web_alice
     # Published on the loopback only: the interface has no login of its own. Put a reverse
     # proxy in front of it (and change 127.0.0.1) to reach it from another machine.
     ports:
@@ -123,6 +125,8 @@ services:
     networks: [testnet]
 
 secrets:
+  #web_alice:
+    #file: ./secrets/web_alice
   community_sw_office:
     file: ./secrets/community_sw_office
   community_defaut:

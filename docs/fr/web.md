@@ -39,11 +39,47 @@ volontaire — le verrou de l'état, les identifiants SNMP et toutes les écritu
 ligne de commande et dans l'interface en terminal (`snowth_my_net tui`), où l'on règle aussi un
 type à la main ou construit un rapport.
 
+## Connexion
+
+Sans compte, il n'y a pas d'authentification et l'interface n'écoute que sur la boucle locale.
+Ajoutez un compte et chaque page la demande :
+
+```bash
+snowth_my_net web --hash-password > /etc/snowth_my_net/secrets/web_alice
+chmod 600 /etc/snowth_my_net/secrets/web_alice
+```
+
+```yaml
+web:
+  auth:
+    session_hours: 12
+    users:
+      - name: alice
+        password_file: web_alice      # relatif à general.secrets_dir
+```
+
+La commande demande le mot de passe deux fois et affiche une empreinte scrypt : le mot de passe
+lui-même n'est écrit nulle part. `password_env` fonctionne aussi, pour une empreinte venant de
+l'environnement.
+
+* La session est un jeton opaque dans un témoin (`HttpOnly`, `SameSite=Strict`, et `Secure`
+  quand la requête arrive par un proxy TLS). Elle dure `session_hours` et vit dans le processus :
+  redémarrer l'interface déconnecte tout le monde.
+* Après cinq échecs, une adresse patiente une minute, bon mot de passe ou non ; les échecs sont
+  journalisés avec l'adresse.
+* `/healthz` et la feuille de style de la page restent ouverts, pour qu'une sonde n'ait pas
+  besoin de compte.
+* `check` avertit quand `web.bind` n'est pas la boucle locale et qu'aucun compte n'est défini.
+
+Avec Docker, l'empreinte est un secret comme les autres : écrivez-la dans `./secrets/web_alice`,
+déclarez-la sous `secrets:` dans `compose.yml` et listez-la dans le service `web` ; dans le
+conteneur elle est lue depuis `/run/secrets`, donc `password_file: web_alice` suffit.
+
 ## Configuration
 
 ```yaml
 web:
-  bind: 127.0.0.1        # 0.0.0.0 seulement derrière un proxy inverse
+  bind: 127.0.0.1        # 0.0.0.0 seulement derrière un proxy inverse, ou avec des comptes
   port: 8080
   node_limit: 2000       # lignes envoyées au navigateur sur la page Nœuds
 ```
@@ -54,10 +90,10 @@ pour une exécution.
 
 ## Sécurité
 
-* **Aucune authentification.** Elle écoute sur `127.0.0.1` par défaut et le conteneur la publie
-  sur la boucle locale de l'hôte. Pour y accéder depuis une autre machine, placez un proxy
-  inverse devant (TLS et l'authentification de votre choix) et laissez l'interface sur la
-  boucle locale.
+* **Authentification optionnelle, boucle locale par défaut.** Sans `web.auth.users`, il n'y a
+  aucune authentification, ce qui n'est sûr que sur `127.0.0.1`. Sur un réseau, ajoutez des
+  comptes *et* du TLS : le formulaire de connexion et le témoin de session circulent en clair
+  en HTTP simple, donc placez un proxy inverse TLS devant.
 * **Aucun secret n'est jamais affiché** : l'état ne garde que le nom des identifiants, jamais
   leur valeur.
 * Les réponses portent `X-Content-Type-Options: nosniff`, une `Content-Security-Policy` qui

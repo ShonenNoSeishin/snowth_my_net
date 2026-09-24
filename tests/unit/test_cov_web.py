@@ -159,15 +159,20 @@ def test_served_over_http_with_safe_headers(server):
         headers = dict(response.headers.items())
     assert response.status == 200 and "snowth_my_net" in body
     assert headers["X-Content-Type-Options"] == "nosniff"
-    assert "form-action 'none'" in headers["Content-Security-Policy"]
+    policy = headers["Content-Security-Policy"]
+    assert "default-src 'none'" in policy                   # only our own style and script
+    assert "form-action 'self'" in policy                   # the login form, nothing else
+    assert headers["Cache-Control"] == "no-store"
     assert "Python" not in headers.get("Server", "")
 
 
-def test_the_interface_only_answers_get(server):
-    request = urllib.request.Request(server + "/", data=b"{}", method="POST")
-    with pytest.raises(urllib.error.HTTPError) as caught:
-        urllib.request.urlopen(request)
-    assert caught.value.code in (405, 501)
+def test_no_page_accepts_a_post(server):
+    """Without accounts there is no form at all: every POST is refused."""
+    for path in ("/", "/nodes", "/login", "/logout"):
+        request = urllib.request.Request(server + path, data=b"{}", method="POST")
+        with pytest.raises(urllib.error.HTTPError) as caught:
+            urllib.request.urlopen(request)
+        assert caught.value.code in (404, 405, 501), path
 
 
 def test_a_broken_page_answers_500_without_details(server, monkeypatch):

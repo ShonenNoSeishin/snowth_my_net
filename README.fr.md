@@ -108,7 +108,7 @@ Détails, unités systemd, durcissement et réseau : [docs/fr/deployment.md](doc
 | `cron print [--format crontab\|cron.d\|supercronic]` | Lignes de planification issues de `schedule:` |
 | `health [--max-age]` | Code 1 si la dernière collecte réussie est trop ancienne |
 | `tui` | Interface en terminal |
-| `web [--bind] [--port]` | Interface web en lecture seule (équipements, nœuds, liens, collectes, fichiers) |
+| `web [--bind] [--port] [--hash-password]` | Interface web en lecture seule (équipements, nœuds, liens, collectes, fichiers), avec comptes optionnels |
 
 Toutes les commandes acceptent `--json` (scripts), `--config`, `--log-level`, `--log-file`, `-q`.
 Les journaux vont sur stderr. Codes de sortie : **0** OK, **1** échec partiel, **2** erreur de

@@ -29,13 +29,14 @@ from snowth_my_net.logs import get_logger
 from snowth_my_net.state.db import StateError, open_db
 from snowth_my_net.state.repo import Repo
 from snowth_my_net.web import pages
+from snowth_my_net.web.auth import COOKIE, LoginLimiter, Sessions, parse_cookie, verify_password
 
 log = get_logger("web")
 ASSETS = {"style.css": "text/css; charset=utf-8", "app.js": "text/javascript; charset=utf-8"}
 CONTENT_TYPES = {".csv": "text/csv; charset=utf-8", ".json": "application/json; charset=utf-8",
                  ".html": "text/html; charset=utf-8", ".dot": "text/plain; charset=utf-8",
                  ".mmd": "text/plain; charset=utf-8"}
-DOWNLOAD_CHUNK = 64 * 1024
+MAX_FORM_BYTES = 4096
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,50 @@ class Site:
         self.loaded = loaded
         self.clock = clock or Clock()
         self.t = Translator(detect_language(loaded.cfg.general.language))
+        self.accounts = load_accounts(loaded)
+        self.sessions = Sessions(lifetime=loaded.cfg.web.auth.session_hours * 3600)
+        self.logins = LoginLimiter()
+
+    @property
+    def guarded(self) -> bool:
+        """True when accounts are configured: every page then needs a session."""
+        return bool(self.accounts)
+
+    # ----------------------------------------------------------------- login
+
+    def login_page(self, message: str = "", target: str = "/") -> bytes:
+        t = self.t
+        error = f'<p class="error">{esc(message)}</p>' if message else ""
+        body = (f'<form class="login" method="post" action="/login">'
+                f'<input type="hidden" name="next" value="{esc(target)}">'
+                f'<label for="user">{esc(t("web.user"))}</label>'
+                f'<input id="user" name="user" autocomplete="username" autofocus required>'
+                f'<label for="password">{esc(t("web.password"))}</label>'
+                f'<input id="password" name="password" type="password" '
+                f'autocomplete="current-password" required>'
+                f'{error}<button type="submit">{esc(t("web.sign_in"))}</button></form>')
+        return self.shell("", t("web.sign_in"), body, logged_in=False)
+
+    def sign_in(self, form: dict, address: str) -> tuple[int, str, bytes, str | None]:
+        """``(status, content type, body, new session token)`` for POST /login."""
+        t = self.t
+        target = safe_target((form.get("next") or ["/"])[0])
+        waiting = self.logins.locked_for(address)
+        if waiting > 0:
+            log.warning("login refused for %s: too many failures", address)
+            return (HTTPStatus.TOO_MANY_REQUESTS, "text/html; charset=utf-8",
+                    self.login_page(t("web.too_many", seconds=int(waiting) + 1), target), None)
+        user = (form.get("user") or [""])[0]
+        password = (form.get("password") or [""])[0]
+        stored = self.accounts.get(user)
+        if stored is None or not verify_password(password, stored):
+            self.logins.failed(address)
+            log.warning("failed login for %r from %s", user[:40], address)
+            return (HTTPStatus.UNAUTHORIZED, "text/html; charset=utf-8",
+                    self.login_page(t("web.bad_login"), target), None)
+        self.logins.succeeded(address)
+        log.info("%s signed in from %s", user, address)
+        return HTTPStatus.SEE_OTHER, target, b"", self.sessions.open(user)
 
     def state(self) -> Repo:
         """A fresh read-only connection: every page sees the state as it is now."""
@@ -62,12 +107,16 @@ class Site:
 
     # ----------------------------------------------------------------- rendering
 
-    def shell(self, active: str, title: str, body: str, subtitle: str = "") -> bytes:
+    def shell(self, active: str, title: str, body: str, subtitle: str = "",
+              logged_in: bool = True) -> bytes:
         t = self.t
         nav = "".join(
             '<a href="{}" class="{}">{}</a>'.format(
                 page.path, "on" if page.path == active else "", esc(t(page.label_key)))
-            for page in NAV)
+            for page in NAV) if logged_in else ""
+        if logged_in and self.guarded:
+            nav += (f'<form class="out" method="post" action="/logout">'
+                    f'<button type="submit">{esc(t("web.sign_out"))}</button></form>')
         return f"""<!doctype html>
 <html lang="{t.lang}">
 <head>
@@ -135,7 +184,8 @@ class Site:
 
     # ----------------------------------------------------------------- routing
 
-    def respond(self, path: str, query: dict) -> tuple[int, str, bytes]:
+    def respond(self, path: str, query: dict, token: str | None = None
+                ) -> tuple[int, str, bytes]:
         """``(status, content type, body)`` for a GET; never touches the state otherwise."""
         t = self.t
         now = self.clock.now()
@@ -144,6 +194,14 @@ class Site:
             return self.asset(path.removeprefix("/static/"))
         if path == "/healthz":
             return HTTPStatus.OK, "text/plain; charset=utf-8", b"ok\n"
+        if self.guarded and self.sessions.user_of(token) is None:
+            if path == "/login":
+                return HTTPStatus.OK, html_type, self.login_page()
+            target = path + (("?" + "&".join(f"{k}={v[0]}" for k, v in query.items()))
+                             if query else "")
+            return HTTPStatus.SEE_OTHER, "/login?next=" + quote(safe_target(target), safe=""), b""
+        if path == "/login":
+            return HTTPStatus.SEE_OTHER, "/", b""       # already signed in
         if path.startswith("/download/"):
             return self.download(path.removeprefix("/download/"))
         if path == "/node":
@@ -194,6 +252,35 @@ def esc(value: object) -> str:
     return html.escape(str(value), quote=True)
 
 
+def safe_target(target: str) -> str:
+    """Only a path of this site: never redirect a browser somewhere else after a login."""
+    if not target.startswith("/") or target.startswith("//") or "\\" in target:
+        return "/"
+    return target
+
+
+def load_accounts(loaded: LoadedConfig) -> dict[str, str]:
+    """``{user: password hash}``; an unreadable account is refused, not silently skipped."""
+    from snowth_my_net.config.secrets import SecretError, resolve_secret
+    from snowth_my_net.config.validate import ConfigError
+
+    accounts, errors = {}, []
+    for user in loaded.cfg.web.auth.users:
+        try:
+            secret, warnings = resolve_secret(user.password_file, user.password_env,
+                                              loaded.paths.secrets_dir,
+                                              f"web user '{user.name}' password")
+        except SecretError as exc:
+            errors.append(str(exc))
+            continue
+        for warning in warnings:
+            log.warning("%s", warning)
+        accounts[user.name] = secret.reveal()
+    if errors:
+        raise ConfigError(errors)
+    return accounts
+
+
 class closing:
     """``contextlib.closing`` for a Repo, which closes its connection."""
 
@@ -214,9 +301,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:              # name imposed by BaseHTTPRequestHandler
         parsed = urlparse(self.path)
+        token = parse_cookie(self.headers.get("Cookie"))
         try:
             status, content_type, body = self.server.site.respond(
-                parsed.path, parse_qs(parsed.query))
+                parsed.path, parse_qs(parsed.query), token)
         except StateError as exc:
             status, content_type = HTTPStatus.SERVICE_UNAVAILABLE, "text/plain; charset=utf-8"
             body = f"{exc}\n".encode()
@@ -224,16 +312,58 @@ class Handler(BaseHTTPRequestHandler):
             log.exception("%s failed", parsed.path)
             status, content_type = HTTPStatus.INTERNAL_SERVER_ERROR, "text/plain; charset=utf-8"
             body = b"internal error; see the logs\n"
+        self.finish_response(status, content_type, body)
+
+    def do_POST(self) -> None:             # name imposed by BaseHTTPRequestHandler
+        """Only the login and logout forms; every page itself stays a GET."""
+        site = self.server.site
+        parsed = urlparse(self.path)
+        token = parse_cookie(self.headers.get("Cookie"))
+        if parsed.path not in ("/login", "/logout") or not site.guarded:
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        form = self.read_form()
+        if parsed.path == "/logout":
+            site.sessions.close(token)
+            self.finish_response(HTTPStatus.SEE_OTHER, "/login", b"", clear_cookie=True)
+            return
+        status, where, body, new_token = site.sign_in(form, self.address_string())
+        self.finish_response(status, where, body, set_cookie=new_token)
+
+    def read_form(self) -> dict:
+        length = min(int(self.headers.get("Content-Length") or 0), MAX_FORM_BYTES)
+        if length <= 0:
+            return {}
+        return parse_qs(self.rfile.read(length).decode("utf-8", errors="replace"))
+
+    def finish_response(self, status: int, content_type: str, body: bytes,
+                        set_cookie: str | None = None, clear_cookie: bool = False) -> None:
+        """A 303 puts the target in ``content_type``; anything else is a normal answer."""
         self.send_response(status)
-        self.send_header("Content-Type", content_type)
+        if status == HTTPStatus.SEE_OTHER:
+            self.send_header("Location", content_type)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+        else:
+            self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Referrer-Policy", "no-referrer")
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Content-Security-Policy",
-                         "default-src 'none'; style-src 'self'; script-src 'self'; "
-                         "img-src 'self' data:; form-action 'none'; frame-ancestors 'none'")
+        if set_cookie or clear_cookie:
+            flags = "Path=/; HttpOnly; SameSite=Strict"
+            if self.headers.get("X-Forwarded-Proto") == "https":
+                flags += "; Secure"        # behind a TLS proxy the cookie never leaves it
+            value = f"{COOKIE}={set_cookie}; {flags}" if set_cookie else (
+                f"{COOKIE}=; Max-Age=0; {flags}")
+            self.send_header("Set-Cookie", value)
+        self.send_security_headers()
         self.end_headers()
         self.wfile.write(body)
+
+    def send_security_headers(self) -> None:
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Security-Policy",
+                         "default-src 'none'; style-src 'self'; script-src 'self'; "
+                         "img-src 'self' data:; form-action 'self'; frame-ancestors 'none'")
 
     def log_message(self, fmt: str, *args: object) -> None:
         log.info("%s %s", self.address_string(), fmt % args)
