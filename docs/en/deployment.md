@@ -124,8 +124,8 @@ the longest gap of `schedule.collect` (or `schedule.health_max_age`).
 
 ## 2. Docker Compose
 
-One service, `snowth`, runs [supercronic](https://github.com/aptible/supercronic) (cron-compatible,
-logs on stdout, no root). At start-up it generates the crontab from `schedule:` — no crontab to
+Two services: `snowth` runs [supercronic](https://github.com/aptible/supercronic) (cron-compatible,
+logs on stdout, no root), and `web` serves the read-only interface. At start-up it generates the crontab from `schedule:` — no crontab to
 maintain on the host — and runs one collect.
 
 ```bash
@@ -162,13 +162,27 @@ the container sets `SNOWTH_SECRETS_DIR=/run/secrets`, where Compose mounts them.
 | `./config/snowth_my_net.yml` | `/etc/snowth_my_net/config.yml` | read-only |
 | `./config/extensions/` | `/etc/snowth_my_net/extensions/` | read-only, custom collectors and reports |
 | `./data/` | `/var/lib/snowth_my_net` | state, lock, vendor database |
+| `./secrets/` | `/run/secrets/` | read-only, one file per secret |
 | `./output/` | `/output` | CSV, JSON, maps, readable on the host |
 
 ### Secrets
 
-Declared under `secrets:` and mounted in `/run/secrets/`. With Compose outside Swarm these are
-bind mounts that keep the host owner and mode (`uid`/`gid`/`mode` are ignored), which is why the
-container runs with your UID/GID: the files can stay `chmod 600`.
+The whole `./secrets/` directory is mounted read-only on `/run/secrets/`, the directory the image
+reads (`SNOWTH_SECRETS_DIR`). A file dropped there is reached by its name — `community_file:
+community_office` — and **`compose.yml` never changes**, which is the point: a file that is never
+edited never conflicts with `git pull`.
+
+A bind mount keeps the owner and mode of the host (`uid`/`gid`/`mode` of Compose secrets are
+ignored outside Swarm), which is why the container runs with your UID/GID: the files can stay
+`chmod 600`.
+
+### Nothing to edit in `compose.yml`
+
+What differs from one site to another lives outside it: `.env` (ports, user, time zone),
+`config/snowth_my_net.yml` (devices, credentials, schedule) and `secrets/` (their values). All
+three are ignored by git. For anything else — another volume, a second interface, a network —
+write a `compose.override.yml` next to it: Compose merges it automatically and git ignores it
+too.
 
 ### Network
 

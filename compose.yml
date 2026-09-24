@@ -2,6 +2,10 @@
 #
 #   cp .env.example .env               # uncomment and adjust SNOWTH_UID/GID, TZ
 #   mkdir -p config data output secrets
+#
+# Nothing here is meant to be edited: what differs from one site to another belongs to .env
+# (ports, user), config/snowth_my_net.yml (devices, credentials) and secrets/ (their values).
+# Anything else: compose.override.yml, which Compose merges on top of this file and git ignores.
 #   docker compose run --rm snowth init --output /tmp/example.yml   (or copy the example)
 #   docker compose run --rm snowth check
 #   docker compose up -d
@@ -33,14 +37,9 @@ services:
     volumes:
       - ./config/snowth_my_net.yml:/etc/snowth_my_net/config.yml:ro
       - ./config/extensions:/etc/snowth_my_net/extensions:ro
+      - ./secrets:/run/secrets:ro        # every file you drop there, by name, nothing to declare
       - ./data:/var/lib/snowth_my_net
       - ./output:/output
-    secrets:
-      - community_sw_office
-      - community_defaut
-      #- snmp_v3_auth
-      #- snmp_v3_priv
-      #- cmdb_token
     restart: unless-stopped
     logging:
       driver: json-file
@@ -70,18 +69,13 @@ services:
     volumes:
       - ./config/snowth_my_net.yml:/etc/snowth_my_net/config.yml:ro
       - ./config/extensions:/etc/snowth_my_net/extensions:ro
+      - ./secrets:/run/secrets:ro
       - ./data:/var/lib/snowth_my_net          # read-only queries, but SQLite needs the mount
       - ./output:/output:ro
-    secrets:
-      - community_sw_office
-      - community_defaut
-      # Only for an account whose password is managed elsewhere (web.auth.users[].password_file);
-      # the usual way is 'docker compose exec web snowth_my_net web passwd NAME'. See docs/en/web.md.
-      #- web_alice
     # Published on the loopback only. Declare an account under web.auth.users and put a TLS
-    # reverse proxy in front of it (and change 127.0.0.1) to reach it from another machine.
+    # reverse proxy in front of it before opening it wider (SNOWTH_WEB_BIND in .env).
     ports:
-      - "127.0.0.1:${SNOWTH_WEB_PORT:-8080}:8080"
+      - "${SNOWTH_WEB_BIND:-127.0.0.1}:${SNOWTH_WEB_PORT:-8080}:8080"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c",
@@ -125,19 +119,9 @@ services:
       - certs:/certs:ro
     networks: [testnet]
 
-secrets:
-  #web_alice:
-    #file: ./secrets/web_alice
-  community_sw_office:
-    file: ./secrets/community_sw_office
-  community_defaut:
-    file: ./secrets/community_defaut
-  #snmp_v3_auth:
-    #file: ./secrets/snmp_v3_auth
-  #snmp_v3_priv:
-    #file: ./secrets/snmp_v3_priv
-  #cmdb_token:
-    #file: ./secrets/cmdb_token
+# No "secrets:" block: ./secrets is mounted whole, read-only, on /run/secrets (the directory the
+# image reads). A file named "community_office" there is reached by "community_file: community_office"
+# in the configuration. Nothing in this file ever has to change when you add one.
 
 volumes:
   certs: {}

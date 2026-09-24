@@ -21,7 +21,7 @@ def documented() -> dict[str, str]:
 def test_every_compose_variable_is_documented_with_its_default():
     used = dict(USED.findall(COMPOSE))
     assert set(used) == {"SNOWTH_VERSION", "SNOWTH_UID", "SNOWTH_GID", "TZ",
-                         "SNOWTH_COLLECT_ON_START", "SNOWTH_WEB_PORT"}
+                         "SNOWTH_COLLECT_ON_START", "SNOWTH_WEB_PORT", "SNOWTH_WEB_BIND"}
     known = documented()
     assert [name for name in used if name not in known] == []
     mismatched = {name: (default, known[name]) for name, default in used.items()
@@ -43,3 +43,10 @@ def test_the_paths_baked_into_the_image_are_listed():
     known = documented()
     assert [f"{name}={value}" for name, value in image.items()
             if known.get(name) != value] == []
+
+
+def test_compose_needs_no_editing_to_add_a_secret():
+    """A tracked file that has to be edited per site conflicts on every 'git pull'."""
+    assert "\nsecrets:" not in COMPOSE                  # no per-site secret declarations
+    assert COMPOSE.count("./secrets:/run/secrets:ro") == 2   # both services, whole directory
+    assert (ROOT / ".gitignore").read_text().count("compose.override.yml") == 1

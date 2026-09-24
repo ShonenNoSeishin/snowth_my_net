@@ -128,8 +128,8 @@ plus ancienne que deux fois le plus long intervalle de `schedule.collect` (ou qu
 
 ## 2. Docker Compose
 
-Un seul service, `snowth`, fait tourner [supercronic](https://github.com/aptible/supercronic)
-(compatible cron, journaux sur stdout, sans root). Au démarrage, il génère la crontab à partir de
+Deux services : `snowth` fait tourner [supercronic](https://github.com/aptible/supercronic)
+(compatible cron, journaux sur stdout, sans root), et `web` sert l'interface en lecture seule. Au démarrage, il génère la crontab à partir de
 `schedule:` — aucune crontab à maintenir sur l'hôte — et lance une collecte.
 
 ```bash
@@ -167,14 +167,27 @@ Compose les monte.
 | `./config/snowth_my_net.yml` | `/etc/snowth_my_net/config.yml` | lecture seule |
 | `./config/extensions/` | `/etc/snowth_my_net/extensions/` | lecture seule, collecteurs et rapports personnalisés |
 | `./data/` | `/var/lib/snowth_my_net` | état, verrou, base des constructeurs |
+| `./secrets/` | `/run/secrets/` | lecture seule, un fichier par secret |
 | `./output/` | `/output` | CSV, JSON, cartes, lisibles sur l'hôte |
 
 ### Secrets
 
-Déclarés sous `secrets:` et montés dans `/run/secrets/`. Avec Compose hors Swarm, ce sont des
-montages qui gardent le propriétaire et les droits de l'hôte (`uid`/`gid`/`mode` sont ignorés) :
-c'est pourquoi le conteneur tourne avec votre UID/GID, et les fichiers peuvent rester en
-`chmod 600`.
+Le répertoire `./secrets/` entier est monté en lecture seule sur `/run/secrets/`, celui que lit
+l'image (`SNOWTH_SECRETS_DIR`). Un fichier déposé là s'utilise par son nom — `community_file:
+community_office` — et **`compose.yml` ne change jamais**, ce qui est tout l'intérêt : un fichier
+qu'on n'édite pas n'entre jamais en conflit avec `git pull`.
+
+Un montage garde le propriétaire et les droits de l'hôte (`uid`/`gid`/`mode` des secrets Compose
+sont ignorés hors Swarm) : c'est pourquoi le conteneur tourne avec votre UID/GID, et les fichiers
+peuvent rester en `chmod 600`.
+
+### Rien à éditer dans `compose.yml`
+
+Ce qui change d'un site à l'autre vit ailleurs : `.env` (ports, utilisateur, fuseau),
+`config/snowth_my_net.yml` (équipements, identifiants, planification) et `secrets/` (leurs
+valeurs). Les trois sont ignorés par git. Pour le reste — un autre volume, une seconde interface,
+un réseau — écrivez un `compose.override.yml` à côté : Compose le fusionne automatiquement, et
+git l'ignore aussi.
 
 ### Réseau
 
