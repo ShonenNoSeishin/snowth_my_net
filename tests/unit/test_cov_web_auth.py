@@ -37,6 +37,11 @@ def test_an_unreadable_hash_never_lets_anyone_in(broken):
     assert not auth.verify_password(PASSWORD, broken)
 
 
+def test_a_hash_with_impossible_parameters_is_refused_not_raised():
+    """Well-formed, but scrypt itself rejects a cost that is not a power of two."""
+    assert not auth.verify_password(PASSWORD, "scrypt$3$8$1$c2FsdA==$aGFzaA==")
+
+
 def test_sessions_expire_and_can_be_closed():
     now = [0.0]
     sessions = auth.Sessions(lifetime=60, clock=lambda: now[0])
@@ -52,6 +57,15 @@ def test_sessions_expire_and_can_be_closed():
     fresh.close(other)
     fresh.close(None)
     assert fresh.user_of(other) is None and fresh.count == 0
+
+
+def test_purging_drops_every_expired_session():
+    now = [0.0]
+    sessions = auth.Sessions(lifetime=60, clock=lambda: now[0])
+    sessions.open("a"), sessions.open("b")
+    now[0] = 61
+    sessions.purge()
+    assert sessions._open == {}
 
 
 def test_two_sessions_are_independent():
@@ -305,3 +319,30 @@ def parse_context_hours() -> int:
     from snowth_my_net.config.loader import parse_config_text
 
     return parse_config_text("").web.auth.session_hours
+
+
+def test_parse_hash_reads_the_parts_and_refuses_anything_else():
+    cost, block, parallel, salt, digest = auth.parse_hash(auth.hash_password(PASSWORD))
+    assert (cost, block, parallel) == (auth.COST, auth.BLOCK, auth.PARALLEL)
+    assert len(salt) == auth.SALT_BYTES and len(digest) == 64
+    assert auth.parse_hash("Password: scrypt$16384$8$1$c2FsdA==$aGFzaA==") is None
+
+
+def test_a_hash_broken_by_a_copy_from_a_terminal_stops_the_interface(tmp_path, caplog):
+    """A line cut in two by the terminal used to read as 'wrong password' forever."""
+    loaded = guarded_config(tmp_path)
+    good = (loaded.paths.secrets_dir / "web_alice").read_text().strip()
+    cut = good[:60] + "\n" + good[60:]
+    (loaded.paths.secrets_dir / "web_alice").write_text(cut)
+    with pytest.raises(ConfigError, match="--hash-password"):
+        load_accounts(loaded)
+
+
+def test_the_log_says_whether_the_account_or_the_password_is_wrong(tmp_path, caplog):
+    site = Site(guarded_config(tmp_path), FixedClock())
+    with caplog.at_level("WARNING"):
+        site.sign_in({"user": ["alice"], "password": ["nope"]}, "10.0.0.1")
+        site.sign_in({"user": ["nobody"], "password": [PASSWORD]}, "10.0.0.2")
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("wrong password" in m and "10.0.0.1" in m for m in messages)
+    assert any("no such account" in m and "10.0.0.2" in m for m in messages)

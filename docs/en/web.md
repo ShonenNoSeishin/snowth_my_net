@@ -75,6 +75,11 @@ written anywhere. `password_env` works too, for a hash coming from the environme
   the address.
 * `/healthz` and the page's own stylesheet stay open, so that a probe needs no account.
 * `check` warns when `web.bind` is not the loopback and no account is configured.
+* A refused login is logged with its reason — `no such account` or `wrong password` — while the
+  page itself stays vague on purpose.
+* The file must hold that one `scrypt$…` line and nothing else. A line cut in two by a copy from
+  a terminal, or the command's prompts pasted along with it, is refused **at startup**, naming
+  the account: the interface never falls back to serving without a login.
 
 With Docker, the hash is a secret like the others: write it to `./secrets/web_alice`, declare it
 under `secrets:` in `compose.yml` and list it in the `web` service; inside the container it is

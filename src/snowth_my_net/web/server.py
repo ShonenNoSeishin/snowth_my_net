@@ -29,7 +29,15 @@ from snowth_my_net.logs import get_logger
 from snowth_my_net.state.db import StateError, open_db
 from snowth_my_net.state.repo import Repo
 from snowth_my_net.web import pages
-from snowth_my_net.web.auth import COOKIE, LoginLimiter, Sessions, parse_cookie, verify_password
+from snowth_my_net.web.auth import (
+    COOKIE,
+    SCHEME,
+    LoginLimiter,
+    Sessions,
+    parse_cookie,
+    parse_hash,
+    verify_password,
+)
 from snowth_my_net.web.pages import Cell
 
 LANGUAGES = ("en", "fr")
@@ -100,7 +108,8 @@ class Site:
         stored = self.accounts.get(user)
         if stored is None or not verify_password(password, stored):
             self.logins.failed(address)
-            log.warning("failed login for %r from %s", user[:40], address)
+            reason = "no such account" if stored is None else "wrong password"
+            log.warning("failed login for %r from %s: %s", user[:40], address, reason)
             return (HTTPStatus.UNAUTHORIZED, "text/html; charset=utf-8",
                     self.login_page(t("web.bad_login"), target, t), None)
         self.logins.succeeded(address)
@@ -301,7 +310,13 @@ def load_accounts(loaded: LoadedConfig) -> dict[str, str]:
             continue
         for warning in warnings:
             log.warning("%s", warning)
-        accounts[user.name] = secret.reveal()
+        value = secret.reveal()
+        if parse_hash(value) is None:
+            errors.append(f"web user '{user.name}': the password source does not hold a hash "
+                          "produced by 'snowth_my_net web --hash-password' (one line starting "
+                          f"with '{SCHEME}$', nothing else)")
+            continue
+        accounts[user.name] = value
     if errors:
         raise ConfigError(errors)
     return accounts

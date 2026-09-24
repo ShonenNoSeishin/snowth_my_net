@@ -30,17 +30,33 @@ def hash_password(password: str) -> str:
                      base64.b64encode(salt).decode(), base64.b64encode(digest).decode()])
 
 
-def verify_password(password: str, stored: str) -> bool:
-    """Compare in constant time; an unreadable hash is a failed attempt, never a pass."""
+def parse_hash(stored: str) -> tuple[int, int, int, bytes, bytes] | None:
+    """``(cost, block, parallel, salt, digest)``, or ``None`` when the line is not a hash.
+
+    A file mangled on its way in -- a line broken by a copy from a terminal, the prompts of the
+    command pasted along with it -- parses to ``None``. The interface refuses such a file at
+    startup rather than answering "wrong password" to a password that is in fact right.
+    """
     try:
         scheme, cost, block, parallel, salt, digest = stored.strip().split("$")
         if scheme != SCHEME:
-            return False
-        expected = base64.b64decode(digest, validate=True)
-        computed = hashlib.scrypt(password.encode(), salt=base64.b64decode(salt, validate=True),
-                                  n=int(cost), r=int(block), p=int(parallel),
+            return None
+        return (int(cost), int(block), int(parallel),
+                base64.b64decode(salt, validate=True), base64.b64decode(digest, validate=True))
+    except (ValueError, TypeError):
+        return None
+
+
+def verify_password(password: str, stored: str) -> bool:
+    """Compare in constant time; an unreadable hash is a failed attempt, never a pass."""
+    parsed = parse_hash(stored)
+    if parsed is None:
+        return False
+    cost, block, parallel, salt, expected = parsed
+    try:
+        computed = hashlib.scrypt(password.encode(), salt=salt, n=cost, r=block, p=parallel,
                                   dklen=len(expected))
-    except (ValueError, TypeError, MemoryError):
+    except (ValueError, MemoryError):
         return False
     return hmac.compare_digest(computed, expected)
 

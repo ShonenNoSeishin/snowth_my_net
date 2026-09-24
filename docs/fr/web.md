@@ -72,6 +72,12 @@ l'environnement.
 * `/healthz` et la feuille de style de la page restent ouverts, pour qu'une sonde n'ait pas
   besoin de compte.
 * `check` avertit quand `web.bind` n'est pas la boucle locale et qu'aucun compte n'est défini.
+* Une connexion refusée est journalisée avec sa raison — `no such account` ou `wrong password` —
+  alors que la page, elle, reste volontairement vague.
+* Le fichier doit contenir cette seule ligne `scrypt$…`, rien d'autre. Une ligne coupée en deux
+  par un copier-coller depuis le terminal, ou les invites de la commande collées avec elle, est
+  refusée **au démarrage**, avec le nom du compte : l'interface ne se rabat jamais sur un service
+  sans authentification.
 
 Avec Docker, l'empreinte est un secret comme les autres : écrivez-la dans `./secrets/web_alice`,
 déclarez-la sous `secrets:` dans `compose.yml` et listez-la dans le service `web` ; dans le
