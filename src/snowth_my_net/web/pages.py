@@ -26,6 +26,15 @@ class Table:
     rows: list[list[str]] = field(default_factory=list)
     total: int = 0                          # rows before the display limit
     empty: str = ""                         # what to say when there is nothing
+    help: list[tuple[str, str]] = field(default_factory=list)   # (label, where it comes from)
+
+
+def help_for(t, page: str, columns: list[tuple[str, str]], keys: list[str | None],
+             extra: list[str] = ()) -> list[tuple[str, str]]:
+    """Pair each column with its explanation; ``extra`` keys are notes without a column."""
+    pairs = [(label, t(f"hint.{page}.{key}"))
+             for (label, _kind), key in zip(columns, keys, strict=True) if key]
+    return pairs + [("", t(key)) for key in extra]
 
 
 def devices(loaded: LoadedConfig, repo: Repo, now: int, t) -> Table:
@@ -39,10 +48,12 @@ def devices(loaded: LoadedConfig, repo: Repo, now: int, t) -> Table:
             device["last_collect_status"] or "", iso_z(device["last_seen"]),
         ])
     rows.sort(key=lambda row: row[0].casefold())
-    return Table([(t("col.name"), "text"), (t("col.ip"), "text"), (t("col.vendor"), "text"),
-                  (t("col.model"), "text"), (t("col.os"), "text"), (t("col.type"), "text"),
-                  (t("col.status"), "text"), (t("col.seen"), "text")],
-                 rows, len(rows), t("web.no_devices"))
+    columns = [(t("col.name"), "text"), (t("col.ip"), "text"), (t("col.vendor"), "text"),
+               (t("col.model"), "text"), (t("col.os"), "text"), (t("col.type"), "text"),
+               (t("col.status"), "text"), (t("col.seen"), "text")]
+    keys = ["name", "ip", "vendor", "model", "os", "type", "status", "seen"]
+    return Table(columns, rows, len(rows), t("web.no_devices"),
+                 help_for(t, "devices", columns, keys))
 
 
 def _devices_and_names(loaded: LoadedConfig, repo: Repo, now: int):
@@ -55,15 +66,19 @@ def nodes(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int) -> Table:
     columns = [(t("col.mac"), "text"), (t("col.vendor"), "text"), (t("col.ip"), "text"),
                (t("col.dns"), "text"), (t("col.switch"), "text"), (t("col.port"), "text"),
                (t("col.vlan"), "number"), (t("col.seen"), "text")]
-    return Table(columns, all_rows[:limit], len(all_rows), t("web.no_nodes"))
+    keys = ["mac", "vendor", "ip", "dns", "switch", "port", "vlan", "seen"]
+    return Table(columns, all_rows[:limit], len(all_rows), t("web.no_nodes"),
+                 help_for(t, "nodes", columns, keys, extra=["hint.nodes.click"]))
 
 
 def links(loaded: LoadedConfig, repo: Repo, now: int, t) -> Table:
     rows = build_view(loaded, repo, now).link_rows()
-    return Table([(t("col.local_device"), "text"), (t("col.local_port"), "text"),
-                  (t("col.remote_device"), "text"), (t("col.remote_port"), "text"),
-                  (t("col.protocol"), "text"), (t("col.seen"), "text")],
-                 rows, len(rows), t("web.no_links"))
+    columns = [(t("col.local_device"), "text"), (t("col.local_port"), "text"),
+               (t("col.remote_device"), "text"), (t("col.remote_port"), "text"),
+               (t("col.protocol"), "text"), (t("col.seen"), "text")]
+    keys = ["devices", None, None, None, "protocol", "seen"]
+    return Table(columns, rows, len(rows), t("web.no_links"),
+                 help_for(t, "links", columns, keys))
 
 
 def runs(repo: Repo, t, limit: int = 50) -> Table:
@@ -76,10 +91,11 @@ def runs(repo: Repo, t, limit: int = 50) -> Table:
         rows.append([str(run["id"]), run["command"], iso_z(run["started_at"]), duration,
                      run["status"] or "running",
                      f"{stats.get('reachable', '—')}/{stats.get('devices', '—')}"])
-    return Table([(t("col.run"), "number"), (t("col.command"), "text"),
-                  (t("col.started"), "text"), (t("col.duration"), "text"),
-                  (t("col.result"), "text"), (t("col.devices"), "text")],
-                 rows, len(rows), t("web.no_runs"))
+    columns = [(t("col.run"), "number"), (t("col.command"), "text"),
+               (t("col.started"), "text"), (t("col.duration"), "text"),
+               (t("col.result"), "text"), (t("col.devices"), "text")]
+    keys = [None, None, None, None, "result", "devices"]
+    return Table(columns, rows, len(rows), t("web.no_runs"), help_for(t, "runs", columns, keys))
 
 
 def files(output_dir: Path, t) -> Table:
@@ -90,8 +106,9 @@ def files(output_dir: Path, t) -> Table:
             continue
         info = path.stat()
         rows.append([name, f"{info.st_size:,}".replace(",", " "), iso_z(int(info.st_mtime))])
-    return Table([(t("col.file"), "text"), (t("col.size"), "number"), (t("col.written"), "text")],
-                 rows, len(rows), t("web.no_files"))
+    columns = [(t("col.file"), "text"), (t("col.size"), "number"), (t("col.written"), "text")]
+    return Table(columns, rows, len(rows), t("web.no_files"),
+                 help_for(t, "files", columns, ["file", None, None]))
 
 
 def summary(loaded: LoadedConfig, repo: Repo, now: int, t) -> str:

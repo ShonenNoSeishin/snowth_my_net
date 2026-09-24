@@ -25,8 +25,10 @@ SNOWTH_WEB_PORT=9000 docker compose up -d web
 | Runs | the last 50 runs, their status and how many devices answered |
 | Files | the exported files present in the output directory, to download |
 
-Each table has a filter box (the `/` key focuses it) and sortable columns; the filter and the
-sort happen in the browser, on the rows already sent. The line under the title says when the
+Each page opens with **How to read this table**, a collapsed panel saying where every column
+comes from: which MIB, which rule, and why a cell can be empty. Each table has a filter box (the
+`/` key focuses it) and sortable columns; the filter and the sort happen in the browser, on the
+rows already sent. The line under the title says when the
 last collect ran and how it went. Clicking a MAC shows the same explanation as
 `snowth_my_net explain`, in the interface's language.
 

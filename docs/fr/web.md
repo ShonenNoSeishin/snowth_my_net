@@ -26,8 +26,10 @@ SNOWTH_WEB_PORT=9000 docker compose up -d web
 | Collectes | les 50 dernières exécutions, leur état et le nombre d'équipements qui ont répondu |
 | Fichiers | les fichiers exportés présents dans le répertoire de sortie, à télécharger |
 
-Chaque tableau a un champ de filtre (la touche `/` y place le curseur) et des colonnes triables ;
-le filtre et le tri se font dans le navigateur, sur les lignes déjà envoyées. La ligne sous le
+Chaque page s'ouvre sur **Comment lire ce tableau**, un panneau replié qui dit d'où vient chaque
+colonne : quelle MIB, quelle règle, et pourquoi une case peut être vide. Chaque tableau a un champ
+de filtre (la touche `/` y place le curseur) et des colonnes triables ; le filtre et le tri se
+font dans le navigateur, sur les lignes déjà envoyées. La ligne sous le
 titre indique quand la dernière collecte a eu lieu et comment elle s'est passée. Cliquer sur une
 MAC affiche la même explication que `snowth_my_net explain`, dans la langue de l'interface.
 

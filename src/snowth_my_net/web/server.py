@@ -165,12 +165,16 @@ class Site:
         if shown < table.total:
             count = (t("web.shown", shown=shown, total=table.total) + " · "
                      + t("web.truncated", limit=shown))
+        hints = "".join(f"<dt>{esc(label)}</dt><dd>{esc(text)}</dd>"
+                        for label, text in table.help)
+        panel = (f'<details class="hint"><summary>{esc(t("web.how"))}</summary>'
+                 f"<dl>{hints}</dl></details>") if table.help else ""
         controls = (f'<div class="bar"><input type="search" id="q" '
                     f'placeholder="{esc(t("web.search"))}" aria-label="{esc(t("web.search"))}">'
                     f'<span class="count" id="count">{esc(count)}</span></div>')
         table_html = (f'<div class="wrap"><table id="rows"><thead><tr>{head}</tr></thead>'
                       f'<tbody>{"".join(body)}</tbody></table></div>')
-        return self.shell(active, title, controls + table_html, subtitle)
+        return self.shell(active, title, panel + controls + table_html, subtitle)
 
     def node_page(self, mac: str) -> bytes:
         t = self.t

@@ -283,3 +283,46 @@ def test_serve_stops_cleanly_on_interrupt(tmp_path, monkeypatch):
     monkeypatch.setattr(server_module.threading, "Thread", FakeThread)
     assert server_module.serve(make_loaded(tmp_path)) == 0
     assert closed == ["shutdown", "close"]
+
+
+def test_each_page_explains_where_its_columns_come_from(site):
+    """The 'how to read this table' panel: one line per column, none left as a raw key."""
+    from snowth_my_net.i18n import STRINGS
+
+    for path in ("/", "/nodes", "/links", "/runs"):
+        _status, _type, body = get(site, path)
+        assert "Comment lire ce tableau" in body or "How to read this table" in body
+        assert "<dt>" in body and "<dd>" in body
+        assert "hint." not in body                       # every key was translated
+    assert [k for k in STRINGS if k.startswith("hint.") and not STRINGS[k][0]] == []
+
+
+def test_the_columns_of_a_page_match_its_explanations(tmp_path):
+    from snowth_my_net.i18n import Translator
+    from snowth_my_net.state.db import open_db
+    from snowth_my_net.state.repo import Repo
+
+    t = Translator("en")
+    repo = Repo(open_db(tmp_path / "state" / "state.sqlite"))
+    loaded = make_loaded(tmp_path)
+    try:
+        tables = {"devices": pages.devices(loaded, repo, NOW, t),
+                  "nodes": pages.nodes(loaded, repo, NOW, t, 10),
+                  "links": pages.links(loaded, repo, NOW, t),
+                  "runs": pages.runs(repo, t),
+                  "files": pages.files(tmp_path, t)}
+    finally:
+        repo.conn.close()
+    for name, table in tables.items():
+        labels = [label for label, _kind in table.columns]
+        explained = [label for label, _text in table.help if label]
+        assert explained, name
+        assert explained == [label for label in labels if label in explained], name
+        assert all(text.strip() for _label, text in table.help), name
+
+
+def test_the_nodes_help_answers_the_ipv6_and_empty_switch_questions(site):
+    _status, _type, body = get(site, "/nodes")
+    assert "IPv6" in body and "IPv4" in body              # why a row shows only an IPv6
+    assert ("cache ARP" in body or "ARP cache" in body)   # why Switch can be empty
+    assert ("uplinks" in body)

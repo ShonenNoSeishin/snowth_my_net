@@ -427,6 +427,110 @@ WEB = {
                       "Vue en lecture seule. Collecte et export depuis la ligne de commande ou "
                       "l'interface en terminal."),
     "web.not_found": ("Nothing here.", "Rien ici."),
+    "web.how": ("How to read this table", "Comment lire ce tableau"),
+    # devices
+    "hint.devices.name": (
+        "sysName, cut at the first dot; ' (IP)' is added when two devices share a name. It is "
+        "the join key used by the Nodes and Links tables.",
+        "Le sysName, coupé au premier point ; « (IP) » est ajouté quand deux équipements portent "
+        "le même nom. C'est la clé de jointure des tableaux Nœuds et Liens."),
+    "hint.devices.ip": (
+        "The address actually polled, the one written in the configuration or found through a "
+        "neighbour.",
+        "L'adresse réellement interrogée, celle de la configuration ou trouvée par un voisin."),
+    "hint.devices.vendor": (
+        "From the private enterprise number of sysObjectID, else from sysDescr, else from the "
+        "MAC address.",
+        "D'après le numéro de constructeur du sysObjectID, sinon le sysDescr, sinon l'adresse "
+        "MAC."),
+    "hint.devices.model": (
+        "ENTITY-MIB chassis, else a pattern on sysDescr, else a vendor driver.",
+        "Le châssis d'ENTITY-MIB, sinon un motif sur le sysDescr, sinon un driver constructeur."),
+    "hint.devices.os": (
+        "Recognised from sysDescr or sysObjectID; a driver fills the version when the standard "
+        "MIBs do not give it.",
+        "Reconnu d'après le sysDescr ou le sysObjectID ; un driver complète la version quand les "
+        "MIB standard ne la donnent pas."),
+    "hint.devices.type": (
+        "Only on sure evidence: LLDP capabilities, a function MIB (printer, UPS), the "
+        "sysObjectID catalogue, the OS, or set by hand. Empty means nothing proved it.",
+        "Seulement sur preuve sûre : capacités LLDP, MIB de fonction (imprimante, onduleur), "
+        "catalogue de sysObjectID, système, ou réglage manuel. Vide = rien ne le prouvait."),
+    "hint.devices.status": (
+        "Result of the last collect of that device: ok, partial (a table failed) or failed.",
+        "Résultat de la dernière collecte de cet équipement : ok, partial (une table a échoué) "
+        "ou failed."),
+    "hint.devices.seen": ("Last time the device answered.",
+                          "Dernière fois que l'équipement a répondu."),
+    # nodes
+    "hint.nodes.mac": (
+        "Learnt in the MAC table of a switch (BRIDGE/Q-BRIDGE) or in the ARP/NDP cache of a "
+        "router or firewall.",
+        "Apprise dans la table MAC d'un commutateur (BRIDGE/Q-BRIDGE) ou dans le cache ARP/NDP "
+        "d'un routeur ou d'un pare-feu."),
+    "hint.nodes.vendor": (
+        "IEEE registry, from the first half of the MAC. Empty for a randomised (locally "
+        "administered) address, which phones and laptops now use by default.",
+        "Registre IEEE, d'après la première moitié de la MAC. Vide pour une adresse aléatoire "
+        "(administrée localement), ce que font aujourd'hui téléphones et portables par défaut."),
+    "hint.nodes.ip": (
+        "ONE address: the most recent one seen in an ARP/NDP cache, IPv4 preferred, dropped when "
+        "another MAC claimed it later. An IPv6 alone means no IPv4 was seen recently for that "
+        "MAC — click the MAC to see every address known for it.",
+        "UNE adresse : la plus récente vue dans un cache ARP/NDP, IPv4 de préférence, écartée si "
+        "une autre MAC l'a revendiquée depuis. Une IPv6 seule signifie qu'aucune IPv4 récente "
+        "n'a été vue pour cette MAC — cliquez la MAC pour voir toutes ses adresses."),
+    "hint.nodes.dns": (
+        "Reverse lookup (PTR) of that address, from the cache; empty when DNS is disabled or the "
+        "name does not exist.",
+        "Résolution inverse (PTR) de cette adresse, depuis le cache ; vide quand le DNS est "
+        "désactivé ou que le nom n'existe pas."),
+    "hint.nodes.switch": (
+        "The device whose MAC table holds that address, on an access port. Empty when the MAC is "
+        "only known from an ARP cache, when every port that saw it is an uplink, or when the "
+        "switch holding it is not polled.",
+        "L'équipement dont la table MAC contient cette adresse, sur un port d'accès. Vide quand "
+        "la MAC n'est connue que par un cache ARP, quand tous les ports qui l'ont vue sont des "
+        "uplinks, ou quand le commutateur qui la porte n'est pas interrogé."),
+    "hint.nodes.port": (
+        "The port of that device. A port carrying many MAC addresses, or facing a neighbour "
+        "switch, is treated as an uplink and never as a position.",
+        "Le port de cet équipement. Un port qui porte beaucoup d'adresses MAC, ou qui fait face "
+        "à un commutateur voisin, est traité comme un uplink et jamais comme une position."),
+    "hint.nodes.vlan": ("From the MAC table, else the VLAN of the port (PVID).",
+                        "D'après la table MAC, sinon le VLAN du port (PVID)."),
+    "hint.nodes.seen": (
+        "Last time that position was observed. A MAC may appear on several lines: that is its "
+        "roaming history, most recent first.",
+        "Dernière observation de cette position. Une MAC peut apparaître sur plusieurs lignes : "
+        "c'est son historique d'itinérance, la plus récente d'abord."),
+    "hint.nodes.click": (
+        "Click a MAC to see why it sits there: every sighting, the ports discarded as uplinks or "
+        "transit, and all its addresses.",
+        "Cliquez une MAC pour savoir pourquoi elle est là : toutes les observations, les ports "
+        "écartés comme uplinks ou transit, et toutes ses adresses."),
+    # links
+    "hint.links.devices": (
+        "Both ends as announced by LLDP or CDP; a name that is not in Devices is a neighbour "
+        "that is not polled (a phone, a router outside the allowed range).",
+        "Les deux extrémités telles qu'annoncées par LLDP ou CDP ; un nom absent des Équipements "
+        "est un voisin non interrogé (un téléphone, un routeur hors de la plage autorisée)."),
+    "hint.links.protocol": (
+        "LLDP, CDP, or both when the two protocols agree on the same link.",
+        "LLDP, CDP, ou les deux quand les deux protocoles décrivent le même lien."),
+    "hint.links.seen": ("Last collect where both ends still announced each other.",
+                        "Dernière collecte où les deux extrémités s'annonçaient encore."),
+    # runs and files
+    "hint.runs.result": (
+        "ok, partial (a device or a table failed) or failed. A tolerated device never turns a "
+        "run partial.",
+        "ok, partial (un équipement ou une table a échoué) ou failed. Un équipement toléré ne "
+        "rend jamais une exécution partielle."),
+    "hint.runs.devices": ("Devices that answered, out of those polled.",
+                          "Équipements qui ont répondu, sur ceux interrogés."),
+    "hint.files.file": (
+        "Written by the last export, in the output directory. Click to download.",
+        "Écrit par le dernier export, dans le répertoire de sortie. Cliquez pour télécharger."),
     "web.user": ("User", "Utilisateur"),
     "web.password": ("Password", "Mot de passe"),
     "web.sign_in": ("Sign in", "Se connecter"),
