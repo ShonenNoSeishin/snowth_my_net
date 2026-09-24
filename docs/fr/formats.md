@@ -47,7 +47,7 @@ historique d'itinérance.
 |---|---|
 | MAC Address | En minuscules avec deux-points. Les MAC de broadcast, multicast, nulles, virtuelles VRRP/HSRP et celles des équipements interrogés sont exclues. |
 | Vendor | Registre IEEE (MA-L/MA-M/MA-S), nettoyé ; vide pour les MAC administrées localement (aléatoires). |
-| IP Address | IP courante de la MAC : vue le plus récemment, non revendiquée ensuite par une autre MAC, IPv4 d'abord. |
+| IP Address | IP courante de la MAC : parmi les adresses qu'aucune autre MAC n'a revendiquées depuis, celles vues dans les `nodes.current_ip_window` (24 h) suivant la plus récente, l'IPv4 d'abord. Une IPv6 seule signifie qu'aucune IPv4 récente n'est connue : augmentez `current_ip_window` (par exemple `30d`) pour qu'une IPv4 gagne dès qu'il en existe une dans la rétention. Toutes les adresses d'une MAC restent dans `snapshot.json` et dans l'interface web. |
 | DNS Name | Nom PTR de cette IP (mis en cache). |
 | Switch | Exactement un `Device Name` de `devices.csv` ; vide quand aucun port d'accès n'est connu. |
 | Port | Nom court de l'interface (`Gi1/0/5`, `1/1/12`, `ge-0/0/3`). |

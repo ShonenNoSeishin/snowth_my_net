@@ -25,8 +25,15 @@ SNOWTH_WEB_PORT=9000 docker compose up -d web
 | Runs | the last 50 runs, their status and how many devices answered |
 | Files | the exported files present in the output directory, to download |
 
+A MAC seen in several places takes several lines, each marked with its number of positions; the
+IP column shows the elected address and then, in grey, the other addresses known for that MAC. In
+Devices, '+n MAC' marks a device known by several addresses.
+
 Each page opens with **How to read this table**, a collapsed panel saying where every column
-comes from: which MIB, which rule, and why a cell can be empty. Each table has a filter box (the
+comes from: which MIB, which rule, and why a cell can be empty. The ☾/☀ button in the header switches between light and dark (the choice is kept by the browser,
+otherwise the system one applies), and EN/FR changes the language.
+
+Each table has a filter box (the
 `/` key focuses it) and sortable columns; the filter and the sort happen in the browser, on the
 rows already sent. The line under the title says when the
 last collect ran and how it went. Clicking a MAC shows the same explanation as

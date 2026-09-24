@@ -20,6 +20,14 @@ DOWNLOADS = ("devices.csv", "nodes.csv", "links.csv", "snapshot.json", "map.html
              "map.mmd")
 
 
+@dataclass(frozen=True)
+class Cell:
+    """A value plus a muted note beside it (other addresses, how many positions…)."""
+
+    text: str
+    note: str = ""
+
+
 @dataclass
 class Table:
     columns: list[tuple[str, str]]          # (label, "text" | "number")
@@ -38,20 +46,26 @@ def help_for(t, page: str, columns: list[tuple[str, str]], keys: list[str | None
 
 
 def devices(loaded: LoadedConfig, repo: Repo, now: int, t) -> Table:
+    found, names = _devices_and_names(loaded, repo, now)
+    macs = {row[0]: row[1] for row in repo.conn.execute(
+        "SELECT device_id, COUNT(*) FROM device_macs GROUP BY device_id")}
     rows = []
-    for device, name in zip(*_devices_and_names(loaded, repo, now), strict=True):
+    for device, name in zip(found, names, strict=True):
+        others = macs.get(device["id"], 0) - (1 if device["base_mac"] else 0)
         rows.append([
             name, split_host_port(device["mgmt_address"])[0], device["vendor"] or "",
             device["model"] or "",
             f"{device['os_name'] or ''} {device['os_version'] or ''}".strip(),
             t(f"type.{device['device_type']}") if device["device_type"] else "",
+            Cell(device["base_mac"] or "",
+                 t("web.more_macs", count=others) if others > 0 else ""),
             device["last_collect_status"] or "", iso_z(device["last_seen"]),
         ])
     rows.sort(key=lambda row: row[0].casefold())
     columns = [(t("col.name"), "text"), (t("col.ip"), "text"), (t("col.vendor"), "text"),
                (t("col.model"), "text"), (t("col.os"), "text"), (t("col.type"), "text"),
-               (t("col.status"), "text"), (t("col.seen"), "text")]
-    keys = ["name", "ip", "vendor", "model", "os", "type", "status", "seen"]
+               (t("col.mac"), "text"), (t("col.status"), "text"), (t("col.seen"), "text")]
+    keys = ["name", "ip", "vendor", "model", "os", "type", "mac", "status", "seen"]
     return Table(columns, rows, len(rows), t("web.no_devices"),
                  help_for(t, "devices", columns, keys))
 
@@ -62,13 +76,46 @@ def _devices_and_names(loaded: LoadedConfig, repo: Repo, now: int):
 
 
 def nodes(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int) -> Table:
-    all_rows = build_view(loaded, repo, now).rows()
+    view = build_view(loaded, repo, now)
+    cfg = loaded.cfg.nodes
+    rows = []
+    for node in view.nodes:
+        vendor = view.vendor(node)
+        current = node.current_ip.ip if node.current_ip else ""
+        others = [ip.ip for ip in node.ips if node.current_ip is not ip]
+        address = Cell(current, _other_addresses(others, t))
+        dns = view.dns_name(current) if current else ""
+        positions = node.positions if cfg.positions == "all" else node.positions[:1]
+        roaming = t("web.positions", count=len(positions)) if len(positions) > 1 else ""
+        for p in positions:
+            rows.append([Cell(node.mac, roaming), vendor, address, dns,
+                         view.device_name(p.device_id),
+                         view.port_name(p.device_id, p.ifindex), str(p.vlan or ""),
+                         iso_z(p.last_seen)])
+        if not positions and cfg.include_unlocated:
+            rows.append([Cell(node.mac), vendor, address, dns, "", "", "",
+                         iso_z(node.last_seen)])
+    rows.sort(key=lambda row: (str(row[7]), text_of(row[0]), str(row[4]), str(row[5])))
+    rows.sort(key=lambda row: str(row[7]), reverse=True)
     columns = [(t("col.mac"), "text"), (t("col.vendor"), "text"), (t("col.ip"), "text"),
                (t("col.dns"), "text"), (t("col.switch"), "text"), (t("col.port"), "text"),
                (t("col.vlan"), "number"), (t("col.seen"), "text")]
     keys = ["mac", "vendor", "ip", "dns", "switch", "port", "vlan", "seen"]
-    return Table(columns, all_rows[:limit], len(all_rows), t("web.no_nodes"),
+    return Table(columns, rows[:limit], len(rows), t("web.no_nodes"),
                  help_for(t, "nodes", columns, keys, extra=["hint.nodes.click"]))
+
+
+def _other_addresses(others: list[str], t, shown: int = 2) -> str:
+    """The addresses the elected one hides, so that an IPv6-only row is never a surprise."""
+    if not others:
+        return ""
+    if len(others) <= shown:
+        return ", ".join(others)
+    return ", ".join(others[:shown]) + t("web.more_ips", count=len(others) - shown)
+
+
+def text_of(value) -> str:
+    return value.text if isinstance(value, Cell) else str(value)
 
 
 def links(loaded: LoadedConfig, repo: Repo, now: int, t) -> Table:

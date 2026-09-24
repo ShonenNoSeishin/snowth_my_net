@@ -4,11 +4,16 @@
   --accent: #2f6f5e; --stripe: #fafaf8; --hover: #eef4f1; --bad: #b3261e; --warn: #8a6100;
   color-scheme: light dark;
 }
+/* Dark: the system preference, unless the reader chose otherwise with the header button. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #15181c; --panel: #1c2026; --text: #e3e6ea; --muted: #97a0aa; --line: #2c323a;
     --accent: #7cc7ae; --stripe: #1f242a; --hover: #243029; --bad: #f2b8b5; --warn: #e0c08b;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #15181c; --panel: #1c2026; --text: #e3e6ea; --muted: #97a0aa; --line: #2c323a;
+  --accent: #7cc7ae; --stripe: #1f242a; --hover: #243029; --bad: #f2b8b5; --warn: #e0c08b;
 }
 * { box-sizing: border-box; }
 body {
@@ -76,7 +81,22 @@ details.hint dd { margin: 0; }
 .explain .dim { color: var(--muted); }
 .back { color: var(--muted); text-decoration: none; }
 .back:hover { color: var(--text); }
-form.out { margin-left: auto; }
+.tools { display: flex; gap: 10px; align-items: center; margin-left: auto; }
+.lang { color: var(--muted); text-decoration: none; font-size: 12px; letter-spacing: .04em; }
+.lang:hover { color: var(--text); }
+.lang.on { color: var(--text); text-decoration: underline; }
+button.icon {
+  all: unset; cursor: pointer; color: var(--muted); font-size: 15px; line-height: 1;
+}
+button.icon:hover { color: var(--accent); }
+button.icon:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+button.icon::after { content: "☾"; }
+:root[data-theme="dark"] button.icon::after { content: "☀"; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) button.icon::after { content: "☀"; }
+}
+td .note { color: var(--muted); font-size: 12px; }
+form.out { margin-left: 0; }
 form.out button, .login button {
   font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line);
   border-radius: 6px; padding: 5px 12px; cursor: pointer;

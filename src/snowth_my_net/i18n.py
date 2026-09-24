@@ -428,6 +428,10 @@ WEB = {
                       "l'interface en terminal."),
     "web.not_found": ("Nothing here.", "Rien ici."),
     "web.how": ("How to read this table", "Comment lire ce tableau"),
+    "web.theme": ("Light or dark", "Clair ou sombre"),
+    "web.positions": ("{count} positions", "{count} positions"),
+    "web.more_ips": (" +{count} more", " +{count} autres"),
+    "web.more_macs": ("+{count} MAC", "+{count} MAC"),
     # devices
     "hint.devices.name": (
         "sysName, cut at the first dot; ' (IP)' is added when two devices share a name. It is "
@@ -456,6 +460,12 @@ WEB = {
         "sysObjectID catalogue, the OS, or set by hand. Empty means nothing proved it.",
         "Seulement sur preuve sûre : capacités LLDP, MIB de fonction (imprimante, onduleur), "
         "catalogue de sysObjectID, système, ou réglage manuel. Vide = rien ne le prouvait."),
+    "hint.devices.mac": (
+        "Base MAC of the device (bridge or LLDP chassis). '+n MAC' means n more addresses are "
+        "known for it, one per interface: a node seen with any of them is not listed as a node.",
+        "MAC de base de l'équipement (bridge ou châssis LLDP). « +n MAC » signifie que n autres "
+        "adresses lui sont connues, une par interface : un nœud vu avec l'une d'elles n'est pas "
+        "listé comme nœud."),
     "hint.devices.status": (
         "Result of the last collect of that device: ok, partial (a table failed) or failed.",
         "Résultat de la dernière collecte de cet équipement : ok, partial (une table a échoué) "
@@ -465,21 +475,23 @@ WEB = {
     # nodes
     "hint.nodes.mac": (
         "Learnt in the MAC table of a switch (BRIDGE/Q-BRIDGE) or in the ARP/NDP cache of a "
-        "router or firewall.",
+        "router or firewall. '2 positions' means the same MAC is on several lines: its roaming "
+        "history, most recent first.",
         "Apprise dans la table MAC d'un commutateur (BRIDGE/Q-BRIDGE) ou dans le cache ARP/NDP "
-        "d'un routeur ou d'un pare-feu."),
+        "d'un routeur ou d'un pare-feu. « 2 positions » signale une MAC présente sur plusieurs "
+        "lignes : son historique d'itinérance, la plus récente d'abord."),
     "hint.nodes.vendor": (
         "IEEE registry, from the first half of the MAC. Empty for a randomised (locally "
         "administered) address, which phones and laptops now use by default.",
         "Registre IEEE, d'après la première moitié de la MAC. Vide pour une adresse aléatoire "
         "(administrée localement), ce que font aujourd'hui téléphones et portables par défaut."),
     "hint.nodes.ip": (
-        "ONE address: the most recent one seen in an ARP/NDP cache, IPv4 preferred, dropped when "
-        "another MAC claimed it later. An IPv6 alone means no IPv4 was seen recently for that "
-        "MAC — click the MAC to see every address known for it.",
-        "UNE adresse : la plus récente vue dans un cache ARP/NDP, IPv4 de préférence, écartée si "
-        "une autre MAC l'a revendiquée depuis. Une IPv6 seule signifie qu'aucune IPv4 récente "
-        "n'a été vue pour cette MAC — cliquez la MAC pour voir toutes ses adresses."),
+        "The elected address, in bold, then the other addresses known for that MAC in grey. The "
+        "elected one is the most recent seen in an ARP/NDP cache, IPv4 preferred, dropped when "
+        "another MAC claimed it later; only it is exported to devices.csv consumers.",
+        "L'adresse élue, puis en gris les autres adresses connues pour cette MAC. L'élue est la "
+        "plus récente vue dans un cache ARP/NDP, IPv4 de préférence, écartée si une autre MAC "
+        "l'a revendiquée depuis ; c'est la seule exportée vers les consommateurs de nodes.csv."),
     "hint.nodes.dns": (
         "Reverse lookup (PTR) of that address, from the cache; empty when DNS is disabled or the "
         "name does not exist.",

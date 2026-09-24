@@ -1,3 +1,20 @@
+// Light or dark, remembered in this browser only. Runs before anything else paints.
+(function () {
+  var root = document.documentElement;
+  var saved = null;
+  try { saved = localStorage.getItem("snowth_theme"); } catch (error) { saved = null; }
+  if (saved === "dark" || saved === "light") { root.dataset.theme = saved; }
+  var button = document.getElementById("theme");
+  if (!button) { return; }
+  button.addEventListener("click", function () {
+    var dark = root.dataset.theme
+      ? root.dataset.theme === "dark"
+      : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark";
+    try { localStorage.setItem("snowth_theme", root.dataset.theme); } catch (error) { /* private */ }
+  });
+})();
+
 // Filter and sort the table already rendered by the server. No request, no state.
 (function () {
   var table = document.getElementById("rows");

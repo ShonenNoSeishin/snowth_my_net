@@ -30,6 +30,10 @@ from snowth_my_net.state.db import StateError, open_db
 from snowth_my_net.state.repo import Repo
 from snowth_my_net.web import pages
 from snowth_my_net.web.auth import COOKIE, LoginLimiter, Sessions, parse_cookie, verify_password
+from snowth_my_net.web.pages import Cell
+
+LANGUAGES = ("en", "fr")
+LANG_COOKIE = "snowth_lang"
 
 log = get_logger("web")
 ASSETS = {"style.css": "text/css; charset=utf-8", "app.js": "text/javascript; charset=utf-8"}
@@ -67,8 +71,8 @@ class Site:
 
     # ----------------------------------------------------------------- login
 
-    def login_page(self, message: str = "", target: str = "/") -> bytes:
-        t = self.t
+    def login_page(self, message: str = "", target: str = "/", t=None) -> bytes:
+        t = t or self.t
         error = f'<p class="error">{esc(message)}</p>' if message else ""
         body = (f'<form class="login" method="post" action="/login">'
                 f'<input type="hidden" name="next" value="{esc(target)}">'
@@ -78,17 +82,19 @@ class Site:
                 f'<input id="password" name="password" type="password" '
                 f'autocomplete="current-password" required>'
                 f'{error}<button type="submit">{esc(t("web.sign_in"))}</button></form>')
-        return self.shell("", t("web.sign_in"), body, logged_in=False)
+        return self.shell("", t("web.sign_in"), body, logged_in=False, t=t)
 
-    def sign_in(self, form: dict, address: str) -> tuple[int, str, bytes, str | None]:
+    def sign_in(self, form: dict, address: str, t=None
+                ) -> tuple[int, str, bytes, str | None]:
         """``(status, content type, body, new session token)`` for POST /login."""
-        t = self.t
+        t = t or self.t
         target = safe_target((form.get("next") or ["/"])[0])
         waiting = self.logins.locked_for(address)
         if waiting > 0:
             log.warning("login refused for %s: too many failures", address)
             return (HTTPStatus.TOO_MANY_REQUESTS, "text/html; charset=utf-8",
-                    self.login_page(t("web.too_many", seconds=int(waiting) + 1), target), None)
+                    self.login_page(t("web.too_many", seconds=int(waiting) + 1), target, t),
+                    None)
         user = (form.get("user") or [""])[0]
         password = (form.get("password") or [""])[0]
         stored = self.accounts.get(user)
@@ -96,10 +102,14 @@ class Site:
             self.logins.failed(address)
             log.warning("failed login for %r from %s", user[:40], address)
             return (HTTPStatus.UNAUTHORIZED, "text/html; charset=utf-8",
-                    self.login_page(t("web.bad_login"), target), None)
+                    self.login_page(t("web.bad_login"), target, t), None)
         self.logins.succeeded(address)
         log.info("%s signed in from %s", user, address)
         return HTTPStatus.SEE_OTHER, target, b"", self.sessions.open(user)
+
+    def translator(self, lang: str | None) -> Translator:
+        """The language of this request: the reader's choice, else the configured one."""
+        return Translator(lang) if lang in LANGUAGES else self.t
 
     def state(self) -> Repo:
         """A fresh read-only connection: every page sees the state as it is now."""
@@ -108,15 +118,22 @@ class Site:
     # ----------------------------------------------------------------- rendering
 
     def shell(self, active: str, title: str, body: str, subtitle: str = "",
-              logged_in: bool = True) -> bytes:
-        t = self.t
+              logged_in: bool = True, t=None) -> bytes:
+        t = t or self.t
         nav = "".join(
             '<a href="{}" class="{}">{}</a>'.format(
                 page.path, "on" if page.path == active else "", esc(t(page.label_key)))
             for page in NAV) if logged_in else ""
+        tools = (f'<button type="button" id="theme" class="icon" '
+                 f'title="{esc(t("web.theme"))}" aria-label="{esc(t("web.theme"))}"></button>'
+                 + "".join(
+                     '<a class="lang{}" href="?lang={}">{}</a>'.format(
+                         " on" if code == t.lang else "", code, code.upper())
+                     for code in LANGUAGES))
         if logged_in and self.guarded:
-            nav += (f'<form class="out" method="post" action="/logout">'
-                    f'<button type="submit">{esc(t("web.sign_out"))}</button></form>')
+            tools += (f'<form class="out" method="post" action="/logout">'
+                      f'<button type="submit">{esc(t("web.sign_out"))}</button></form>')
+        nav += f'<span class="tools">{tools}</span>'
         return f"""<!doctype html>
 <html lang="{t.lang}">
 <head>
@@ -142,11 +159,11 @@ class Site:
 """.encode()
 
     def table_page(self, active: str, title: str, table: pages.Table, subtitle: str,
-                   link_first: str = "") -> bytes:
-        t = self.t
+                   link_first: str = "", t=None) -> bytes:
+        t = t or self.t
         if not table.rows:
             return self.shell(active, title, f'<p class="empty">{esc(table.empty)}</p>',
-                              subtitle)
+                              subtitle, t=t)
         head = "".join(f'<th class="{kind}"><button type="button">{esc(label)}'
                        '<span class="arrow"></span></button></th>'
                        for label, kind in table.columns)
@@ -155,9 +172,13 @@ class Site:
             cells = []
             for index, (value, (_label, kind)) in enumerate(zip(row, table.columns,
                                                                 strict=True)):
-                text = esc(value)
-                if index == 0 and link_first and value:
-                    text = f'<a href="{link_first}{quote(value, safe=":")}">{text}</a>'
+                main = value.text if isinstance(value, Cell) else str(value)
+                note = value.note if isinstance(value, Cell) else ""
+                text = esc(main)
+                if index == 0 and link_first and main:
+                    text = f'<a href="{link_first}{quote(main, safe=":")}">{text}</a>'
+                if note:
+                    text += f' <span class="note">{esc(note)}</span>'
                 cells.append(f'<td class="{kind}">{text}</td>')
             body.append("<tr>" + "".join(cells) + "</tr>")
         shown = len(table.rows)
@@ -174,24 +195,24 @@ class Site:
                     f'<span class="count" id="count">{esc(count)}</span></div>')
         table_html = (f'<div class="wrap"><table id="rows"><thead><tr>{head}</tr></thead>'
                       f'<tbody>{"".join(body)}</tbody></table></div>')
-        return self.shell(active, title, panel + controls + table_html, subtitle)
+        return self.shell(active, title, panel + controls + table_html, subtitle, t=t)
 
-    def node_page(self, mac: str) -> bytes:
-        t = self.t
+    def node_page(self, mac: str, t=None) -> bytes:
+        t = t or self.t
         with closing(self.state()) as repo:
             lines = pages.explain_lines(self.loaded, repo, self.clock.now(), mac, t)
         rendered = "\n".join(
             f'<span class="{kind}">{esc(text)}</span>' if text else "" for text, kind in lines)
         body = (f'<p><a class="back" href="/nodes">← {esc(t("web.back"))}</a></p>'
                 f'<pre class="explain">{rendered}</pre>')
-        return self.shell("/nodes", t("web.node_title", mac=mac), body)
+        return self.shell("/nodes", t("web.node_title", mac=mac), body, t=t)
 
     # ----------------------------------------------------------------- routing
 
-    def respond(self, path: str, query: dict, token: str | None = None
-                ) -> tuple[int, str, bytes]:
+    def respond(self, path: str, query: dict, token: str | None = None,
+                lang: str | None = None) -> tuple[int, str, bytes]:
         """``(status, content type, body)`` for a GET; never touches the state otherwise."""
-        t = self.t
+        t = self.translator(lang)
         now = self.clock.now()
         html_type = "text/html; charset=utf-8"
         if path.startswith("/static/"):
@@ -200,7 +221,7 @@ class Site:
             return HTTPStatus.OK, "text/plain; charset=utf-8", b"ok\n"
         if self.guarded and self.sessions.user_of(token) is None:
             if path == "/login":
-                return HTTPStatus.OK, html_type, self.login_page()
+                return HTTPStatus.OK, html_type, self.login_page(t=t)
             target = path + (("?" + "&".join(f"{k}={v[0]}" for k, v in query.items()))
                              if query else "")
             return HTTPStatus.SEE_OTHER, "/login?next=" + quote(safe_target(target), safe=""), b""
@@ -210,10 +231,10 @@ class Site:
             return self.download(path.removeprefix("/download/"))
         if path == "/node":
             mac = (query.get("mac") or [""])[0]
-            return HTTPStatus.OK, html_type, self.node_page(mac)
+            return HTTPStatus.OK, html_type, self.node_page(mac, t)
         if path not in {page.path for page in NAV}:
             return (HTTPStatus.NOT_FOUND, html_type,
-                    self.shell("/", t("web.not_found"), ""))
+                    self.shell("/", t("web.not_found"), "", t=t))
         with closing(self.state()) as repo:
             subtitle = pages.summary(self.loaded, repo, now, t)
             if path == "/":
@@ -232,7 +253,8 @@ class Site:
                 table = pages.files(self.loaded.paths.output_dir, t)
                 title = t("web.tab.files")
         link = "/node?mac=" if path == "/nodes" else ("/download/" if path == "/files" else "")
-        return HTTPStatus.OK, html_type, self.table_page(path, title, table, subtitle, link)
+        return (HTTPStatus.OK, html_type,
+                self.table_page(path, title, table, subtitle, link, t))
 
     def asset(self, name: str) -> tuple[int, str, bytes]:
         if name not in ASSETS:
@@ -305,10 +327,19 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:              # name imposed by BaseHTTPRequestHandler
         parsed = urlparse(self.path)
-        token = parse_cookie(self.headers.get("Cookie"))
+        cookies = self.headers.get("Cookie")
+        token = parse_cookie(cookies)
+        query = parse_qs(parsed.query)
+        chosen = (query.pop("lang", [""]) or [""])[0]
+        if chosen in LANGUAGES:            # the reader picked a language: remember it
+            rest = "&".join(f"{k}={v[0]}" for k, v in query.items())
+            self.finish_response(HTTPStatus.SEE_OTHER,
+                                 parsed.path + (f"?{rest}" if rest else ""), b"",
+                                 lang_cookie=chosen)
+            return
         try:
             status, content_type, body = self.server.site.respond(
-                parsed.path, parse_qs(parsed.query), token)
+                parsed.path, query, token, parse_cookie(cookies, LANG_COOKIE))
         except StateError as exc:
             status, content_type = HTTPStatus.SERVICE_UNAVAILABLE, "text/plain; charset=utf-8"
             body = f"{exc}\n".encode()
@@ -331,7 +362,9 @@ class Handler(BaseHTTPRequestHandler):
             site.sessions.close(token)
             self.finish_response(HTTPStatus.SEE_OTHER, "/login", b"", clear_cookie=True)
             return
-        status, where, body, new_token = site.sign_in(form, self.address_string())
+        status, where, body, new_token = site.sign_in(
+            form, self.address_string(),
+            site.translator(parse_cookie(self.headers.get("Cookie"), LANG_COOKIE)))
         self.finish_response(status, where, body, set_cookie=new_token)
 
     def read_form(self) -> dict:
@@ -341,7 +374,8 @@ class Handler(BaseHTTPRequestHandler):
         return parse_qs(self.rfile.read(length).decode("utf-8", errors="replace"))
 
     def finish_response(self, status: int, content_type: str, body: bytes,
-                        set_cookie: str | None = None, clear_cookie: bool = False) -> None:
+                        set_cookie: str | None = None, clear_cookie: bool = False,
+                        lang_cookie: str | None = None) -> None:
         """A 303 puts the target in ``content_type``; anything else is a normal answer."""
         self.send_response(status)
         if status == HTTPStatus.SEE_OTHER:
@@ -357,6 +391,9 @@ class Handler(BaseHTTPRequestHandler):
             value = f"{COOKIE}={set_cookie}; {flags}" if set_cookie else (
                 f"{COOKIE}=; Max-Age=0; {flags}")
             self.send_header("Set-Cookie", value)
+        if lang_cookie:
+            self.send_header("Set-Cookie", f"{LANG_COOKIE}={lang_cookie}; Path=/; Max-Age=31536000"
+                                           "; SameSite=Lax")
         self.send_security_headers()
         self.end_headers()
         self.wfile.write(body)

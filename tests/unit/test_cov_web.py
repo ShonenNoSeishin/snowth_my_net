@@ -323,6 +323,66 @@ def test_the_columns_of_a_page_match_its_explanations(tmp_path):
 
 def test_the_nodes_help_answers_the_ipv6_and_empty_switch_questions(site):
     _status, _type, body = get(site, "/nodes")
-    assert "IPv6" in body and "IPv4" in body              # why a row shows only an IPv6
+    assert "IPv4" in body                                 # how the shown address is elected
     assert ("cache ARP" in body or "ARP cache" in body)   # why Switch can be empty
-    assert ("uplinks" in body)
+    assert "uplinks" in body
+
+
+def test_a_node_shows_its_other_addresses_next_to_the_elected_one(site):
+    """D's IPv4 was claimed by another MAC, so an IPv6 is elected: the rest stays visible."""
+    from tests.unit.test_cov_views import D
+
+    _status, _type, body = get(site, "/nodes")
+    row = next(line for line in body.split("<tr>") if D in line)
+    assert "2001:db8::60" in row                           # the elected address
+    assert '<span class="note">' in row and "192.0.2.60" in row   # the ones it hides
+
+
+def test_a_roaming_mac_says_so_on_every_one_of_its_rows(site):
+    from tests.unit.test_cov_views import D
+
+    _status, _type, body = get(site, "/nodes")
+    rows = [line for line in body.split("<tr>") if D in line]
+    assert len(rows) > 1                                   # D moved from sw2 to sw1
+    assert all("positions" in row for row in rows)
+
+
+def test_a_device_known_by_several_macs_says_how_many(site):
+    _status, _type, body = get(site, "/")
+    assert "+" in body and "MAC" in body
+
+
+def test_the_reader_can_switch_language_and_it_is_remembered(server):
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *args):
+            return None
+
+    opener = urllib.request.build_opener(NoRedirect())
+    with pytest.raises(urllib.error.HTTPError) as caught:
+        opener.open(server + "/nodes?lang=en")
+    assert caught.value.code == 303
+    assert caught.value.headers["Location"] == "/nodes"
+    assert "snowth_lang=en" in caught.value.headers["Set-Cookie"]
+
+    request = urllib.request.Request(server + "/", headers={"Cookie": "snowth_lang=en"})
+    with urllib.request.urlopen(request) as response:
+        assert "Devices" in response.read().decode()
+    request = urllib.request.Request(server + "/", headers={"Cookie": "snowth_lang=fr"})
+    with urllib.request.urlopen(request) as response:
+        page = response.read().decode()
+    assert "Équipements" in page and 'href="?lang=en"' in page
+
+
+def test_an_unknown_language_is_ignored(server):
+    request = urllib.request.Request(server + "/", headers={"Cookie": "snowth_lang=xx"})
+    with urllib.request.urlopen(request) as response:
+        assert response.status == 200                     # falls back to the configured one
+
+
+def test_the_theme_button_is_there_for_the_browser_to_use(server):
+    with urllib.request.urlopen(server + "/") as response:
+        page = response.read().decode()
+    assert 'id="theme"' in page
+    with urllib.request.urlopen(server + "/static/app.js") as response:
+        script = response.read().decode()
+    assert "snowth_theme" in script and "prefers-color-scheme" in script

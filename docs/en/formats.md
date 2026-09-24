@@ -44,7 +44,7 @@ the most recent line as the current position; the other lines are its roaming hi
 |---|---|
 | MAC Address | Lowercase with colons. Broadcast, multicast, zero, VRRP/HSRP virtual MACs and MACs of polled devices are excluded. |
 | Vendor | IEEE registry (MA-L/MA-M/MA-S), cleaned; empty for locally administered (random) MACs. |
-| IP Address | Current IP of the MAC: most recently seen, not claimed later by another MAC, IPv4 first. |
+| IP Address | Current IP of the MAC: among the addresses no other MAC claimed since, those seen within `nodes.current_ip_window` (24 h) of the most recent one, IPv4 first. An IPv6 alone means no recent IPv4 is known: raise `current_ip_window` (say `30d`) so that an IPv4 wins whenever one exists within the retention. Every address of a MAC stays in `snapshot.json` and in the web interface. |
 | DNS Name | PTR name of that IP (cached). |
 | Switch | Exactly a `Device Name` of `devices.csv`; empty when no access port is known. |
 | Port | Short interface name (`Gi1/0/5`, `1/1/12`, `ge-0/0/3`). |
