@@ -21,7 +21,8 @@ def documented() -> dict[str, str]:
 def test_every_compose_variable_is_documented_with_its_default():
     used = dict(USED.findall(COMPOSE))
     assert set(used) == {"SNOWTH_VERSION", "SNOWTH_UID", "SNOWTH_GID", "TZ",
-                         "SNOWTH_COLLECT_ON_START", "SNOWTH_WEB_PORT", "SNOWTH_WEB_BIND"}
+                         "SNOWTH_COLLECT_ON_START", "SNOWTH_HTTP_PORT", "SNOWTH_HTTPS_PORT",
+                         "SNOWTH_TLS_HOSTS"}
     known = documented()
     assert [name for name in used if name not in known] == []
     mismatched = {name: (default, known[name]) for name, default in used.items()
@@ -50,3 +51,14 @@ def test_compose_needs_no_editing_to_add_a_secret():
     assert "\nsecrets:" not in COMPOSE                  # no per-site secret declarations
     assert COMPOSE.count("./secrets:/run/secrets:ro") == 2   # both services, whole directory
     assert (ROOT / ".gitignore").read_text().count("compose.override.yml") == 1
+
+
+def test_the_interface_is_only_reachable_through_the_tls_front():
+    """Nothing publishes the interface in clear: the proxy is the way in."""
+    import yaml
+
+    services = yaml.safe_load(COMPOSE)["services"]
+    assert services["nginx"]["build"]["context"] == "./nginx"
+    assert "ports" not in services["web"]                    # no clear-text port on the host
+    assert len(services["nginx"]["ports"]) == 2              # 80 (redirect) and 443
+    assert "--trusted-proxy" in services["web"]["command"]   # the reader's own address is kept

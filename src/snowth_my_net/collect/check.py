@@ -18,6 +18,7 @@ from snowth_my_net.collect.model import DeviceResult, Identification
 from snowth_my_net.collect.tables.system import IDENTITY_OIDS, parse_system
 from snowth_my_net.config.effective import settings_for
 from snowth_my_net.config.loader import LoadedConfig, ResolvedCredential
+from snowth_my_net.config.schema import LOOPBACK
 from snowth_my_net.drivers.base import fill_identity
 from snowth_my_net.snmp import oids
 from snowth_my_net.snmp.client import EnginePool, SnmpClient, SnmpError
@@ -225,7 +226,7 @@ def config_warnings(loaded: LoadedConfig) -> list[str]:
         warnings.append("discovery.allowed is empty: only the seeds will ever be polled")
     warnings += hook_warnings(loaded)
     web = cfg.web
-    if not web.auth.users and web.bind not in ("127.0.0.1", "::1", "localhost"):
+    if not web.auth.users and web.bind not in LOOPBACK:
         warnings.append(f"web.bind is {web.bind} with no account in web.auth.users: anyone who "
                         "reaches that address sees the whole inventory")
     warnings += web.auth.check()

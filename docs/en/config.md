@@ -245,6 +245,7 @@ Read-only web interface (`snowth_my_net web`, or the `web` service of Compose), 
 | `web.auth.users[].name` | required | User name typed in the login form. A name alone is enough: the first password is invented and logged, then `web passwd` changes it. |
 | `web.auth.users[].password_file` | | Optional: a file holding the hash printed by `snowth_my_net web --hash-password` (relative to `general.secrets_dir`), for a password managed outside the tool. |
 | `web.auth.users[].password_env` | | The same hash, from an environment variable. Never both forms at once. |
+| `web.trusted_proxies` | `[]` | Networks of the reverse proxies allowed to state the reader's address in `X-Forwarded-For` (and `X-Forwarded-Proto`). Anyone else is ignored. `--trusted-proxy CIDR` overrides it for one run. |
 | `web.auth.session_hours` | `12` | Lifetime of a session; sessions live in the process and are lost on restart. |
 
 ## `hooks`

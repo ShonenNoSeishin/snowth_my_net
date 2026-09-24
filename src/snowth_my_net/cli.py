@@ -27,7 +27,7 @@ from snowth_my_net.collect.probe import ProbeInputError
 from snowth_my_net.config.effective import settings_for
 from snowth_my_net.config.loader import LoadedConfig, find_config, load_config
 from snowth_my_net.config.manual import ManualError, normalize_address
-from snowth_my_net.config.validate import ConfigError
+from snowth_my_net.config.validate import ConfigError, parse_network
 from snowth_my_net.export.atomic import atomic_write
 from snowth_my_net.export.naming import base_name
 from snowth_my_net.export.run import export, exported_devices
@@ -1143,6 +1143,8 @@ def cmd_web(args: argparse.Namespace) -> int:
     loaded = load(args)
     if args.action == "passwd":
         return _set_web_password(loaded, args.user)
+    if args.trusted_proxy:
+        loaded.cfg.web.trusted_proxies = [parse_network(value) for value in args.trusted_proxy]
     return serve(loaded, args.bind, args.port)
 
 
@@ -1401,6 +1403,9 @@ def build_parser() -> argparse.ArgumentParser:
                        help="serve the read-only web interface (web: in the configuration)")
     p.add_argument("--bind", help="address to listen on (default web.bind: 127.0.0.1)")
     p.add_argument("--port", type=int, help="port to listen on (default web.port: 8080)")
+    p.add_argument("--trusted-proxy", action="append", metavar="CIDR", dest="trusted_proxy",
+                   help="a reverse proxy allowed to state the reader's address in "
+                        "X-Forwarded-For (repeatable; default web.trusted_proxies)")
     p.add_argument("action", nargs="?", choices=["passwd"],
                    help="passwd: set the password of an account, in place")
     p.add_argument("user", nargs="?", help="the account of 'passwd' (default: the only one)")

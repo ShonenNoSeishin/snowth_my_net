@@ -555,6 +555,9 @@ class WebAuthCfg:
         return errs
 
 
+LOOPBACK = ("127.0.0.1", "::1", "localhost")   # addresses only this machine can reach
+
+
 @dataclass
 class WebCfg:
     """Read-only web interface (``snowth_my_net web``)."""
@@ -563,6 +566,7 @@ class WebCfg:
     port: int = 8080
     node_limit: int = 2000           # rows sent to the browser on the Nodes page
     auth: WebAuthCfg = field(default_factory=WebAuthCfg)
+    trusted_proxies: list[Network] = field(default_factory=list)   # who may set X-Forwarded-For
 
     def check(self) -> list[str]:
         errs = []

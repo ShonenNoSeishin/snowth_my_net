@@ -274,7 +274,10 @@ def test_an_empty_form_is_a_failed_login(guarded):
 
 
 def test_the_cookie_is_marked_secure_behind_a_tls_proxy(guarded):
-    base, _site = guarded
+    from ipaddress import ip_network
+
+    base, site = guarded
+    site.proxies = [ip_network("127.0.0.1/32")]             # the front is trusted to say so
     data = urllib.parse.urlencode({"user": "alice", "password": PASSWORD}).encode()
     request = urllib.request.Request(base + "/login", data=data,
                                      headers={"X-Forwarded-Proto": "https"})
@@ -289,6 +292,11 @@ def test_the_cookie_is_marked_secure_behind_a_tls_proxy(guarded):
     assert caught.value.code == HTTPStatus.SEE_OTHER
     cookie = caught.value.headers["Set-Cookie"]
     assert "Secure" in cookie and "HttpOnly" in cookie and "SameSite=Strict" in cookie
+    site.proxies = []                                        # an untrusted claim is ignored
+    with pytest.raises(urllib.error.HTTPError) as caught:
+        opener.open(urllib.request.Request(base + "/login", data=data,
+                                           headers={"X-Forwarded-Proto": "https"}))
+    assert "Secure" not in caught.value.headers["Set-Cookie"]
 
 
 def test_check_warns_when_it_listens_wide_open_without_accounts(tmp_path):
@@ -349,3 +357,58 @@ def test_the_log_says_whether_the_account_or_the_password_is_wrong(tmp_path, cap
     messages = [record.getMessage() for record in caplog.records]
     assert any("wrong password" in m and "10.0.0.1" in m for m in messages)
     assert any("no such account" in m and "10.0.0.2" in m for m in messages)
+
+
+# --------------------------------------------------------------------------- behind a proxy
+
+
+def proxied(tmp_path, *networks: str):
+    from ipaddress import ip_network
+
+    site = Site(guarded_config(tmp_path), FixedClock())
+    site.proxies = [ip_network(value) for value in networks]
+    return site
+
+
+def test_without_a_trusted_proxy_the_header_is_ignored(tmp_path):
+    site = proxied(tmp_path)
+    assert site.caller("10.0.0.9", "203.0.113.7") == "10.0.0.9"
+
+
+def test_a_trusted_proxy_states_the_readers_address(tmp_path):
+    site = proxied(tmp_path, "172.16.0.0/12")
+    assert site.caller("172.18.0.5", "10.1.50.121") == "10.1.50.121"
+    assert site.caller("172.18.0.5", None) == "172.18.0.5"        # no header: the peer
+    assert site.caller("172.18.0.5", "  ") == "172.18.0.5"        # an empty one too
+
+
+def test_a_chain_of_proxies_yields_the_last_address_outside_them(tmp_path):
+    site = proxied(tmp_path, "172.16.0.0/12", "10.0.0.0/8")
+    assert site.caller("172.18.0.5", "203.0.113.7, 10.0.0.2, 172.18.0.5") == "203.0.113.7"
+    assert site.caller("172.18.0.5", "10.0.0.2") == "172.18.0.5"  # nothing but proxies
+
+
+def test_only_the_declared_proxy_is_believed(tmp_path):
+    """Anyone else stating an address would dodge the failure limiter by inventing one."""
+    site = proxied(tmp_path, "172.16.0.0/12")
+    assert site.caller("10.1.50.121", "1.2.3.4") == "10.1.50.121"
+    assert site.caller("not-an-address", "1.2.3.4") == "not-an-address"
+    assert site.caller("172.18.0.5", "not-an-address") == "not-an-address"
+
+
+def test_an_ipv6_proxy_does_not_match_an_ipv4_network(tmp_path):
+    site = proxied(tmp_path, "172.16.0.0/12")
+    assert site.caller("2001:db8::1", "1.2.3.4") == "2001:db8::1"
+
+
+def test_the_failure_limiter_counts_the_reader_not_the_proxy(tmp_path):
+    site = proxied(tmp_path, "172.16.0.0/12")
+    for _ in range(auth.MAX_FAILURES):
+        site.sign_in({"user": ["alice"], "password": ["faux"]},
+                     site.caller("172.18.0.5", "10.1.50.121"))
+    locked = site.sign_in({"user": ["alice"], "password": [PASSWORD]},
+                          site.caller("172.18.0.5", "10.1.50.121"))
+    assert locked[0] == HTTPStatus.TOO_MANY_REQUESTS
+    other = site.sign_in({"user": ["alice"], "password": [PASSWORD]},
+                         site.caller("172.18.0.5", "10.1.50.122"))
+    assert other[0] == HTTPStatus.SEE_OTHER          # another reader is not locked out

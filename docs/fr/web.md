@@ -9,11 +9,12 @@ snowth_my_net web                     # http://127.0.0.1:8080
 snowth_my_net web --bind 0.0.0.0 --port 9000
 ```
 
-Avec Docker Compose, c'est le service `web`, publié sur la boucle locale de l'hôte :
+Avec Docker Compose, c'est le service `web`, atteint à travers le service `nginx` qui termine
+le TLS devant lui :
 
 ```bash
-docker compose up -d web              # http://127.0.0.1:8080
-SNOWTH_WEB_PORT=9000 docker compose up -d web
+docker compose up -d                  # https://<host>:8443 (http://<host>:8080 y redirige)
+SNOWTH_HTTPS_PORT=9443 docker compose up -d
 ```
 
 ## Ce qu'elle montre
@@ -173,10 +174,47 @@ sudo systemctl enable --now snowth-web.service
 Le répertoire d'état est accessible en écriture parce que SQLite en a besoin même pour lire
 (`-shm`, `-wal`) ; l'interface, elle, n'écrit jamais.
 
-## Derrière un proxy inverse
+## La façade TLS
+
+La pile Compose répond sur `https://<host>:8443`, et y redirige `http://<host>:8080`. Les deux
+ports se règlent dans `.env` (`SNOWTH_HTTPS_PORT`, `SNOWTH_HTTP_PORT`), et l'interface elle-même
+n'est publiée nulle part : le proxy est la seule porte d'entrée.
+
+Le certificat est **auto-signé**, généré au premier démarrage et conservé dans le volume
+`certs_web`. Dites pour qui avant ce premier démarrage, pour qu'il corresponde au moins à
+l'adresse que les gens saisissent :
+
+```bash
+SNOWTH_TLS_HOSTS=inventory.example.net,192.0.2.10,localhost,127.0.0.1
+```
+
+Soyons honnêtes sur ce qu'il apporte : il cache le mot de passe et le témoin de session à qui
+écoute le réseau, et le navigateur avertira à chaque visite parce que rien ne le cautionne. Pour
+faire disparaître l'avertissement, remplacez `server.crt` et `server.key` dans ce volume par un
+certificat signé par votre propre autorité, ou par Let's Encrypt — nginx lit les deux mêmes
+chemins :
+
+```bash
+docker compose cp votre.crt nginx:/etc/nginx/certs/server.crt
+docker compose cp votre.key nginx:/etc/nginx/certs/server.key
+docker compose restart nginx
+```
+
+### L'adresse du lecteur
+
+Sans précaution, l'interface verrait toutes les requêtes venir du proxy : une seule adresse dans
+le journal pour tout le monde, et cinq mauvais mots de passe verrouillant tout le monde. Le
+service `web` est donc lancé avec `--trusted-proxy 172.16.0.0/12` (là où Docker place ses
+réseaux bridge), et la façade annonce dans `X-Forwarded-For` l'adresse à laquelle elle parle. Un
+en-tête venant de quelqu'un d'autre est ignoré — c'est la même clé qui empêche un lecteur
+d'inventer une adresse pour contourner le verrou. La clé de configuration est
+`web.trusted_proxies`.
+
+### Votre propre proxy à la place
 
 Les pages utilisent des liens absolus depuis la racine (`/nodes`, `/static/style.css`) :
-servez-la à la racine d'un nom d'hôte plutôt que sous un sous-chemin.
+servez-la à la racine d'un nom d'hôte plutôt que sous un sous-chemin, et passez
+`X-Forwarded-Proto: https` pour que le témoin de session soit marqué `Secure` :
 
 ```nginx
 server {
@@ -184,8 +222,8 @@ server {
     location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;
-        auth_basic "snowth_my_net";
-        auth_basic_user_file /etc/nginx/snowth.htpasswd;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
     }
 }
 ```

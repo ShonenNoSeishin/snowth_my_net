@@ -63,7 +63,10 @@ services:
       target: runtime
     image: snowth_my_net:${SNOWTH_VERSION:-latest}
     user: "${SNOWTH_UID:-10001}:${SNOWTH_GID:-10001}"
-    command: ["web", "--bind", "0.0.0.0", "--port", "8080"]
+    # 172.16.0.0/12 is where Docker puts its bridge networks: the interface then reads the
+    # reader's own address from X-Forwarded-For instead of seeing every request come from nginx
+    # (it would otherwise log one address for everybody, and lock everybody out together).
+    command: ["web", "--bind", "0.0.0.0", "--port", "8080", "--trusted-proxy", "172.16.0.0/12"]
     environment:
       TZ: ${TZ:-UTC}
     volumes:
@@ -72,14 +75,47 @@ services:
       - ./secrets:/run/secrets:ro
       - ./data:/var/lib/snowth_my_net          # read-only queries, but SQLite needs the mount
       - ./output:/output:ro
-    # Published on the loopback only. Declare an account under web.auth.users and put a TLS
-    # reverse proxy in front of it before opening it wider (SNOWTH_WEB_BIND in .env).
-    ports:
-      - "${SNOWTH_WEB_BIND:-127.0.0.1}:${SNOWTH_WEB_PORT:-8080}:8080"
+    # No "ports:": the nginx service below is the way in, over TLS. To reach the interface in
+    # clear anyway (an SSH tunnel, another proxy), add the mapping in a compose.override.yml.
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c",
              "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz')"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+
+  # TLS front. It generates a self-signed certificate on first start (kept in a volume), so a
+  # browser warns once: it protects the password and the session cookie from a passive listener,
+  # it does not prove who answers. Drop your own certificate in the volume, or point it at one
+  # from your CA, to get rid of the warning.
+  nginx:
+    build:
+      context: ./nginx
+    image: snowth_my_net-nginx:${SNOWTH_VERSION:-latest}
+    environment:
+      TZ: ${TZ:-UTC}
+      SNOWTH_HTTPS_PORT: ${SNOWTH_HTTPS_PORT:-8443}    # for the redirect from the clear port
+      SNOWTH_TLS_HOSTS: ${SNOWTH_TLS_HOSTS:-localhost,127.0.0.1}
+    ports:
+      - "${SNOWTH_HTTP_PORT:-8080}:80"                 # redirects to the address below
+      - "${SNOWTH_HTTPS_PORT:-8443}:443"
+    volumes:
+      - certs_web:/etc/nginx/certs
+    depends_on:
+      - web
+    restart: unless-stopped
+    security_opt:
+      - "no-new-privileges:true"
+    init: true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "--no-check-certificate",
+             "https://127.0.0.1/healthz"]
       interval: 1m
       timeout: 10s
       retries: 3
@@ -125,6 +161,7 @@ services:
 
 volumes:
   certs: {}
+  certs_web: {}        # the TLS certificate of the interface, generated on first start
 
 networks:
   testnet:

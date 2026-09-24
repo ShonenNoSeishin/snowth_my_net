@@ -8,11 +8,12 @@ snowth_my_net web                     # http://127.0.0.1:8080
 snowth_my_net web --bind 0.0.0.0 --port 9000
 ```
 
-With Docker Compose it is the `web` service, published on the loopback of the host:
+With Docker Compose it is the `web` service, reached through the `nginx` service that
+terminates TLS in front of it:
 
 ```bash
-docker compose up -d web              # http://127.0.0.1:8080
-SNOWTH_WEB_PORT=9000 docker compose up -d web
+docker compose up -d                  # https://<host>:8443 (http://<host>:8080 redirects there)
+SNOWTH_HTTPS_PORT=9443 docker compose up -d
 ```
 
 ## What it shows
@@ -172,10 +173,45 @@ sudo systemctl enable --now snowth-web.service
 The state directory is writable because SQLite needs it even to read (`-shm`, `-wal`); the
 interface itself never writes.
 
-## Behind a reverse proxy
+## The TLS front
 
-The pages use absolute links from the root (`/nodes`, `/static/style.css`), so serve it at the
-root of a host name rather than under a sub-path:
+The Compose stack answers on `https://<host>:8443`, and redirects `http://<host>:8080` there.
+Both ports are `.env` matters (`SNOWTH_HTTPS_PORT`, `SNOWTH_HTTP_PORT`), and the interface
+itself is published nowhere: the proxy is the only way in.
+
+The certificate is **self-signed**, generated on the first start and kept in the `certs_web`
+volume. Say who it is for before that first start, so that it at least matches the address
+people type:
+
+```bash
+SNOWTH_TLS_HOSTS=inventory.example.net,192.0.2.10,localhost,127.0.0.1
+```
+
+Be honest about what it buys: it hides the password and the session cookie from anyone
+listening on the network, and browsers will warn on every visit because nothing vouches for it.
+To get rid of the warning, replace `server.crt` and `server.key` in that volume with a
+certificate signed by your own CA, or by Let's Encrypt — nginx reads the same two paths:
+
+```bash
+docker compose cp your.crt nginx:/etc/nginx/certs/server.crt
+docker compose cp your.key nginx:/etc/nginx/certs/server.key
+docker compose restart nginx
+```
+
+### The reader's own address
+
+The interface would otherwise see every request come from the proxy: one address in the log for
+everybody, and five wrong passwords locking everybody out. So the `web` service is started with
+`--trusted-proxy 172.16.0.0/12` (where Docker puts its bridge networks), and the front states
+the address it is talking to in `X-Forwarded-For`. A header from anyone else is ignored — the
+same key is what stops a reader from inventing an address to dodge the limiter. The
+configuration key is `web.trusted_proxies`.
+
+### Your own proxy instead
+
+The pages use absolute links from the root (`/nodes`, `/static/style.css`), so serve the
+interface at the root of a host name rather than under a sub-path, and pass
+`X-Forwarded-Proto: https` so that the session cookie is marked `Secure`:
 
 ```nginx
 server {
@@ -183,8 +219,8 @@ server {
     location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;
-        auth_basic "snowth_my_net";
-        auth_basic_user_file /etc/nginx/snowth.htpasswd;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
     }
 }
 ```

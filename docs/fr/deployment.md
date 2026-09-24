@@ -128,8 +128,9 @@ plus ancienne que deux fois le plus long intervalle de `schedule.collect` (ou qu
 
 ## 2. Docker Compose
 
-Deux services : `snowth` fait tourner [supercronic](https://github.com/aptible/supercronic)
-(compatible cron, journaux sur stdout, sans root), et `web` sert l'interface en lecture seule. Au démarrage, il génère la crontab à partir de
+Trois services : `snowth` fait tourner [supercronic](https://github.com/aptible/supercronic)
+(compatible cron, journaux sur stdout, sans root), `web` sert l'interface en lecture seule, et
+`nginx` termine le TLS devant elle — l'interface elle-même n'est publiée nulle part. Au démarrage, il génère la crontab à partir de
 `schedule:` — aucune crontab à maintenir sur l'hôte — et lance une collecte.
 
 ```bash
@@ -145,7 +146,7 @@ printf '%s' 'the-v3-priv-key' > secrets/snmp_v3_priv
 printf '%s' 'the-push-token'  > secrets/cmdb_token
 chmod 600 secrets/*
 docker compose run --rm snowth check
-docker compose up -d
+docker compose up -d                          # https://<host>:8443 pour l'interface web
 ```
 
 Dans `config/snowth_my_net.yml`, les fichiers de secrets sont désignés par leur nom

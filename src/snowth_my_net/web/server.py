@@ -18,12 +18,14 @@ from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
+from ipaddress import ip_address
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
 
 from snowth_my_net import __version__
 from snowth_my_net.clock import Clock
 from snowth_my_net.config.loader import LoadedConfig
+from snowth_my_net.config.schema import LOOPBACK
 from snowth_my_net.i18n import Translator, detect_language
 from snowth_my_net.logs import get_logger
 from snowth_my_net.state.db import StateError, open_db
@@ -82,7 +84,30 @@ class Site:
         self.writing = threading.Lock()
         self.sessions = Sessions(lifetime=loaded.cfg.web.auth.session_hours * 3600)
         self.logins = LoginLimiter()
+        self.proxies = list(loaded.cfg.web.trusted_proxies)
         self.bootstrap()
+
+    def caller(self, peer: str, forwarded: str | None) -> str:
+        """The reader's address: the peer, unless a trusted proxy stated another one.
+
+        Behind the bundled TLS front every request comes from the same container. Without this,
+        one address would be logged for everybody and five wrong passwords would lock out
+        everybody; with it, a header from anyone else is still ignored.
+        """
+        if not (self.proxies and forwarded and self.trusts(peer)):
+            return peer
+        for candidate in reversed([part.strip() for part in forwarded.split(",")]):
+            if candidate and not self.trusts(candidate):
+                return candidate
+        return peer
+
+    def trusts(self, address: str) -> bool:
+        try:
+            parsed = ip_address(address)
+        except ValueError:
+            return False
+        return any(parsed in network for network in self.proxies
+                   if parsed.version == network.version)
 
     @property
     def guarded(self) -> bool:
@@ -488,7 +513,7 @@ class Handler(BaseHTTPRequestHandler):
             status, where, body = site.change_password(user, form, lang)
             self.finish_response(status, where, body)
             return
-        status, where, body, new_token = site.sign_in(form, self.address_string(), lang)
+        status, where, body, new_token = site.sign_in(form, self.caller(), lang)
         self.finish_response(status, where, body, set_cookie=new_token)
 
     def read_form(self) -> dict:
@@ -510,7 +535,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         if set_cookie or clear_cookie:
             flags = "Path=/; HttpOnly; SameSite=Strict"
-            if self.headers.get("X-Forwarded-Proto") == "https":
+            if self.secure_request():
                 flags += "; Secure"        # behind a TLS proxy the cookie never leaves it
             value = f"{COOKIE}={set_cookie}; {flags}" if set_cookie else (
                 f"{COOKIE}=; Max-Age=0; {flags}")
@@ -530,8 +555,18 @@ class Handler(BaseHTTPRequestHandler):
                          "default-src 'none'; style-src 'self'; script-src 'self'; "
                          "img-src 'self' data:; form-action 'self'; frame-ancestors 'none'")
 
+    def caller(self) -> str:
+        site = self.server.site
+        return site.caller(self.address_string(), self.headers.get("X-Forwarded-For"))
+
+    def secure_request(self) -> bool:
+        """True when the reader's own connection was TLS, as a trusted proxy states it."""
+        site = self.server.site
+        return (self.headers.get("X-Forwarded-Proto") == "https"
+                and site.trusts(self.address_string()))
+
     def log_message(self, fmt: str, *args: object) -> None:
-        log.info("%s %s", self.address_string(), fmt % args)
+        log.info("%s %s", self.caller(), fmt % args)
 
 
 class WebServer(ThreadingHTTPServer):
@@ -555,6 +590,9 @@ def serve(loaded: LoadedConfig, bind: str | None = None, port: int | None = None
     server = build(loaded, bind, port)
     host, listening = server.server_address[:2]
     log.info("web interface on http://%s:%s (read-only; Ctrl+C to stop)", host, listening)
+    if not server.site.guarded and str(host) not in LOOPBACK:
+        log.warning("listening on %s with no account in web.auth.users: everyone who reaches "
+                    "this address sees the whole inventory", host)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:

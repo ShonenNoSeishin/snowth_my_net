@@ -124,8 +124,9 @@ the longest gap of `schedule.collect` (or `schedule.health_max_age`).
 
 ## 2. Docker Compose
 
-Two services: `snowth` runs [supercronic](https://github.com/aptible/supercronic) (cron-compatible,
-logs on stdout, no root), and `web` serves the read-only interface. At start-up it generates the crontab from `schedule:` — no crontab to
+Three services: `snowth` runs [supercronic](https://github.com/aptible/supercronic)
+(cron-compatible, logs on stdout, no root), `web` serves the read-only interface, and `nginx`
+terminates TLS in front of it — the interface itself is published nowhere. At start-up it generates the crontab from `schedule:` — no crontab to
 maintain on the host — and runs one collect.
 
 ```bash
@@ -141,7 +142,7 @@ printf '%s' 'the-v3-priv-key' > secrets/snmp_v3_priv
 printf '%s' 'the-push-token'  > secrets/cmdb_token
 chmod 600 secrets/*
 docker compose run --rm snowth check
-docker compose up -d
+docker compose up -d                          # https://<host>:8443 for the web interface
 ```
 
 In `config/snowth_my_net.yml`, secret files are referenced by name (`auth_key_file: snmp_v3_auth`):

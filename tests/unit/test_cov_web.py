@@ -257,8 +257,12 @@ def test_serve_stops_cleanly_on_interrupt(tmp_path, monkeypatch):
 
     closed = []
 
+    class FakeSite:
+        guarded = False
+
     class FakeServer:
         server_address = ("127.0.0.1", 8080)
+        site = FakeSite()
 
         def serve_forever(self):        # pragma: no cover - the fake thread never runs it
             raise AssertionError("not reached")
@@ -283,6 +287,42 @@ def test_serve_stops_cleanly_on_interrupt(tmp_path, monkeypatch):
     monkeypatch.setattr(server_module.threading, "Thread", FakeThread)
     assert server_module.serve(make_loaded(tmp_path)) == 0
     assert closed == ["shutdown", "close"]
+
+
+def test_listening_wide_open_without_accounts_is_said_out_loud(tmp_path, monkeypatch, caplog):
+    from snowth_my_net.web import server as server_module
+
+    class FakeSite:
+        guarded = False
+
+    class FakeServer:
+        server_address = ("0.0.0.0", 8080)
+        site = FakeSite()
+
+        def serve_forever(self):        # pragma: no cover - the fake thread never runs it
+            raise AssertionError("not reached")
+
+        def shutdown(self):
+            pass
+
+        def server_close(self):
+            pass
+
+    class FakeThread:
+        def __init__(self, target, daemon):
+            pass
+
+        def start(self):
+            pass
+
+        def join(self):
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(server_module, "build", lambda *a, **k: FakeServer())
+    monkeypatch.setattr(server_module.threading, "Thread", FakeThread)
+    with caplog.at_level("WARNING"):
+        assert server_module.serve(make_loaded(tmp_path)) == 0
+    assert "no account" in "\n".join(r.getMessage() for r in caplog.records)
 
 
 def test_each_page_explains_where_its_columns_come_from(site):
