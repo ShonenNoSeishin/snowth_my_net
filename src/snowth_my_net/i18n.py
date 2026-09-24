@@ -550,6 +550,21 @@ WEB = {
     "web.bad_login": ("Wrong user or password.", "Utilisateur ou mot de passe incorrect."),
     "web.too_many": ("Too many attempts. Try again in {seconds} s.",
                      "Trop de tentatives. Réessayez dans {seconds} s."),
+    "web.password.title": ("Your password", "Votre mot de passe"),
+    "web.password.new": ("New password", "Nouveau mot de passe"),
+    "web.password.again": ("New password (again)", "Nouveau mot de passe (à nouveau)"),
+    "web.password.save": ("Save", "Enregistrer"),
+    "web.password.rule": ("At least {min} characters.", "Au moins {min} caractères."),
+    "web.password.mismatch": ("The two passwords differ.",
+                              "Les deux mots de passe sont différents."),
+    "web.password.forced": ("Choose your own password to go on: this one was invented by the "
+                            "interface and printed in the log.",
+                            "Choisissez votre propre mot de passe pour continuer : celui-ci a "
+                            "été inventé par l'interface et écrit dans le journal."),
+    "web.password.from_file": ("The password of this account comes from a file set in the "
+                               "configuration (password_file): change it there.",
+                               "Le mot de passe de ce compte vient d'un fichier indiqué dans la "
+                               "configuration (password_file) : changez-le là."),
 }
 STRINGS.update(WEB)
 

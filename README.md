@@ -97,7 +97,7 @@ Details, systemd units, hardening and networking: [docs/en/deployment.md](docs/e
 | `cron print [--format crontab\|cron.d\|supercronic]` | Scheduler lines from `schedule:` |
 | `health [--max-age]` | Exit 1 when the last successful collect is too old |
 | `tui` | Terminal interface |
-| `web [--bind] [--port] [--hash-password]` | Read-only web interface (devices, nodes, links, runs, files), with optional accounts |
+| `web [--bind] [--port]`, `web passwd [USER]` | Read-only web interface (devices, nodes, links, runs, files), with optional accounts |
 
 Every command accepts `--json` (scripts), `--config`, `--log-level`, `--log-file`, `-q`. Logs go
 to stderr. Exit codes: **0** OK, **1** partial failure, **2** configuration error, **3** state

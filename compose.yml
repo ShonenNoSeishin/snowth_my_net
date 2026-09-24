@@ -75,10 +75,11 @@ services:
     secrets:
       - community_sw_office
       - community_defaut
-      # Accounts of the interface (web.auth.users[].password_file), see docs/en/web.md:
+      # Only for an account whose password is managed elsewhere (web.auth.users[].password_file);
+      # the usual way is 'docker compose exec web snowth_my_net web passwd NAME'. See docs/en/web.md.
       #- web_alice
-    # Published on the loopback only: the interface has no login of its own. Put a reverse
-    # proxy in front of it (and change 127.0.0.1) to reach it from another machine.
+    # Published on the loopback only. Declare an account under web.auth.users and put a TLS
+    # reverse proxy in front of it (and change 127.0.0.1) to reach it from another machine.
     ports:
       - "127.0.0.1:${SNOWTH_WEB_PORT:-8080}:8080"
     restart: unless-stopped

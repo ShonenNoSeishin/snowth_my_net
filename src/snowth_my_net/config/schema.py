@@ -534,8 +534,10 @@ class WebUserCfg:
     password_env: str | None = None
 
     def check(self) -> list[str]:
-        if bool(self.password_file) == bool(self.password_env):
-            return [f"web user '{self.name}': set exactly one of password_file or password_env"]
+        """Neither is the usual case: the interface then invents a first password and
+        'web passwd' changes it. Both at once is a contradiction."""
+        if self.password_file and self.password_env:
+            return [f"web user '{self.name}': set password_file or password_env, not both"]
         return []
 
 

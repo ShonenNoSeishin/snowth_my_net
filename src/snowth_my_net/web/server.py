@@ -29,11 +29,19 @@ from snowth_my_net.logs import get_logger
 from snowth_my_net.state.db import StateError, open_db
 from snowth_my_net.state.repo import Repo
 from snowth_my_net.web import pages
+from snowth_my_net.web.accounts import (
+    MIN_LENGTH,
+    STORE_NAME,
+    Account,
+    Store,
+    initial_password,
+)
 from snowth_my_net.web.auth import (
     COOKIE,
     SCHEME,
     LoginLimiter,
     Sessions,
+    hash_password,
     parse_cookie,
     parse_hash,
     verify_password,
@@ -68,14 +76,48 @@ class Site:
         self.loaded = loaded
         self.clock = clock or Clock()
         self.t = Translator(detect_language(loaded.cfg.general.language))
-        self.accounts = load_accounts(loaded)
+        self.names = [user.name for user in loaded.cfg.web.auth.users]
+        self.fixed = load_accounts(loaded)          # password_file / password_env accounts
+        self.store = Store(loaded.paths.state_dir / STORE_NAME)
+        self.writing = threading.Lock()
         self.sessions = Sessions(lifetime=loaded.cfg.web.auth.session_hours * 3600)
         self.logins = LoginLimiter()
+        self.bootstrap()
 
     @property
     def guarded(self) -> bool:
         """True when accounts are configured: every page then needs a session."""
-        return bool(self.accounts)
+        return bool(self.names)
+
+    def bootstrap(self) -> None:
+        """Give every declared account without a password a first one, and log it.
+
+        Logged, not written into the configuration: whoever reads the log already administers
+        the machine, and this way nothing has to be pasted anywhere. It is asked for at the
+        first sign-in and replaced there; 'web passwd' sets another one at any time.
+        """
+        known = self.store.read()
+        for name in self.names:
+            if name in self.fixed or name in known:
+                continue
+            password = initial_password()
+            with self.writing:
+                self.store.set(name, hash_password(password), must_change=True)
+            log.warning("web user %r has no password yet - sign in once with: %s "
+                        "(the interface then asks you to choose your own)", name, password)
+
+    def account_of(self, name: str) -> Account | None:
+        """The account as it stands now; the store is re-read so that 'web passwd' in a
+        shell reaches the running interface without a restart."""
+        if name not in self.names:
+            return None
+        if name in self.fixed:
+            return Account(name, self.fixed[name], must_change=False, from_file=True)
+        return self.store.read().get(name)
+
+    def set_password(self, name: str, password: str) -> None:
+        with self.writing:
+            self.store.set(name, hash_password(password), must_change=False)
 
     # ----------------------------------------------------------------- login
 
@@ -105,16 +147,63 @@ class Site:
                     None)
         user = (form.get("user") or [""])[0]
         password = (form.get("password") or [""])[0]
-        stored = self.accounts.get(user)
-        if stored is None or not verify_password(password, stored):
+        account = self.account_of(user)
+        if account is None or not verify_password(password, account.hash):
             self.logins.failed(address)
-            reason = "no such account" if stored is None else "wrong password"
+            reason = "no such account" if account is None else "wrong password"
             log.warning("failed login for %r from %s: %s", user[:40], address, reason)
             return (HTTPStatus.UNAUTHORIZED, "text/html; charset=utf-8",
                     self.login_page(t("web.bad_login"), target, t), None)
         self.logins.succeeded(address)
         log.info("%s signed in from %s", user, address)
-        return HTTPStatus.SEE_OTHER, target, b"", self.sessions.open(user)
+        where = "/password" if account.must_change else target
+        return HTTPStatus.SEE_OTHER, where, b"", self.sessions.open(user)
+
+    # ----------------------------------------------------------------- password
+
+    def password_page(self, user: str, message: str = "", t=None) -> bytes:
+        """Where a reader chooses their own password; the only form that writes anything."""
+        t = t or self.t
+        account = self.account_of(user)
+        if account is not None and account.from_file:
+            body = f'<p class="empty">{esc(t("web.password.from_file"))}</p>'
+            return self.shell("", t("web.password.title"), body, t=t)
+        forced = t("web.password.forced") if account is not None and account.must_change else ""
+        error = f'<p class="error">{esc(message)}</p>' if message else ""
+        body = (f'<form class="login" method="post" action="/password">'
+                f'<label for="new">{esc(t("web.password.new"))}</label>'
+                f'<input id="new" name="new" type="password" '
+                f'autocomplete="new-password" autofocus required>'
+                f'<label for="again">{esc(t("web.password.again"))}</label>'
+                f'<input id="again" name="again" type="password" '
+                f'autocomplete="new-password" required>'
+                f'<p class="note">{esc(t("web.password.rule", min=MIN_LENGTH))}</p>'
+                f'{error}<button type="submit">{esc(t("web.password.save"))}</button></form>')
+        return self.shell("", t("web.password.title"), body, forced, t=t)
+
+    def change_password(self, user: str, form: dict, t=None
+                        ) -> tuple[int, str, bytes]:
+        """``(status, content type or target, body)`` for POST /password."""
+        t = t or self.t
+        account = self.account_of(user)
+        if account is None or account.from_file:
+            return (HTTPStatus.OK, "text/html; charset=utf-8",
+                    self.password_page(user, t=t))
+        new = (form.get("new") or [""])[0]
+        again = (form.get("again") or [""])[0]
+        if len(new) < MIN_LENGTH:
+            return (HTTPStatus.BAD_REQUEST, "text/html; charset=utf-8",
+                    self.password_page(user, t("web.password.rule", min=MIN_LENGTH), t))
+        if new != again:
+            return (HTTPStatus.BAD_REQUEST, "text/html; charset=utf-8",
+                    self.password_page(user, t("web.password.mismatch"), t))
+        self.set_password(user, new)
+        log.info("%s changed their password", user)
+        return HTTPStatus.SEE_OTHER, "/", b""
+
+    def must_change(self, user: str | None) -> bool:
+        account = self.account_of(user) if user else None
+        return bool(account and account.must_change)
 
     def translator(self, lang: str | None) -> Translator:
         """The language of this request: the reader's choice, else the configured one."""
@@ -140,7 +229,8 @@ class Site:
                          " on" if code == t.lang else "", code, code.upper())
                      for code in LANGUAGES))
         if logged_in and self.guarded:
-            tools += (f'<form class="out" method="post" action="/logout">'
+            tools += (f'<a class="lang" href="/password">{esc(t("web.password"))}</a>'
+                      f'<form class="out" method="post" action="/logout">'
                       f'<button type="submit">{esc(t("web.sign_out"))}</button></form>')
         nav += f'<span class="tools">{tools}</span>'
         return f"""<!doctype html>
@@ -236,6 +326,14 @@ class Site:
             return HTTPStatus.SEE_OTHER, "/login?next=" + quote(safe_target(target), safe=""), b""
         if path == "/login":
             return HTTPStatus.SEE_OTHER, "/", b""       # already signed in
+        who = self.sessions.user_of(token)
+        if path == "/password":
+            if not self.guarded:
+                return (HTTPStatus.NOT_FOUND, html_type,
+                        self.shell("/", t("web.not_found"), "", t=t))
+            return HTTPStatus.OK, html_type, self.password_page(who, t=t)
+        if self.must_change(who):                       # nothing else until it is chosen
+            return HTTPStatus.SEE_OTHER, "/password", b""
         if path.startswith("/download/"):
             return self.download(path.removeprefix("/download/"))
         if path == "/node":
@@ -295,12 +393,16 @@ def safe_target(target: str) -> str:
 
 
 def load_accounts(loaded: LoadedConfig) -> dict[str, str]:
-    """``{user: password hash}``; an unreadable account is refused, not silently skipped."""
+    """``{user: password hash}`` for the accounts whose password comes from a file or the
+    environment; an unreadable one is refused, not silently skipped. Every other account keeps
+    its password in the store, where the tool itself writes it."""
     from snowth_my_net.config.secrets import SecretError, resolve_secret
     from snowth_my_net.config.validate import ConfigError
 
     accounts, errors = {}, []
     for user in loaded.cfg.web.auth.users:
+        if not (user.password_file or user.password_env):
+            continue                     # its password lives in the store, written by the tool
         try:
             secret, warnings = resolve_secret(user.password_file, user.password_env,
                                               loaded.paths.secrets_dir,
@@ -369,7 +471,7 @@ class Handler(BaseHTTPRequestHandler):
         site = self.server.site
         parsed = urlparse(self.path)
         token = parse_cookie(self.headers.get("Cookie"))
-        if parsed.path not in ("/login", "/logout") or not site.guarded:
+        if parsed.path not in ("/login", "/logout", "/password") or not site.guarded:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         form = self.read_form()
@@ -377,9 +479,16 @@ class Handler(BaseHTTPRequestHandler):
             site.sessions.close(token)
             self.finish_response(HTTPStatus.SEE_OTHER, "/login", b"", clear_cookie=True)
             return
-        status, where, body, new_token = site.sign_in(
-            form, self.address_string(),
-            site.translator(parse_cookie(self.headers.get("Cookie"), LANG_COOKIE)))
+        lang = site.translator(parse_cookie(self.headers.get("Cookie"), LANG_COOKIE))
+        if parsed.path == "/password":
+            user = site.sessions.user_of(token)
+            if user is None:
+                self.finish_response(HTTPStatus.SEE_OTHER, "/login", b"")
+                return
+            status, where, body = site.change_password(user, form, lang)
+            self.finish_response(status, where, body)
+            return
+        status, where, body, new_token = site.sign_in(form, self.address_string(), lang)
         self.finish_response(status, where, body, set_cookie=new_token)
 
     def read_form(self) -> dict:

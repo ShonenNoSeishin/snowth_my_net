@@ -304,8 +304,11 @@ def test_check_warns_when_it_listens_wide_open_without_accounts(tmp_path):
 def test_configuration_of_the_accounts_is_validated():
     from snowth_my_net.config.loader import parse_config_text
 
-    with pytest.raises(ConfigError, match="exactly one of password_file or password_env"):
-        parse_config_text("web: {auth: {users: [{name: a}]}}")
+    bare = parse_config_text("web: {auth: {users: [{name: a}]}}")
+    assert bare.web.auth.users[0].name == "a"        # no password source: the store holds it
+    with pytest.raises(ConfigError, match="password_file or password_env, not both"):
+        parse_config_text("web: {auth: {users: [{name: a, password_file: f, "
+                          "password_env: E}]}}")
     with pytest.raises(ConfigError, match="duplicate user name"):
         parse_config_text("web:\n  auth:\n    users:\n"
                           "      - {name: a, password_env: X}\n"

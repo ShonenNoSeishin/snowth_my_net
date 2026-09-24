@@ -44,12 +44,7 @@ type à la main ou construit un rapport.
 ## Connexion
 
 Sans compte, il n'y a pas d'authentification et l'interface n'écoute que sur la boucle locale.
-Ajoutez un compte et chaque page la demande :
-
-```bash
-snowth_my_net web --hash-password > /etc/snowth_my_net/secrets/web_alice
-chmod 600 /etc/snowth_my_net/secrets/web_alice
-```
+Déclarer un nom suffit — produire le mot de passe n'est pas votre travail :
 
 ```yaml
 web:
@@ -57,31 +52,63 @@ web:
     session_hours: 12
     users:
       - name: alice
-        password_file: web_alice      # relatif à general.secrets_dir
 ```
 
-La commande demande le mot de passe deux fois et affiche une empreinte scrypt : le mot de passe
-lui-même n'est écrit nulle part. `password_env` fonctionne aussi, pour une empreinte venant de
-l'environnement.
+Au démarrage, l'interface voit un compte sans mot de passe, en invente un et l'écrit :
+
+```
+WARNING web user 'alice' has no password yet - sign in once with: k7m3-qp9x-4tvr
+        (the interface then asks you to choose your own)
+```
+
+Connectez-vous une fois avec ; l'interface demande alors le vôtre avant de montrer quoi que ce
+soit. Qui lit ce journal administre déjà la machine, et rien n'a à être collé nulle part. Le mot
+de passe inventé reste valable tant qu'il n'a pas servi : un redémarrage ne le change pas.
+
+Pour définir ou réinitialiser un mot de passe à tout moment, sans éditer de fichier :
+
+```bash
+snowth_my_net web passwd alice                         # demandé deux fois, masqué
+docker compose exec web snowth_my_net web passwd alice # idem, dans le conteneur qui tourne
+```
+
+Les mots de passe vivent dans `web_accounts.json`, à côté de l'état (mode 0600), sous forme
+d'empreintes scrypt, jamais en clair. Supprimer ce fichier oublie tous les mots de passe : le
+démarrage suivant en invente d'autres et les journalise. Le fichier est relu à chaque connexion,
+donc `web passwd` atteint une interface qui tourne sans redémarrage — les sessions déjà ouvertes
+le restent.
 
 * La session est un jeton opaque dans un témoin (`HttpOnly`, `SameSite=Strict`, et `Secure`
   quand la requête arrive par un proxy TLS). Elle dure `session_hours` et vit dans le processus :
   redémarrer l'interface déconnecte tout le monde.
 * Après cinq échecs, une adresse patiente une minute, bon mot de passe ou non ; les échecs sont
-  journalisés avec l'adresse.
+  journalisés avec l'adresse et leur raison — `no such account` ou `wrong password` — alors que
+  la page, elle, reste volontairement vague.
 * `/healthz` et la feuille de style de la page restent ouverts, pour qu'une sonde n'ait pas
   besoin de compte.
 * `check` avertit quand `web.bind` n'est pas la boucle locale et qu'aucun compte n'est défini.
-* Une connexion refusée est journalisée avec sa raison — `no such account` ou `wrong password` —
-  alors que la page, elle, reste volontairement vague.
-* Le fichier doit contenir cette seule ligne `scrypt$…`, rien d'autre. Une ligne coupée en deux
-  par un copier-coller depuis le terminal, ou les invites de la commande collées avec elle, est
-  refusée **au démarrage**, avec le nom du compte : l'interface ne se rabat jamais sur un service
-  sans authentification.
+* Un mot de passe fait au moins 8 caractères ; l'interface refuse plus court.
 
-Avec Docker, l'empreinte est un secret comme les autres : écrivez-la dans `./secrets/web_alice`,
-déclarez-la sous `secrets:` dans `compose.yml` et listez-la dans le service `web` ; dans le
-conteneur elle est lue depuis `/run/secrets`, donc `password_file: web_alice` suffit.
+### Un mot de passe géré ailleurs
+
+Quand la configuration doit tout contenir (une image construite par une chaîne d'intégration, un
+secret venu d'un coffre), un compte peut pointer vers une empreinte. Elle est alors en lecture
+seule pour l'interface, et `web passwd` refuse d'y toucher :
+
+```bash
+snowth_my_net web --hash-password > /etc/snowth_my_net/secrets/web_alice
+chmod 600 /etc/snowth_my_net/secrets/web_alice
+```
+
+```yaml
+      - name: alice
+        password_file: web_alice      # relatif à general.secrets_dir ; password_env marche aussi
+```
+
+Ce fichier doit contenir cette seule ligne `scrypt$…`, rien d'autre. Une ligne coupée en deux par
+un copier-coller depuis le terminal, ou les invites de la commande collées avec elle, est refusée
+**au démarrage**, avec le nom du compte : l'interface ne se rabat jamais sur un service sans
+authentification.
 
 ## Configuration
 

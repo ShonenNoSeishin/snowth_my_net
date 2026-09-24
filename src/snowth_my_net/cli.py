@@ -1141,21 +1141,59 @@ def cmd_web(args: argparse.Namespace) -> int:
     if args.hash_password:
         return _hash_web_password()
     loaded = load(args)
+    if args.action == "passwd":
+        return _set_web_password(loaded, args.user)
     return serve(loaded, args.bind, args.port)
 
 
-def _hash_web_password() -> int:
-    """Ask for a password twice and print its hash, to be saved in a file."""
+def _ask_password() -> str:
+    """The same password twice, never echoed, never through a clipboard."""
     import getpass
 
-    from snowth_my_net.web.auth import hash_password
+    from snowth_my_net.web.accounts import MIN_LENGTH
 
     password = getpass.getpass("Password: ")
-    if not password:
-        raise ManualError("empty password")
+    if len(password) < MIN_LENGTH:
+        raise ManualError(f"the password must be at least {MIN_LENGTH} characters")
     if password != getpass.getpass("Password (again): "):
         raise ManualError("the two passwords differ")
-    out(hash_password(password))
+    return password
+
+
+def _hash_web_password() -> int:
+    """Print the hash of a password, for a declarative web.auth.users[].password_file."""
+    from snowth_my_net.web.auth import hash_password
+
+    out(hash_password(_ask_password()))
+    return EXIT_OK
+
+
+def _set_web_password(loaded: LoadedConfig, name: str | None) -> int:
+    """Set the password of a web account, in place: no file to edit, no hash to paste."""
+    from snowth_my_net.web.accounts import STORE_NAME, Store
+    from snowth_my_net.web.auth import hash_password
+
+    users = {user.name: user for user in loaded.cfg.web.auth.users}
+    if not users:
+        raise ManualError("no account yet: add one under web.auth.users in "
+                          f"{loaded.paths.config_file} (docs/en/web.md)")
+    if name is None:
+        if len(users) > 1:
+            raise ManualError("several accounts: name the one to change ("
+                              + ", ".join(sorted(users)) + ")")
+        name = next(iter(users))
+    if name not in users:
+        raise ManualError(f"no account named '{name}' in web.auth.users ("
+                          + ", ".join(sorted(users)) + ")")
+    chosen = users[name]
+    if chosen.password_file or chosen.password_env:
+        source = chosen.password_file or f"${chosen.password_env}"
+        raise ManualError(f"the password of '{name}' comes from {source}: change it there, or "
+                          "drop password_file/password_env to manage it with this command")
+    store = Store(loaded.paths.state_dir / STORE_NAME)
+    store.set(name, hash_password(_ask_password()), must_change=False)
+    out(f"password set for '{name}'")
+    log.info("password set for web user '%s'", name)
     return EXIT_OK
 
 
@@ -1363,6 +1401,9 @@ def build_parser() -> argparse.ArgumentParser:
                        help="serve the read-only web interface (web: in the configuration)")
     p.add_argument("--bind", help="address to listen on (default web.bind: 127.0.0.1)")
     p.add_argument("--port", type=int, help="port to listen on (default web.port: 8080)")
+    p.add_argument("action", nargs="?", choices=["passwd"],
+                   help="passwd: set the password of an account, in place")
+    p.add_argument("user", nargs="?", help="the account of 'passwd' (default: the only one)")
     p.add_argument("--hash-password", action="store_true",
                    help="print the hash of a password, for web.auth.users[].password_file")
     p.set_defaults(func=cmd_web)

@@ -238,13 +238,13 @@ Read-only web interface (`snowth_my_net web`, or the `web` service of Compose), 
 
 | Key | Default | Description |
 |---|---|---|
-| `web.bind` | `127.0.0.1` | Address it listens on. It has no login: use `0.0.0.0` only behind a reverse proxy. |
+| `web.bind` | `127.0.0.1` | Address it listens on. Use `0.0.0.0` only with accounts, behind a TLS reverse proxy. |
 | `web.port` | `8080` | Port it listens on. In Docker the container always listens on 8080 and `SNOWTH_WEB_PORT` chooses the host port. |
 | `web.node_limit` | `2000` | Rows sent to the browser on the Nodes page; the page says when it truncates. |
 | `web.auth.users` | `[]` | Accounts of the interface. Empty: no login, which is only safe on the loopback. |
-| `web.auth.users[].name` | required | User name typed in the login form. |
-| `web.auth.users[].password_file` | | File holding the hash printed by `snowth_my_net web --hash-password` (relative to `general.secrets_dir`). |
-| `web.auth.users[].password_env` | | Same hash, from an environment variable. Exactly one of the two forms. |
+| `web.auth.users[].name` | required | User name typed in the login form. A name alone is enough: the first password is invented and logged, then `web passwd` changes it. |
+| `web.auth.users[].password_file` | | Optional: a file holding the hash printed by `snowth_my_net web --hash-password` (relative to `general.secrets_dir`), for a password managed outside the tool. |
+| `web.auth.users[].password_env` | | The same hash, from an environment variable. Never both forms at once. |
 | `web.auth.session_hours` | `12` | Lifetime of a session; sessions live in the process and are lost on restart. |
 
 ## `hooks`

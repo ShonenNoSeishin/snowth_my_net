@@ -48,13 +48,8 @@ lock, the SNMP credentials and every write stay in the CLI and in the terminal i
 
 ## Login
 
-Without accounts there is no login, and the interface only listens on the loopback. Add an
-account and every page asks for it:
-
-```bash
-snowth_my_net web --hash-password > /etc/snowth_my_net/secrets/web_alice
-chmod 600 /etc/snowth_my_net/secrets/web_alice
-```
+Without accounts there is no login, and the interface only listens on the loopback. Declaring a
+name is all it takes — the password is not your business to produce:
 
 ```yaml
 web:
@@ -62,28 +57,60 @@ web:
     session_hours: 12
     users:
       - name: alice
-        password_file: web_alice      # relative to general.secrets_dir
 ```
 
-The command asks for the password twice and prints a scrypt hash: the password itself is never
-written anywhere. `password_env` works too, for a hash coming from the environment.
+At startup the interface sees an account without a password, invents one and prints it:
+
+```
+WARNING web user 'alice' has no password yet - sign in once with: k7m3-qp9x-4tvr
+        (the interface then asks you to choose your own)
+```
+
+Sign in with it once; the interface then asks for a password of your own before showing
+anything. Whoever reads that log already administers the machine, and nothing has to be pasted
+anywhere. The invented password stays valid until it is used, so a restart does not change it.
+
+To set or reset a password at any time, without editing a file:
+
+```bash
+snowth_my_net web passwd alice                         # asks twice, hidden
+docker compose exec web snowth_my_net web passwd alice # the same, in the running container
+```
+
+The passwords live in `web_accounts.json`, next to the state (mode 0600), and hold scrypt
+hashes, never a password. Deleting that file forgets every password: the next start invents new
+ones and logs them. The file is re-read at every sign-in, so `web passwd` reaches a running
+interface without a restart — the sessions already open stay open.
 
 * The session is an opaque token in a cookie (`HttpOnly`, `SameSite=Strict`, and `Secure` when
   the request arrived through a TLS proxy). It lasts `session_hours` and lives in the process:
   restarting the interface signs everybody out.
 * After five failures an address waits a minute, right password or not; failures are logged with
-  the address.
+  the address and their reason — `no such account` or `wrong password` — while the page itself
+  stays vague on purpose.
 * `/healthz` and the page's own stylesheet stay open, so that a probe needs no account.
 * `check` warns when `web.bind` is not the loopback and no account is configured.
-* A refused login is logged with its reason — `no such account` or `wrong password` — while the
-  page itself stays vague on purpose.
-* The file must hold that one `scrypt$…` line and nothing else. A line cut in two by a copy from
-  a terminal, or the command's prompts pasted along with it, is refused **at startup**, naming
-  the account: the interface never falls back to serving without a login.
+* A password must be at least 8 characters; the interface refuses shorter ones.
 
-With Docker, the hash is a secret like the others: write it to `./secrets/web_alice`, declare it
-under `secrets:` in `compose.yml` and list it in the `web` service; inside the container it is
-read from `/run/secrets`, so `password_file: web_alice` is enough.
+### A password managed elsewhere
+
+When a configuration must hold everything (an image built by a pipeline, a secret from a vault),
+an account can point at a hash instead. It is then read-only for the interface, and
+`web passwd` refuses to touch it:
+
+```bash
+snowth_my_net web --hash-password > /etc/snowth_my_net/secrets/web_alice
+chmod 600 /etc/snowth_my_net/secrets/web_alice
+```
+
+```yaml
+      - name: alice
+        password_file: web_alice      # relative to general.secrets_dir; password_env works too
+```
+
+That file must hold the one `scrypt$…` line and nothing else. A line cut in two by a copy from a
+terminal, or the command's prompts pasted along with it, is refused **at startup**, naming the
+account: the interface never falls back to serving without a login.
 
 ## Configuration
 
