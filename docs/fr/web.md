@@ -89,6 +89,10 @@ le restent.
   besoin de compte.
 * `check` avertit quand `web.bind` n'est pas la boucle locale et qu'aucun compte n'est défini.
 * Un mot de passe fait au moins 8 caractères ; l'interface refuse plus court.
+* Changer de mot de passe dans le navigateur demande d'abord l'actuel — une session laissée
+  ouverte sur un écran déverrouillé ne suffit pas à s'emparer du compte — et les erreurs
+  comptent dans le même verrou qu'une connexion. `web passwd`, dans un terminal sur la
+  machine, ne le demande pas : c'est la porte de secours quand le mot de passe est perdu.
 
 ### Un mot de passe géré ailleurs
 

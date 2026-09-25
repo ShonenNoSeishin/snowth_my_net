@@ -26,7 +26,8 @@ header {
   position: sticky; top: 0; z-index: 2;
 }
 .brand { font-weight: 650; color: var(--accent); text-decoration: none; }
-nav { display: flex; gap: 16px; flex-wrap: wrap; }
+nav { display: flex; gap: 16px; flex-wrap: wrap; align-items: baseline; flex: 1; }
+/* The tools sit at the far right of the header, away from the tabs. */
 nav a { color: var(--muted); text-decoration: none; padding: 2px 0; border-bottom: 2px solid transparent; }
 nav a:hover { color: var(--text); }
 nav a.on { color: var(--text); border-bottom-color: var(--accent); }
@@ -81,7 +82,7 @@ details.hint dd { margin: 0; }
 .explain .dim { color: var(--muted); }
 .back { color: var(--muted); text-decoration: none; }
 .back:hover { color: var(--text); }
-.tools { display: flex; gap: 10px; align-items: center; margin-left: auto; }
+.tools { display: flex; gap: 12px; align-items: center; margin-left: auto; }
 .lang { color: var(--muted); text-decoration: none; font-size: 12px; letter-spacing: .04em; }
 .lang:hover { color: var(--text); }
 .lang.on { color: var(--text); text-decoration: underline; }

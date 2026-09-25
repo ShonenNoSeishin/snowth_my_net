@@ -196,9 +196,12 @@ class Site:
         forced = t("web.password.forced") if account is not None and account.must_change else ""
         error = f'<p class="error">{esc(message)}</p>' if message else ""
         body = (f'<form class="login" method="post" action="/password">'
+                f'<label for="current">{esc(t("web.password.current"))}</label>'
+                f'<input id="current" name="current" type="password" '
+                f'autocomplete="current-password" autofocus required>'
                 f'<label for="new">{esc(t("web.password.new"))}</label>'
                 f'<input id="new" name="new" type="password" '
-                f'autocomplete="new-password" autofocus required>'
+                f'autocomplete="new-password" required>'
                 f'<label for="again">{esc(t("web.password.again"))}</label>'
                 f'<input id="again" name="again" type="password" '
                 f'autocomplete="new-password" required>'
@@ -206,14 +209,29 @@ class Site:
                 f'{error}<button type="submit">{esc(t("web.password.save"))}</button></form>')
         return self.shell("", t("web.password.title"), body, forced, t=t)
 
-    def change_password(self, user: str, form: dict, t=None
+    def change_password(self, user: str, form: dict, t=None, address: str = ""
                         ) -> tuple[int, str, bytes]:
-        """``(status, content type or target, body)`` for POST /password."""
+        """``(status, content type or target, body)`` for POST /password.
+
+        The current password is asked for again: a session left open on an unlocked screen
+        must not be enough to take the account over.
+        """
         t = t or self.t
         account = self.account_of(user)
         if account is None or account.from_file:
             return (HTTPStatus.OK, "text/html; charset=utf-8",
                     self.password_page(user, t=t))
+        waiting = self.logins.locked_for(address) if address else 0.0
+        if waiting > 0:
+            return (HTTPStatus.TOO_MANY_REQUESTS, "text/html; charset=utf-8",
+                    self.password_page(user, t("web.too_many", seconds=int(waiting) + 1), t))
+        current = (form.get("current") or [""])[0]
+        if not verify_password(current, account.hash):
+            if address:
+                self.logins.failed(address)
+            log.warning("%s gave the wrong current password from %s", user, address or "?")
+            return (HTTPStatus.BAD_REQUEST, "text/html; charset=utf-8",
+                    self.password_page(user, t("web.password.wrong"), t))
         new = (form.get("new") or [""])[0]
         again = (form.get("again") or [""])[0]
         if len(new) < MIN_LENGTH:
@@ -223,6 +241,8 @@ class Site:
             return (HTTPStatus.BAD_REQUEST, "text/html; charset=utf-8",
                     self.password_page(user, t("web.password.mismatch"), t))
         self.set_password(user, new)
+        if address:
+            self.logins.succeeded(address)
         log.info("%s changed their password", user)
         return HTTPStatus.SEE_OTHER, "/", b""
 
@@ -510,7 +530,7 @@ class Handler(BaseHTTPRequestHandler):
             if user is None:
                 self.finish_response(HTTPStatus.SEE_OTHER, "/login", b"")
                 return
-            status, where, body = site.change_password(user, form, lang)
+            status, where, body = site.change_password(user, form, lang, self.caller())
             self.finish_response(status, where, body)
             return
         status, where, body, new_token = site.sign_in(form, self.caller(), lang)

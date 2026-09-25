@@ -92,6 +92,10 @@ interface without a restart — the sessions already open stay open.
 * `/healthz` and the page's own stylesheet stay open, so that a probe needs no account.
 * `check` warns when `web.bind` is not the loopback and no account is configured.
 * A password must be at least 8 characters; the interface refuses shorter ones.
+* Changing a password in the browser asks for the current one first — a session left open on
+  an unlocked screen is not enough to take the account over — and wrong answers count towards
+  the same limiter as a login. `web passwd`, in a shell on the machine, does not ask: it is
+  the way back in when the password is lost.
 
 ### A password managed elsewhere
 

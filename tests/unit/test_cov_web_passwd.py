@@ -130,7 +130,8 @@ def signed_in(tmp_path, password: str = PASSWORD):
 
 def test_a_reader_chooses_their_own_password_and_the_old_one_stops_working(tmp_path):
     site, token = signed_in(tmp_path)
-    status, where, _body = site.change_password("alice", {"new": ["a-new-one"],
+    status, where, _body = site.change_password("alice", {"current": [PASSWORD],
+                                                         "new": ["a-new-one"],
                                                          "again": ["a-new-one"]})
     assert (status, where) == (HTTPStatus.SEE_OTHER, "/")
     assert not site.must_change("alice")
@@ -140,9 +141,12 @@ def test_a_reader_chooses_their_own_password_and_the_old_one_stops_working(tmp_p
 
 
 @pytest.mark.parametrize(("form", "expected"), [
-    ({"new": ["short"], "again": ["short"]}, "characters"),
-    ({"new": ["long-enough"], "again": ["other-one"]}, "differ"),
-    ({}, "characters"),
+    ({"current": [PASSWORD], "new": ["short"], "again": ["short"]}, "characters"),
+    ({"current": [PASSWORD], "new": ["long-enough"], "again": ["other-one"]}, "differ"),
+    ({"current": [PASSWORD]}, "characters"),
+    ({"new": ["long-enough"], "again": ["long-enough"]}, "current password is wrong"),
+    ({"current": ["not-it"], "new": ["long-enough"], "again": ["long-enough"]},
+     "current password is wrong"),
 ])
 def test_a_refused_password_says_why_and_changes_nothing(tmp_path, form, expected):
     site, _token = signed_in(tmp_path)
@@ -157,7 +161,8 @@ def test_a_password_from_a_file_is_not_changed_from_the_browser(tmp_path):
     _s, _w, _b, token = site.sign_in({"user": ["declarative"], "password": [PASSWORD]}, "10.0.0.1")
     page = site.respond("/password", {}, token, "en")[2].decode()
     assert "password_file" in page and 'name="new"' not in page
-    status, _type, body = site.change_password("declarative", {"new": ["a-new-one"],
+    status, _type, body = site.change_password("declarative", {"current": [PASSWORD],
+                                                               "new": ["a-new-one"],
                                                                "again": ["a-new-one"]},
                                                               Translator("en"))
     assert status == HTTPStatus.OK and "password_file" in body.decode()
@@ -274,7 +279,8 @@ def test_the_whole_first_login_happens_in_the_browser(running):
         assert 'name="new"' in response.read().decode()
     with opener.open(base + "/nodes") as response:
         assert response.url == base + "/password"          # every page leads back to it
-    chosen = urllib.parse.urlencode({"new": "mon-mot-de-passe", "again": "mon-mot-de-passe"})
+    chosen = urllib.parse.urlencode({"current": password, "new": "mon-mot-de-passe",
+                                     "again": "mon-mot-de-passe"})
     with opener.open(base + "/password", chosen.encode()) as response:
         assert response.url == base + "/" and response.status == 200
     with opener.open(base + "/nodes") as response:
@@ -285,7 +291,8 @@ def test_the_whole_first_login_happens_in_the_browser(running):
 
 def test_changing_a_password_needs_a_session(running):
     base, _site, _password = running
-    form = urllib.parse.urlencode({"new": "mon-mot-de-passe", "again": "mon-mot-de-passe"})
+    form = urllib.parse.urlencode({"current": "whatever", "new": "mon-mot-de-passe",
+                                   "again": "mon-mot-de-passe"})
     request = urllib.request.Request(base + "/password", form.encode())
     opener = urllib.request.build_opener(NoRedirect())
     with pytest.raises(urllib.error.HTTPError) as caught:
@@ -307,3 +314,23 @@ def test_a_failed_write_leaves_the_previous_passwords_alone(tmp_path, monkeypatc
 
 def boom(*args, **kwargs):
     raise OSError("disk full")
+
+
+def test_guessing_the_current_password_is_slowed_down_like_a_login(tmp_path):
+    """A session left open on an unlocked screen must not become a free guessing machine."""
+    from snowth_my_net.web import auth
+
+    site, _token = signed_in(tmp_path)
+    wrong = {"current": ["not-it"], "new": ["long-enough"], "again": ["long-enough"]}
+    for _ in range(auth.MAX_FAILURES):
+        assert site.change_password("alice", wrong, Translator("en"),
+                                    "10.0.0.7")[0] == HTTPStatus.BAD_REQUEST
+    status, _type, body = site.change_password(
+        "alice", {"current": [PASSWORD], "new": ["long-enough"], "again": ["long-enough"]},
+        Translator("en"), "10.0.0.7")
+    assert status == HTTPStatus.TOO_MANY_REQUESTS and "Too many" in body.decode()
+    assert verify_password(PASSWORD, site.account_of("alice").hash)      # unchanged
+    status, _where, _body = site.change_password(
+        "alice", {"current": [PASSWORD], "new": ["long-enough"], "again": ["long-enough"]},
+        Translator("en"), "10.0.0.8")                                    # another address
+    assert status == HTTPStatus.SEE_OTHER

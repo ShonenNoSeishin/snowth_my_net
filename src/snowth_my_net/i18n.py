@@ -551,12 +551,15 @@ WEB = {
     "web.too_many": ("Too many attempts. Try again in {seconds} s.",
                      "Trop de tentatives. Réessayez dans {seconds} s."),
     "web.password.title": ("Your password", "Votre mot de passe"),
+    "web.password.current": ("Current password", "Mot de passe actuel"),
     "web.password.new": ("New password", "Nouveau mot de passe"),
     "web.password.again": ("New password (again)", "Nouveau mot de passe (à nouveau)"),
     "web.password.save": ("Save", "Enregistrer"),
     "web.password.rule": ("At least {min} characters.", "Au moins {min} caractères."),
     "web.password.mismatch": ("The two passwords differ.",
                               "Les deux mots de passe sont différents."),
+    "web.password.wrong": ("The current password is wrong.",
+                           "Le mot de passe actuel est incorrect."),
     "web.password.forced": ("Choose your own password to go on: this one was invented by the "
                             "interface and printed in the log.",
                             "Choisissez votre propre mot de passe pour continuer : celui-ci a "
