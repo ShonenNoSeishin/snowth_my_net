@@ -69,7 +69,8 @@ RUN /opt/venv/bin/pip install ".[test]" \
 COPY tests ./tests
 COPY examples ./examples
 COPY docs ./docs
-COPY README.fr.md DESIGN.md compose.yml .env.example ./
+COPY README.fr.md DESIGN.md compose.yml .env.example .gitignore ./
+COPY nginx ./nginx
 COPY Dockerfile ./Dockerfile
 COPY tools ./tools
 ENV PATH=/opt/venv/bin:$PATH HOME=/tmp PYTHONDONTWRITEBYTECODE=1

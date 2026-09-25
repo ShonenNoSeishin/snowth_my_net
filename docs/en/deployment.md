@@ -177,6 +177,13 @@ A bind mount keeps the owner and mode of the host (`uid`/`gid`/`mode` of Compose
 ignored outside Swarm), which is why the container runs with your UID/GID: the files can stay
 `chmod 600`.
 
+### The front and the interface
+
+`nginx` reaches the interface by its service name, through Docker's own resolver, asked again
+every 10 seconds. A name resolved once at start-up would be an address, and recreating the `web`
+container (a new address) would leave the front answering `502 Bad Gateway` to everything until
+it is restarted by hand.
+
 ### Nothing to edit in `compose.yml`
 
 What differs from one site to another lives outside it: `.env` (ports, user, time zone),

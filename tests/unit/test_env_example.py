@@ -62,3 +62,11 @@ def test_the_interface_is_only_reachable_through_the_tls_front():
     assert "ports" not in services["web"]                    # no clear-text port on the host
     assert len(services["nginx"]["ports"]) == 2              # 80 (redirect) and 443
     assert "--trusted-proxy" in services["web"]["command"]   # the reader's own address is kept
+
+
+def test_the_front_resolves_the_interface_again_instead_of_pinning_an_address():
+    """A name resolved once at start-up answers 502 to everything after the app is recreated."""
+    template = (ROOT / "nginx" / "nginx.conf.template").read_text(encoding="utf-8")
+    assert "resolver 127.0.0.11" in template          # Docker's own DNS
+    assert "proxy_pass http://$interface;" in template   # a variable: resolved per request
+    assert "proxy_pass http://web:8080" not in template  # the pinned form

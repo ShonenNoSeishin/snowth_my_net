@@ -182,6 +182,13 @@ Un montage garde le propriétaire et les droits de l'hôte (`uid`/`gid`/`mode` d
 sont ignorés hors Swarm) : c'est pourquoi le conteneur tourne avec votre UID/GID, et les fichiers
 peuvent rester en `chmod 600`.
 
+### La façade et l'interface
+
+`nginx` joint l'interface par son nom de service, via le résolveur de Docker, réinterrogé toutes
+les 10 secondes. Un nom résolu une seule fois au démarrage serait une adresse, et recréer le
+conteneur `web` (nouvelle adresse) laisserait la façade répondre `502 Bad Gateway` à tout
+jusqu'à un redémarrage à la main.
+
 ### Rien à éditer dans `compose.yml`
 
 Ce qui change d'un site à l'autre vit ailleurs : `.env` (ports, utilisateur, fuseau),
