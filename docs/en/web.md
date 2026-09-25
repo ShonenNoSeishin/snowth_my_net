@@ -21,7 +21,7 @@ SNOWTH_HTTPS_PORT=9443 docker compose up -d
 | Page | Content |
 |---|---|
 | Devices | the inventory, as `devices.csv`: name, IP, vendor, model, OS, type, last collect |
-| Nodes | MAC addresses and where they are, as `nodes.csv`; a MAC opens its explanation |
+| Nodes | MAC addresses and where they are, as `nodes.csv`; a MAC opens its explanation, where it can also be named |
 | Links | the physical links found through LLDP/CDP, as `links.csv` |
 | Runs | the last 50 runs, their status and how many devices answered |
 | Files | the exported files present in the output directory, to download |
@@ -39,6 +39,27 @@ Each table has a filter box (the
 rows already sent. The line under the title says when the
 last collect ran and how it went. Clicking a MAC shows the same explanation as
 `snowth_my_net explain`, in the interface's language.
+
+## Naming a MAC
+
+Six hundred rows say little until the ones that matter carry a name. Click a MAC and give it
+one — `imprimante compta`, `poste de Julie`, `caméra hall`. The name then shows in the first
+column of the Nodes page, and the filter box finds it like anything else.
+
+```bash
+snowth_my_net node name 00:11:22:33:44:55 "imprimante compta"
+snowth_my_net node name 00:11:22:33:44:55        # empty: forget it
+snowth_my_net node                               # every name given so far
+```
+
+**The name belongs to the MAC address, not to the row.** Positions move, addresses change, a
+collect rewrites everything it read: the name stays. It is kept in `node_names.json` next to the
+state, never in the database, so that a schema upgrade or a state thrown away keeps the names —
+that file is the one to copy when you move an installation.
+
+It reaches `snapshot.json` and `explain` too. It is left out of `nodes.csv` unless
+`export.nodes.include_name: true`, so that whatever reads that file keeps finding the columns it
+knows.
 
 ## What it cannot do
 

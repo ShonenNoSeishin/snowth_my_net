@@ -473,6 +473,11 @@ WEB = {
     "hint.devices.seen": ("Last time the device answered.",
                           "Dernière fois que l'équipement a répondu."),
     # nodes
+    "hint.nodes.name": (
+        "Given by hand (a MAC opens its page), kept with the MAC address: positions and "
+        "addresses change, the name stays.",
+        "Donné à la main (une MAC ouvre sa page), conservé avec l'adresse MAC : les positions "
+        "et les adresses changent, le nom reste."),
     "hint.nodes.mac": (
         "Learnt in the MAC table of a switch (BRIDGE/Q-BRIDGE) or in the ARP/NDP cache of a "
         "router or firewall. '2 positions' means the same MAC is on several lines: its roaming "
@@ -550,6 +555,14 @@ WEB = {
     "web.bad_login": ("Wrong user or password.", "Utilisateur ou mot de passe incorrect."),
     "web.too_many": ("Too many attempts. Try again in {seconds} s.",
                      "Trop de tentatives. Réessayez dans {seconds} s."),
+    "web.name.title": ("Name", "Nom"),
+    "web.name.hint": ("Given by hand, kept with the MAC address: a collect never changes it.",
+                      "Donné à la main, conservé avec l'adresse MAC : une collecte ne le "
+                      "change jamais."),
+    "web.name.save": ("Save", "Enregistrer"),
+    "web.name.placeholder": ("printer, desk of…, camera", "imprimante, poste de…, caméra"),
+    "web.name.empty_clears": ("Leave empty to forget the name.",
+                              "Laissez vide pour oublier le nom."),
     "web.password.title": ("Your password", "Votre mot de passe"),
     "web.password.current": ("Current password", "Mot de passe actuel"),
     "web.password.new": ("New password", "Nouveau mot de passe"),
@@ -576,6 +589,7 @@ EXPLAIN = {
     "xp.not_found": ("{query}: not seen in any MAC or ARP table within the retention period",
                      "{query} : vue dans aucune table MAC ou ARP pendant la rétention"),
     "xp.title": ("MAC {mac} — {vendor} ({kind})", "MAC {mac} — {vendor} ({kind})"),
+    "xp.given_name": ("Named by hand: {name}", "Nommée à la main : {name}"),
     "xp.vendor_unknown": ("unknown vendor", "constructeur inconnu"),
     "xp.random": ("locally administered (random or virtual)",
                   "administrée localement (aléatoire ou virtuelle)"),

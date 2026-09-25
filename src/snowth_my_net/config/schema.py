@@ -358,6 +358,11 @@ class DevicesExportCfg:
 
 
 @dataclass
+class NodesExportCfg:
+    include_name: bool = False       # a "Name" column: off, so that nodes.csv keeps its shape
+
+
+@dataclass
 class LinksExportCfg:
     include_endpoints: bool = False
 
@@ -381,6 +386,7 @@ class ExportCfg:
     allow_empty: list[Literal["devices", "nodes", "links"]] = field(default_factory=list)
     csv: CsvCfg = field(default_factory=CsvCfg)
     devices: DevicesExportCfg = field(default_factory=DevicesExportCfg)
+    nodes: NodesExportCfg = field(default_factory=NodesExportCfg)
     links: LinksExportCfg = field(default_factory=LinksExportCfg)
     map: MapCfg = field(default_factory=MapCfg)
 

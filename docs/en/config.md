@@ -184,6 +184,7 @@ How MAC and ARP observations become node positions (see `explain`).
 | `export.allow_empty` | `[]` | CSV files allowed to have no data row. Otherwise an empty CSV is neither written over the previous one nor pushed, and the command exits 1. |
 | `export.csv.line_terminator` | `crlf` | `crlf` (RFC 4180) or `lf`. |
 | `export.devices.include_type` | `true` | Trailing `"Device Type"` column. |
+| `export.nodes.include_name` | `false` | Add a first `Name` column to `nodes.csv` with the names given by hand (`node name`). Off by default so that an importer keeps reading the same columns. |
 | `export.links.include_endpoints` | `false` | Include phones and stations in `links.csv` and the map. |
 | `export.map.formats` | `[dot, mmd, html]` | Map files. |
 | `export.map.endpoints` | `none` | End hosts on the map: `none`, `grouped` (one bubble per port), `all` (grouped above 2000 hosts). |

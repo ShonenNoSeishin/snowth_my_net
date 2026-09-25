@@ -97,6 +97,7 @@ Details, systemd units, hardening and networking: [docs/en/deployment.md](docs/e
 | `cron print [--format crontab\|cron.d\|supercronic]` | Scheduler lines from `schedule:` |
 | `health [--max-age]` | Exit 1 when the last successful collect is too old |
 | `tui` | Terminal interface |
+| `node [name MAC [TEXT]]` | Name a MAC address by hand, or list the names (kept across collects) |
 | `web [--bind] [--port]`, `web passwd [USER]` | Read-only web interface (devices, nodes, links, runs, files), with optional accounts |
 
 Every command accepts `--json` (scripts), `--config`, `--log-level`, `--log-file`, `-q`. Logs go

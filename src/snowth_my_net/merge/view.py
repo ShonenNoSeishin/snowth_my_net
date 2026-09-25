@@ -138,6 +138,7 @@ class NodeView:
     names: dict[int, str]
     oui: OuiDatabase
     dns: dict[str, str] = field(default_factory=dict)       # ip -> name (cache)
+    given: dict[str, str] = field(default_factory=dict)     # mac -> name given by hand
     neighbors: list[ResolvedNeighbor] = field(default_factory=list)
     links: list[Link] = field(default_factory=list)
     _nodes: list[Node] | None = None
@@ -148,6 +149,10 @@ class NodeView:
             self._nodes = [n for mac in self.ctx.all_macs()
                            if (n := resolve_mac(self.ctx, mac)).excluded is None]
         return self._nodes
+
+    def given_name(self, mac: str) -> str:
+        """The name someone gave this MAC, or nothing. It outlives every collect."""
+        return self.given.get(mac, "")
 
     def vendor(self, node: Node) -> str:
         return "" if node.random_mac else self.oui.lookup(node.mac,
@@ -197,6 +202,8 @@ class NodeView:
                 rows.append([node.mac, vendor, ip, dns, "", "", "", iso_z(node.last_seen)])
         rows.sort(key=lambda r: (r[7], r[0], r[4], r[5]))
         rows.sort(key=lambda r: r[7], reverse=True)
+        if self.loaded.cfg.export.nodes.include_name:
+            return [[self.given_name(row[0]), *row] for row in rows]
         return rows
 
     def find(self, query: str) -> list[Node]:
@@ -219,8 +226,11 @@ class NodeView:
 
 
 def build_view(loaded: LoadedConfig, repo: Repo, now: int) -> NodeView:
+    from snowth_my_net.names import store_for
+
     inputs, names = load_inputs(loaded, repo, now)
-    view = NodeView(loaded, None, names, oui_database(loaded), repo.dns_names(now))
+    view = NodeView(loaded, None, names, oui_database(loaded), repo.dns_names(now),
+                    given=store_for(loaded.paths).read())
     view.neighbors, view.links = load_topology(loaded, repo, inputs, names, view.port_name_of(
         inputs))
     view.ctx = MergeContext(inputs, loaded.cfg.nodes, now)

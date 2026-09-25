@@ -34,6 +34,8 @@ def explain_node(view: NodeView, node: Node, t: Text = ENGLISH) -> list[Line]:
     kind = t("xp.random") if node.random_mac else t("xp.universal")
     lines: list[Line] = [(t("xp.title", mac=node.mac, vendor=vendor or t("xp.vendor_unknown"),
                             kind=kind), "title")]
+    if given := view.given_name(node.mac):
+        lines.append((t("xp.given_name", name=given), "text"))
     if node.excluded:
         reason = t(f"xp.excl.{node.excluded.code}", detail=node.excluded.detail)
         lines.append((t("xp.not_node", reason=reason), "bad"))
@@ -127,7 +129,8 @@ def node_json(view: NodeView, node: Node) -> dict:
                 "first_seen": iso_z(s.first_seen), "last_seen": iso_z(s.last_seen)}
 
     return {
-        "mac": node.mac, "vendor": view.vendor(node), "random_mac": node.random_mac,
+        "mac": node.mac, "name": view.given_name(node.mac) or None,
+        "vendor": view.vendor(node), "random_mac": node.random_mac,
         "excluded": str(node.excluded) if node.excluded else None,
         "position_kind": node.position_kind,
         "first_seen": iso_z(node.first_seen), "last_seen": iso_z(node.last_seen),

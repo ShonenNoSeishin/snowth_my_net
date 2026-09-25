@@ -87,20 +87,21 @@ def nodes(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int) -> Table:
         dns = view.dns_name(current) if current else ""
         positions = node.positions if cfg.positions == "all" else node.positions[:1]
         roaming = t("web.positions", count=len(positions)) if len(positions) > 1 else ""
+        given = view.given_name(node.mac)
         for p in positions:
-            rows.append([Cell(node.mac, roaming), vendor, address, dns,
+            rows.append([given, Cell(node.mac, roaming), vendor, address, dns,
                          view.device_name(p.device_id),
                          view.port_name(p.device_id, p.ifindex), str(p.vlan or ""),
                          iso_z(p.last_seen)])
         if not positions and cfg.include_unlocated:
-            rows.append([Cell(node.mac), vendor, address, dns, "", "", "",
+            rows.append([given, Cell(node.mac), vendor, address, dns, "", "", "",
                          iso_z(node.last_seen)])
-    rows.sort(key=lambda row: (str(row[7]), text_of(row[0]), str(row[4]), str(row[5])))
-    rows.sort(key=lambda row: str(row[7]), reverse=True)
-    columns = [(t("col.mac"), "text"), (t("col.vendor"), "text"), (t("col.ip"), "text"),
-               (t("col.dns"), "text"), (t("col.switch"), "text"), (t("col.port"), "text"),
-               (t("col.vlan"), "number"), (t("col.seen"), "text")]
-    keys = ["mac", "vendor", "ip", "dns", "switch", "port", "vlan", "seen"]
+    rows.sort(key=lambda row: (str(row[8]), text_of(row[1]), str(row[5]), str(row[6])))
+    rows.sort(key=lambda row: str(row[8]), reverse=True)
+    columns = [(t("col.name"), "text"), (t("col.mac"), "text"), (t("col.vendor"), "text"),
+               (t("col.ip"), "text"), (t("col.dns"), "text"), (t("col.switch"), "text"),
+               (t("col.port"), "text"), (t("col.vlan"), "number"), (t("col.seen"), "text")]
+    keys = ["name", "mac", "vendor", "ip", "dns", "switch", "port", "vlan", "seen"]
     return Table(columns, rows[:limit], len(rows), t("web.no_nodes"),
                  help_for(t, "nodes", columns, keys, extra=["hint.nodes.click"]))
 

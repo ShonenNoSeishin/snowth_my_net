@@ -188,6 +188,7 @@ Comment les observations MAC et ARP deviennent des positions de nœuds (voir `ex
 | `export.allow_empty` | `[]` | Fichiers CSV autorisés à n'avoir aucune ligne de données. Sinon un CSV vide n'écrase pas le précédent, n'est pas poussé, et la commande sort avec le code 1. |
 | `export.csv.line_terminator` | `crlf` | `crlf` (RFC 4180) ou `lf`. |
 | `export.devices.include_type` | `true` | Colonne finale `"Device Type"`. |
+| `export.nodes.include_name` | `false` | Ajouter une première colonne `Name` à `nodes.csv` avec les noms donnés à la main (`node name`). Désactivé par défaut pour qu'un importateur continue de lire les mêmes colonnes. |
 | `export.links.include_endpoints` | `false` | Inclure téléphones et stations dans `links.csv` et sur la carte. |
 | `export.map.formats` | `[dot, mmd, html]` | Fichiers de carte. |
 | `export.map.endpoints` | `none` | Hôtes finaux sur la carte : `none`, `grouped` (une bulle par port), `all` (groupés au-delà de 2000 hôtes). |

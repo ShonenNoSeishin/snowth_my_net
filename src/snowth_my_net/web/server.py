@@ -28,6 +28,7 @@ from snowth_my_net.config.loader import LoadedConfig
 from snowth_my_net.config.schema import LOOPBACK
 from snowth_my_net.i18n import Translator, detect_language
 from snowth_my_net.logs import get_logger
+from snowth_my_net.names import MAX_LENGTH, NameError_, clean_mac, clean_name, store_for
 from snowth_my_net.state.db import StateError, open_db
 from snowth_my_net.state.repo import Repo
 from snowth_my_net.web import pages
@@ -81,6 +82,7 @@ class Site:
         self.names = [user.name for user in loaded.cfg.web.auth.users]
         self.fixed = load_accounts(loaded)          # password_file / password_env accounts
         self.store = Store(loaded.paths.state_dir / STORE_NAME)
+        self.labels = store_for(loaded.paths)      # MAC -> name given by hand
         self.writing = threading.Lock()
         self.sessions = Sessions(lifetime=loaded.cfg.web.auth.session_hours * 3600)
         self.logins = LoginLimiter()
@@ -303,7 +305,7 @@ class Site:
 """.encode()
 
     def table_page(self, active: str, title: str, table: pages.Table, subtitle: str,
-                   link_first: str = "", t=None) -> bytes:
+                   link_first: str = "", t=None, link_column: int = 0) -> bytes:
         t = t or self.t
         if not table.rows:
             return self.shell(active, title, f'<p class="empty">{esc(table.empty)}</p>',
@@ -319,7 +321,7 @@ class Site:
                 main = value.text if isinstance(value, Cell) else str(value)
                 note = value.note if isinstance(value, Cell) else ""
                 text = esc(main)
-                if index == 0 and link_first and main:
+                if index == link_column and link_first and main:
                     text = f'<a href="{link_first}{quote(main, safe=":")}">{text}</a>'
                 if note:
                     text += f' <span class="note">{esc(note)}</span>'
@@ -341,15 +343,45 @@ class Site:
                       f'<tbody>{"".join(body)}</tbody></table></div>')
         return self.shell(active, title, panel + controls + table_html, subtitle, t=t)
 
-    def node_page(self, mac: str, t=None) -> bytes:
+    def node_page(self, mac: str, t=None, message: str = "") -> bytes:
         t = t or self.t
         with closing(self.state()) as repo:
             lines = pages.explain_lines(self.loaded, repo, self.clock.now(), mac, t)
         rendered = "\n".join(
             f'<span class="{kind}">{esc(text)}</span>' if text else "" for text, kind in lines)
         body = (f'<p><a class="back" href="/nodes">← {esc(t("web.back"))}</a></p>'
+                f'{self.name_form(mac, t, message)}'
                 f'<pre class="explain">{rendered}</pre>')
         return self.shell("/nodes", t("web.node_title", mac=mac), body, t=t)
+
+    def name_form(self, mac: str, t, message: str = "") -> str:
+        """Naming a MAC is the one thing a reader may write, and it is theirs, not collected."""
+        error = f'<p class="error">{esc(message)}</p>' if message else ""
+        try:
+            given = self.labels.get(clean_mac(mac))
+        except NameError_:
+            return error         # nothing to name here, but the reason must still be readable
+        return (f'<form class="rename" method="post" action="/name">'
+                f'<input type="hidden" name="mac" value="{esc(mac)}">'
+                f'<label for="given">{esc(t("web.name.title"))}</label>'
+                f'<input id="given" name="name" value="{esc(given)}" maxlength="{MAX_LENGTH}" '
+                f'placeholder="{esc(t("web.name.placeholder"))}">'
+                f'<button type="submit">{esc(t("web.name.save"))}</button>'
+                f'<span class="note">{esc(t("web.name.hint"))} '
+                f'{esc(t("web.name.empty_clears"))}</span>{error}</form>')
+
+    def set_name(self, mac: str, name: str, t=None) -> tuple[int, str, bytes]:
+        """``(status, content type or target, body)`` for POST /name."""
+        t = t or self.t
+        try:
+            stored = clean_mac(mac)
+            with self.writing:
+                self.labels.set(stored, name)
+        except NameError_ as exc:
+            return (HTTPStatus.BAD_REQUEST, "text/html; charset=utf-8",
+                    self.node_page(mac, t, str(exc)))
+        log.info("node %s named %r", stored, clean_name(name))
+        return HTTPStatus.SEE_OTHER, "/node?mac=" + quote(stored, safe=":"), b""
 
     # ----------------------------------------------------------------- routing
 
@@ -405,8 +437,9 @@ class Site:
                 table = pages.files(self.loaded.paths.output_dir, t)
                 title = t("web.tab.files")
         link = "/node?mac=" if path == "/nodes" else ("/download/" if path == "/files" else "")
+        column = 1 if path == "/nodes" else 0      # the MAC, which the name column now precedes
         return (HTTPStatus.OK, html_type,
-                self.table_page(path, title, table, subtitle, link, t))
+                self.table_page(path, title, table, subtitle, link, t, column))
 
     def asset(self, name: str) -> tuple[int, str, bytes]:
         if name not in ASSETS:
@@ -516,8 +549,14 @@ class Handler(BaseHTTPRequestHandler):
         site = self.server.site
         parsed = urlparse(self.path)
         token = parse_cookie(self.headers.get("Cookie"))
-        if parsed.path not in ("/login", "/logout", "/password") or not site.guarded:
+        if parsed.path not in ("/login", "/logout", "/password", "/name"):
             self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        if parsed.path != "/name" and not site.guarded:
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        if parsed.path == "/name" and site.guarded and site.sessions.user_of(token) is None:
+            self.finish_response(HTTPStatus.SEE_OTHER, "/login", b"")
             return
         form = self.read_form()
         if parsed.path == "/logout":
@@ -525,6 +564,11 @@ class Handler(BaseHTTPRequestHandler):
             self.finish_response(HTTPStatus.SEE_OTHER, "/login", b"", clear_cookie=True)
             return
         lang = site.translator(parse_cookie(self.headers.get("Cookie"), LANG_COOKIE))
+        if parsed.path == "/name":
+            status, where, body = site.set_name((form.get("mac") or [""])[0],
+                                                (form.get("name") or [""])[0], lang)
+            self.finish_response(status, where, body)
+            return
         if parsed.path == "/password":
             user = site.sessions.user_of(token)
             if user is None:

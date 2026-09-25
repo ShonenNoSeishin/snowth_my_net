@@ -115,5 +115,23 @@ form.out button:hover, .login button:hover { border-color: var(--accent); color:
 .login input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .login button { margin-top: 10px; }
 .login .error { color: var(--bad); margin: 6px 0 0; font-size: 13px; }
+/* Naming a MAC: one line above its explanation, never in the way of it. */
+.rename {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 0 0 14px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px;
+}
+.rename label { color: var(--muted); font-size: 12.5px; }
+.rename input {
+  font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 10px; min-width: 220px; flex: 1;
+}
+.rename input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.rename button {
+  font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 12px; cursor: pointer;
+}
+.rename button:hover { border-color: var(--accent); color: var(--accent); }
+.rename .note { color: var(--muted); font-size: 12px; flex-basis: 100%; }
+.rename .error { color: var(--bad); font-size: 13px; flex-basis: 100%; margin: 0; }
 footer { max-width: 1400px; margin: 0 auto; padding: 0 20px 26px; }
 @media (max-width: 600px) { header { position: static; } }

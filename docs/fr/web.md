@@ -22,7 +22,7 @@ SNOWTH_HTTPS_PORT=9443 docker compose up -d
 | Page | Contenu |
 |---|---|
 | Équipements | l'inventaire, comme `devices.csv` : nom, IP, constructeur, modèle, système, type, dernière collecte |
-| Nœuds | les adresses MAC et où elles se trouvent, comme `nodes.csv` ; une MAC ouvre son explication |
+| Nœuds | les adresses MAC et où elles se trouvent, comme `nodes.csv` ; une MAC ouvre son explication, où elle peut aussi être nommée |
 | Liens | les liens physiques trouvés par LLDP/CDP, comme `links.csv` |
 | Collectes | les 50 dernières exécutions, leur état et le nombre d'équipements qui ont répondu |
 | Fichiers | les fichiers exportés présents dans le répertoire de sortie, à télécharger |
@@ -33,6 +33,28 @@ de filtre (la touche `/` y place le curseur) et des colonnes triables ; le filtr
 font dans le navigateur, sur les lignes déjà envoyées. La ligne sous le
 titre indique quand la dernière collecte a eu lieu et comment elle s'est passée. Cliquer sur une
 MAC affiche la même explication que `snowth_my_net explain`, dans la langue de l'interface.
+
+## Nommer une MAC
+
+Six cents lignes ne disent pas grand-chose tant que celles qui comptent n'ont pas de nom.
+Cliquez sur une MAC et donnez-lui-en un — `imprimante compta`, `poste de Julie`, `caméra hall`.
+Le nom apparaît alors dans la première colonne de la page Nœuds, et le champ de filtre le trouve
+comme le reste.
+
+```bash
+snowth_my_net node name 00:11:22:33:44:55 "imprimante compta"
+snowth_my_net node name 00:11:22:33:44:55        # vide : l'oublier
+snowth_my_net node                               # tous les noms donnés
+```
+
+**Le nom appartient à l'adresse MAC, pas à la ligne.** Les positions bougent, les adresses
+changent, une collecte réécrit tout ce qu'elle a lu : le nom reste. Il est gardé dans
+`node_names.json` à côté de l'état, jamais dans la base, pour qu'une montée de schéma ou un état
+jeté n'emporte pas les noms — c'est ce fichier qu'on copie quand on déplace une installation.
+
+Il arrive aussi dans `snapshot.json` et dans `explain`. Il est absent de `nodes.csv` sauf si
+`export.nodes.include_name: true`, pour que ce qui lit ce fichier continue d'y trouver les
+colonnes qu'il connaît.
 
 ## Ce qu'elle ne fait pas
 

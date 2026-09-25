@@ -16,6 +16,8 @@ DEVICES_HEADER = ('"Device Name","Device Details","IP Address",Location,Model,Se
                   '"Operating System","OS Version","MAC Address"')
 DEVICES_TYPE_COLUMN = ',"Device Type"'
 NODES_HEADER = '"MAC Address",Vendor,"IP Address","DNS Name",Switch,Port,VLAN,"Last Seen"'
+NAMED_NODES_HEADER = 'Name,' + NODES_HEADER   # export.nodes.include_name: off by default, so
+#                                               that an importer keeps reading the same columns
 LINKS_HEADER = "Local Device,Local Port,Remote Device,Remote Port,Protocol,Last Seen"
 
 EOL = {"crlf": "\r\n", "lf": "\n"}
