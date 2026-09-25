@@ -185,6 +185,7 @@ How MAC and ARP observations become node positions (see `explain`).
 | `export.csv.line_terminator` | `crlf` | `crlf` (RFC 4180) or `lf`. |
 | `export.devices.include_type` | `true` | Trailing `"Device Type"` column. |
 | `export.nodes.include_name` | `false` | Add a first `Name` column to `nodes.csv` with the names given by hand (`node name`). Off by default so that an importer keeps reading the same columns. |
+| `export.nodes.include_description` | `false` | The same, for the descriptions (`node describe`). |
 | `export.links.include_endpoints` | `false` | Include phones and stations in `links.csv` and the map. |
 | `export.map.formats` | `[dot, mmd, html]` | Map files. |
 | `export.map.endpoints` | `none` | End hosts on the map: `none`, `grouped` (one bubble per port), `all` (grouped above 2000 hosts). |
@@ -246,6 +247,7 @@ Read-only web interface (`snowth_my_net web`, or the `web` service of Compose), 
 | `web.auth.users[].name` | required | User name typed in the login form. A name alone is enough: the first password is invented and logged, then `web passwd` changes it. |
 | `web.auth.users[].password_file` | | Optional: a file holding the hash printed by `snowth_my_net web --hash-password` (relative to `general.secrets_dir`), for a password managed outside the tool. |
 | `web.auth.users[].password_env` | | The same hash, from an environment variable. Never both forms at once. |
+| `web.actions` | `true` | The buttons of the Runs page that start a collect, a discovery, an export or a push. `false` removes them and refuses the requests. Without an account, anyone who reaches the page can press them. |
 | `web.trusted_proxies` | `[]` | Networks of the reverse proxies allowed to state the reader's address in `X-Forwarded-For` (and `X-Forwarded-Proto`). Anyone else is ignored. `--trusted-proxy CIDR` overrides it for one run. |
 | `web.auth.session_hours` | `12` | Lifetime of a session; sessions live in the process and are lost on restart. |
 

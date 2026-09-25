@@ -1205,24 +1205,27 @@ def cmd_node(args: argparse.Namespace) -> int:
 
     loaded = load(args)
     names = store_for(loaded.paths)
+    field = "description" if args.action == "describe" else "name"
     if args.mac is None:
         stored = names.read()
         if args.json:
             out_json({"names": stored})
         elif not stored:
-            out("no name given yet: snowth_my_net node name <MAC> \"a name\"")
+            out('no name given yet: snowth_my_net node name <MAC> "a name"')
         else:
-            out(table(["MAC", "NAME"], sorted(stored.items())))
+            out(table(["MAC", "NAME", "DESCRIPTION"],
+                      [[mac, entry.get("name", ""), entry.get("description", "")]
+                       for mac, entry in sorted(stored.items())]))
         return EXIT_OK
     try:
         mac = clean_mac(args.mac)
-        given = names.set(mac, " ".join(args.name))
+        given = names.set(mac, " ".join(args.name), field)
     except NameError_ as exc:
         raise ManualError(str(exc)) from None
     if args.json:
-        out_json({"mac": mac, "name": given or None})
+        out_json({"mac": mac, "field": field, "value": given or None})
     else:
-        out(f"{mac}: {given}" if given else f"{mac}: name forgotten")
+        out(f"{mac}: {field} = {given}" if given else f"{mac}: {field} forgotten")
     return EXIT_OK
 
 
@@ -1442,10 +1445,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("node", parents=[common],
                        help="name a MAC address by hand (kept across collects), or list names")
-    p.add_argument("action", nargs="?", choices=["name"],
-                   help="name: set or clear the name of a MAC (omit to list the names)")
+    p.add_argument("action", nargs="?", choices=["name", "describe"],
+                   help="name or describe a MAC (omit everything to list what was given)")
     p.add_argument("mac", nargs="?", metavar="MAC")
-    p.add_argument("name", nargs="*", metavar="TEXT", help="empty: forget the name")
+    p.add_argument("name", nargs="*", metavar="TEXT", help="empty: forget that field")
     p.set_defaults(func=cmd_node)
 
     p = sub.add_parser("tui", parents=[common], help="open the terminal management interface")

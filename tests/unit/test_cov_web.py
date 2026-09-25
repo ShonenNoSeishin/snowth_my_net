@@ -162,6 +162,7 @@ def test_served_over_http_with_safe_headers(server):
     policy = headers["Content-Security-Policy"]
     assert "default-src 'none'" in policy                   # only our own style and script
     assert "form-action 'self'" in policy                   # the login form, nothing else
+    assert "connect-src 'self'" in policy                   # saving a name in the table
     assert headers["Cache-Control"] == "no-store"
     assert "Python" not in headers.get("Server", "")
 
@@ -426,3 +427,52 @@ def test_the_theme_button_is_there_for_the_browser_to_use(server):
     with urllib.request.urlopen(server + "/static/app.js") as response:
         script = response.read().decode()
     assert "snowth_theme" in script and "prefers-color-scheme" in script
+
+
+def test_the_pages_show_the_hours_of_the_reader_not_utc(tmp_path, monkeypatch):
+    """The exports stay in UTC; a page is read by someone who counts in their own hours."""
+    import time as time_module
+
+    from snowth_my_net.clock import local_time, local_zone
+    from snowth_my_net.web.server import Site
+
+    monkeypatch.setenv("TZ", "Europe/Brussels")
+    time_module.tzset()
+    try:
+        repo = build_state(tmp_path)
+        repo.conn.close()
+        site = Site(make_loaded(tmp_path), FixedClock())
+        assert local_time(1768467640) == "2026-01-15 10:00"         # winter: +01:00
+        assert local_time(1789200040) == "2026-09-12 10:00"         # summer: +02:00
+        page = site.respond("/runs", {})[2].decode()
+        assert "Europe/Brussels" in page                            # said once, in the footer
+        assert 'title="' in page and "Z\">" in page                 # the UTC value on hover
+        assert local_zone() == "Europe/Brussels"
+    finally:
+        monkeypatch.undo()
+        time_module.tzset()
+
+
+def test_without_a_configured_zone_the_offset_is_spelled_out(monkeypatch):
+    import time as time_module
+
+    from snowth_my_net.clock import local_zone
+
+    monkeypatch.setenv("TZ", "UTC")
+    time_module.tzset()
+    monkeypatch.delenv("TZ")
+    try:
+        assert local_zone(1789200040) in ("UTC (+00:00)", "UTC")
+    finally:
+        monkeypatch.undo()
+        time_module.tzset()
+
+
+def test_the_addresses_a_row_hides_fold_instead_of_widening_it(site):
+    """A list of addresses in the cell pushed the end of the table off the screen."""
+    from tests.unit.test_cov_views import D
+
+    _status, _type, body = get(site, "/nodes")
+    row = next(line for line in body.split("<tr>") if D in line)
+    assert '<details class="more"><summary>+2</summary>' in row
+    assert "<li>192.0.2.60</li>" in row                     # there when opened, not before

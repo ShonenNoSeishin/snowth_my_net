@@ -426,6 +426,8 @@ WEB = {
                       "interface.",
                       "Vue en lecture seule. Collecte et export depuis la ligne de commande ou "
                       "l'interface en terminal."),
+    "web.times": ("Times in {zone}; hover one for the stored UTC value",
+                  "Heures en {zone} ; survolez-en une pour la valeur UTC stockée"),
     "web.not_found": ("Nothing here.", "Rien ici."),
     "web.how": ("How to read this table", "Comment lire ce tableau"),
     "web.theme": ("Light or dark", "Clair ou sombre"),
@@ -467,17 +469,27 @@ WEB = {
         "adresses lui sont connues, une par interface : un nœud vu avec l'une d'elles n'est pas "
         "listé comme nœud."),
     "hint.devices.status": (
-        "Result of the last collect of that device: ok, partial (a table failed) or failed.",
-        "Résultat de la dernière collecte de cet équipement : ok, partial (une table a échoué) "
-        "ou failed."),
-    "hint.devices.seen": ("Last time the device answered.",
-                          "Dernière fois que l'équipement a répondu."),
+        "Result of the last collect of that device: ok, partial (a table failed), failed, or "
+        "never for an address that has never answered. The reason is written beside it, and "
+        "these rows are coloured: this is where the device missing from '11/12 reachable' is.",
+        "Résultat de la dernière collecte de cet équipement : ok, partial (une table a échoué), "
+        "failed, ou never pour une adresse qui n'a jamais répondu. La raison est écrite à côté, "
+        "et ces lignes sont colorées : c'est là qu'est l'équipement manquant de "
+        "« 11/12 joignables »."),
+    "hint.devices.seen": ("Last time the device answered. Empty for an address that never did.",
+                          "Dernière fois que l'équipement a répondu. Vide pour une adresse qui "
+                          "n'a jamais répondu."),
     # nodes
     "hint.nodes.name": (
         "Given by hand (a MAC opens its page), kept with the MAC address: positions and "
         "addresses change, the name stays.",
         "Donné à la main (une MAC ouvre sa page), conservé avec l'adresse MAC : les positions "
         "et les adresses changent, le nom reste."),
+    "hint.nodes.description": (
+        "Written by hand, like the name, and kept with the MAC address: what it is for, where "
+        "it hangs, whom to call.",
+        "Écrite à la main, comme le nom, et conservée avec l'adresse MAC : à quoi ça sert, où "
+        "c'est accroché, qui appeler."),
     "hint.nodes.mac": (
         "Learnt in the MAC table of a switch (BRIDGE/Q-BRIDGE) or in the ARP/NDP cache of a "
         "router or firewall. '2 positions' means the same MAC is on several lines: its roaming "
@@ -517,10 +529,12 @@ WEB = {
     "hint.nodes.vlan": ("From the MAC table, else the VLAN of the port (PVID).",
                         "D'après la table MAC, sinon le VLAN du port (PVID)."),
     "hint.nodes.seen": (
-        "Last time that position was observed. A MAC may appear on several lines: that is its "
-        "roaming history, most recent first.",
-        "Dernière observation de cette position. Une MAC peut apparaître sur plusieurs lignes : "
-        "c'est son historique d'itinérance, la plus récente d'abord."),
+        "Last time that position was observed, in the time zone of the server (the exports stay "
+        "in UTC). A MAC may appear on several lines: that is its roaming history, most recent "
+        "first.",
+        "Dernière observation de cette position, dans le fuseau du serveur (les exports restent "
+        "en UTC). Une MAC peut apparaître sur plusieurs lignes : c'est son historique "
+        "d'itinérance, la plus récente d'abord."),
     "hint.nodes.click": (
         "Click a MAC to see why it sits there: every sighting, the ports discarded as uplinks or "
         "transit, and all its addresses.",
@@ -555,7 +569,54 @@ WEB = {
     "web.bad_login": ("Wrong user or password.", "Utilisateur ou mot de passe incorrect."),
     "web.too_many": ("Too many attempts. Try again in {seconds} s.",
                      "Trop de tentatives. Réessayez dans {seconds} s."),
+    "web.snmp.tab": ("SNMP", "SNMP"),
+    "web.snmp.title": ("SNMP connections", "Connexions SNMP"),
+    "web.snmp.locked": ("Type your password again to open this page.",
+                        "Retapez votre mot de passe pour ouvrir cette page."),
+    "web.snmp.open": ("Open", "Ouvrir"),
+    "web.snmp.intro": ("Which addresses are polled, with which credential, and why one does "
+                       "not answer. A community is never shown here: the state only holds the "
+                       "name of a credential, and its value stays in its file.",
+                       "Quelles adresses sont interrogées, avec quel identifiant, et pourquoi "
+                       "l'une ne répond pas. Une communauté n'est jamais affichée ici : l'état "
+                       "ne garde que le nom d'un identifiant, sa valeur reste dans son fichier."),
+    "web.snmp.add": ("Add an address", "Ajouter une adresse"),
+    "web.snmp.added": ("{address} will be polled from the next collect on.",
+                       "{address} sera interrogée dès la prochaine collecte."),
+    "web.snmp.removed": ("{address} is no longer polled.",
+                         "{address} n'est plus interrogée."),
+    "web.snmp.remove": ("Remove", "Retirer"),
+    "web.snmp.test": ("Test", "Tester"),
+    "web.snmp.testing": ("Testing {address}…", "Test de {address}…"),
+    "web.snmp.any": ("whichever answers", "celui qui répond"),
+    "web.snmp.save": ("Apply", "Appliquer"),
+    "web.snmp.credentials_from": (
+        "Credentials come from the configuration file ({count} declared); this page can choose "
+        "one for an address, never create one or show its value.",
+        "Les identifiants viennent du fichier de configuration ({count} déclarés) ; cette page "
+        "peut en choisir un pour une adresse, jamais en créer un ni afficher sa valeur."),
+    "col.address": ("ADDRESS", "ADRESSE"),
+    "col.origin": ("ORIGIN", "ORIGINE"),
+    "col.credential": ("CREDENTIAL", "IDENTIFIANT"),
+    "col.failures": ("FAILURES", "ÉCHECS"),
+    "web.do.collect": ("Collect", "Collecter"),
+    "web.do.discover": ("Discover", "Découvrir"),
+    "web.do.export": ("Export", "Exporter"),
+    "web.do.push": ("Push", "Envoyer"),
+    "web.do.title": ("Run now", "Lancer maintenant"),
+    "web.do.running": ("{what} running for {seconds} s…", "{what} en cours depuis {seconds} s…"),
+    "web.do.busy": ("Something is already running.", "Quelque chose tourne déjà."),
+    "web.do.last": ("Last: {what}, {status}, {seconds} s — {detail}",
+                    "Dernier : {what}, {status}, {seconds} s — {detail}"),
+    "web.do.ok": ("done", "terminé"),
+    "web.do.partial": ("partial", "partiel"),
+    "web.do.failed": ("failed", "échec"),
+    "web.do.hint": ("The same commands as in a shell, one at a time. The scheduler keeps its "
+                    "own pace.",
+                    "Les mêmes commandes qu'en ligne de commande, une à la fois. Le "
+                    "planificateur garde son propre rythme."),
     "web.name.title": ("Name", "Nom"),
+    "web.description.title": ("Description", "Description"),
     "web.name.hint": ("Given by hand, kept with the MAC address: a collect never changes it.",
                       "Donné à la main, conservé avec l'adresse MAC : une collecte ne le "
                       "change jamais."),
@@ -590,6 +651,7 @@ EXPLAIN = {
                      "{query} : vue dans aucune table MAC ou ARP pendant la rétention"),
     "xp.title": ("MAC {mac} — {vendor} ({kind})", "MAC {mac} — {vendor} ({kind})"),
     "xp.given_name": ("Named by hand: {name}", "Nommée à la main : {name}"),
+    "xp.given_description": ("Description: {text}", "Description : {text}"),
     "xp.vendor_unknown": ("unknown vendor", "constructeur inconnu"),
     "xp.random": ("locally administered (random or virtual)",
                   "administrée localement (aléatoire ou virtuelle)"),

@@ -17,20 +17,23 @@ from pathlib import Path
 from snowth_my_net.snmp.values import normalize_mac
 
 STORE_NAME = "node_names.json"
-FORMAT = 1
-MAX_LENGTH = 60                                  # a label, not a comment
+FORMAT = 2                                       # 1 held a bare name; 2 holds the fields below
+FIELDS = ("name", "description")
+MAX_LENGTH = {"name": 60, "description": 200}    # a label, and a line about it
 
 
 class NameError_(ValueError):
     """What is wrong with a name or a MAC, in a sentence meant for the reader."""
 
 
-def clean_name(text: str) -> str:
-    """One line, trimmed, no control character: a name is rendered in a table cell."""
-    name = " ".join(str(text).split())
-    if len(name) > MAX_LENGTH:
-        raise NameError_(f"a name is at most {MAX_LENGTH} characters")
-    return name
+def clean_field(field: str, text: str) -> str:
+    """One line, trimmed, no control character: it is rendered in a table cell."""
+    if field not in FIELDS:
+        raise NameError_(f"unknown field {field!r}; it is one of {', '.join(FIELDS)}")
+    value = " ".join(str(text).split())
+    if len(value) > MAX_LENGTH[field]:
+        raise NameError_(f"a {field} is at most {MAX_LENGTH[field]} characters")
+    return value
 
 
 def clean_mac(value: str) -> str:
@@ -41,12 +44,15 @@ def clean_mac(value: str) -> str:
 
 
 class Names:
-    """``{mac: name}``. Reads never raise; writes replace the file atomically."""
+    """``{mac: {field: value}}``. Reads never raise; writes replace the file atomically."""
 
     def __init__(self, path: Path) -> None:
         self.path = path
 
-    def read(self) -> dict[str, str]:
+    def read(self) -> dict[str, dict[str, str]]:
+        """``{mac: {"name": …, "description": …}}``. A file written by an older version held
+        the name alone; it is read as such and rewritten in the richer shape on the next
+        change, so an upgrade never loses a name."""
         try:
             data = json.loads(self.path.read_text(encoding="utf-8"))
             names = data["names"]
@@ -54,24 +60,38 @@ class Names:
             return {}
         if not isinstance(names, dict):
             return {}
-        return {mac: name for mac, name in names.items()
-                if isinstance(mac, str) and isinstance(name, str) and name}
+        found = {}
+        for mac, entry in names.items():                     # JSON keys are always strings
+            if isinstance(entry, str):                       # the shape of version 1
+                entry = {"name": entry}
+            if not isinstance(entry, dict):
+                continue
+            kept = {f: entry[f] for f in FIELDS
+                    if isinstance(entry.get(f), str) and entry[f]}
+            if kept:
+                found[mac] = kept
+        return found
 
-    def get(self, mac: str) -> str:
-        return self.read().get(mac, "")
+    def get(self, mac: str, field: str = "name") -> str:
+        return self.read().get(mac, {}).get(field, "")
 
-    def set(self, mac: str, name: str) -> str:
-        """Name a MAC, or forget it when the name is empty. Returns the stored name."""
-        mac, name = clean_mac(mac), clean_name(name)
+    def set(self, mac: str, value: str, field: str = "name") -> str:
+        """Set one field of a MAC, or forget it when the value is empty."""
+        mac, value = clean_mac(mac), clean_field(field, value)
         names = self.read()
-        if name:
-            names[mac] = name
+        entry = dict(names.get(mac, {}))
+        if value:
+            entry[field] = value
         else:
-            names.pop(mac, None)
+            entry.pop(field, None)
+        if entry:
+            names[mac] = entry
+        else:
+            names.pop(mac, None)                             # nothing left to remember
         self._write(names)
-        return name
+        return value
 
-    def _write(self, names: dict[str, str]) -> None:
+    def _write(self, names: dict[str, dict[str, str]]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temp = self.path.with_name(self.path.name + ".new")
         text = json.dumps({"version": FORMAT, "names": names}, indent=2, sort_keys=True,

@@ -16,8 +16,11 @@ DEVICES_HEADER = ('"Device Name","Device Details","IP Address",Location,Model,Se
                   '"Operating System","OS Version","MAC Address"')
 DEVICES_TYPE_COLUMN = ',"Device Type"'
 NODES_HEADER = '"MAC Address",Vendor,"IP Address","DNS Name",Switch,Port,VLAN,"Last Seen"'
-NAMED_NODES_HEADER = 'Name,' + NODES_HEADER   # export.nodes.include_name: off by default, so
-#                                               that an importer keeps reading the same columns
+def nodes_header(include_name: bool, include_description: bool) -> str:
+    """The columns of ``nodes.csv``: the ones an importer knows, and only what was asked for
+    in front of them (both off by default, so that file never changes shape on its own)."""
+    front = (["Name"] if include_name else []) + (["Description"] if include_description else [])
+    return ",".join([*front, NODES_HEADER]) if front else NODES_HEADER
 LINKS_HEADER = "Local Device,Local Port,Remote Device,Remote Port,Protocol,Last Seen"
 
 EOL = {"crlf": "\r\n", "lf": "\n"}

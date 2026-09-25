@@ -13,10 +13,9 @@ from snowth_my_net.config.loader import LoadedConfig
 from snowth_my_net.export.atomic import atomic_write
 from snowth_my_net.export.csvout import (
     LINKS_HEADER,
-    NAMED_NODES_HEADER,
-    NODES_HEADER,
     EmptyExport,
     devices_csv,
+    nodes_header,
     render_csv,
 )
 from snowth_my_net.export.naming import NameInput, assign_names
@@ -113,7 +112,7 @@ def nodes_csv(loaded: LoadedConfig, repo: Repo, now: int, ptr_lookup=None,
     rows = view.rows()
     if not rows and "nodes" not in cfg.export.allow_empty:
         raise EmptyExport("nodes.csv would have no data row")
-    header = NAMED_NODES_HEADER if cfg.export.nodes.include_name else NODES_HEADER
+    header = nodes_header(cfg.export.nodes.include_name, cfg.export.nodes.include_description)
     return render_csv(header, rows, cfg.export.csv.line_terminator)
 
 

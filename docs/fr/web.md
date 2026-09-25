@@ -21,11 +21,17 @@ SNOWTH_HTTPS_PORT=9443 docker compose up -d
 
 | Page | Contenu |
 |---|---|
-| Équipements | l'inventaire, comme `devices.csv` : nom, IP, constructeur, modèle, système, type, dernière collecte |
-| Nœuds | les adresses MAC et où elles se trouvent, comme `nodes.csv` ; une MAC ouvre son explication, où elle peut aussi être nommée |
+| Équipements | l'inventaire, comme `devices.csv` : nom, IP, constructeur, modèle, système, type, dernière collecte — plus toute adresse interrogée qui n'a pas répondu, en rouge, avec la raison |
+| Nœuds | les adresses MAC et où elles se trouvent, comme `nodes.csv` ; le nom et la description s'écrivent directement dans le tableau |
+| SNMP | quelles adresses sont interrogées, avec quel identifiant, et pourquoi l'une ne répond pas (un compte et son mot de passe redemandé) |
 | Liens | les liens physiques trouvés par LLDP/CDP, comme `links.csv` |
 | Collectes | les 50 dernières exécutions, leur état et le nombre d'équipements qui ont répondu |
 | Fichiers | les fichiers exportés présents dans le répertoire de sortie, à télécharger |
+
+Les heures sont affichées dans le fuseau de la machine qui sert la page (`TZ`, réglé dans
+`.env` pour la pile Compose), et le pied de page dit lequel ; survoler une heure montre la valeur
+UTC stockée. Tout ce qui est écrit — `nodes.csv`, `snapshot.json`, les journaux — reste en UTC,
+parce que c'est ce qu'attendent un importateur et un lecteur de journaux.
 
 Chaque page s'ouvre sur **Comment lire ce tableau**, un panneau replié qui dit d'où vient chaque
 colonne : quelle MIB, quelle règle, et pourquoi une case peut être vide. Chaque tableau a un champ
@@ -37,14 +43,19 @@ MAC affiche la même explication que `snowth_my_net explain`, dans la langue de 
 ## Nommer une MAC
 
 Six cents lignes ne disent pas grand-chose tant que celles qui comptent n'ont pas de nom.
-Cliquez sur une MAC et donnez-lui-en un — `imprimante compta`, `poste de Julie`, `caméra hall`.
-Le nom apparaît alors dans la première colonne de la page Nœuds, et le champ de filtre le trouve
-comme le reste.
+Écrivez-le directement dans la première colonne de la page Nœuds — `imprimante compta`,
+`poste de Julie`, `caméra hall` — il s'enregistre en quittant la case ou avec `Enter`, sans
+recharger la page, sans perdre votre filtre ni votre place dans la liste. `Escape` remet ce qui
+était là. Le même champ est sur la page d'une MAC, et le filtre trouve un nom comme le reste.
+
+Une colonne **Description** est à côté, écrite de la même façon, pour ce qu'un nom ne peut pas
+porter : où c'est accroché, à quoi ça sert, qui appeler.
 
 ```bash
 snowth_my_net node name 00:11:22:33:44:55 "imprimante compta"
+snowth_my_net node describe 00:11:22:33:44:55 "2e étage, local technique"
 snowth_my_net node name 00:11:22:33:44:55        # vide : l'oublier
-snowth_my_net node                               # tous les noms donnés
+snowth_my_net node                               # tout ce qui a été donné
 ```
 
 **Le nom appartient à l'adresse MAC, pas à la ligne.** Les positions bougent, les adresses
@@ -56,13 +67,51 @@ Il arrive aussi dans `snapshot.json` et dans `explain`. Il est absent de `nodes.
 `export.nodes.include_name: true`, pour que ce qui lit ce fichier continue d'y trouver les
 colonnes qu'il connaît.
 
+## Connexions SNMP
+
+L'onglet **SNMP** n'existe que si un compte est configuré, et il **redemande ce mot de passe**
+avant de s'ouvrir — une session laissée sur un écran déverrouillé suffit à lire l'inventaire, pas
+à changer ce à quoi l'outil parle. La confirmation dure quinze minutes, une déconnexion y met
+fin, et une mauvaise réponse compte dans le même verrou qu'une connexion.
+
+Il liste toutes les adresses interrogées : d'où elles viennent (une amorce, un voisin, un
+balayage, ou la main), l'identifiant choisi pour chacune, le résultat de la dernière tentative
+et, en cas d'échec, la raison. De là vous pouvez ajouter une adresse, en retirer une, en épingler
+une à un identifiant — ou laisser l'outil les essayer tous — et en tester une, ce qui lance une
+collecte pour cette seule adresse.
+
+**Une communauté n'est jamais affichée ici**, et ne quitte jamais son fichier : l'état garde le
+*nom* d'un identifiant, jamais sa valeur, et cette page ne lit rien d'autre. Les identifiants
+eux-mêmes se déclarent dans le fichier de configuration, avec leurs secrets dans `secrets/` ;
+cette page peut en choisir un pour une adresse, jamais en créer un.
+
+`web.actions: false` retire cet onglet comme les boutons plus bas.
+
+## Lancer quelque chose
+
+La page Collectes porte les boutons : **Collecter**, **Découvrir**, **Exporter**, et **Envoyer**
+quand une cible de push est configurée. L'interface ne fait pas le travail elle-même — elle
+lance exactement la commande que vous auriez tapée, dans un processus séparé, et montre ce
+qu'elle a rapporté :
+
+```
+Dernier : Collecter, terminé, 47 s — 12/13 devices, 1 error(s)
+```
+
+Une à la fois : pendant qu'une commande tourne, les boutons sont désactivés et la page revient
+d'elle-même toutes les cinq secondes jusqu'à la fin. Le planificateur garde son propre rythme ;
+le premier qui prend le verrou de l'état fait attendre l'autre, exactement comme deux terminaux.
+
+`web.actions: false` retire les boutons et refuse les requêtes, pour une installation qui veut
+l'interface strictement en lecture seule. **Sans compte configuré, quiconque atteint la page
+peut appuyer dessus** — une raison de déclarer un compte sous `web.auth.users`.
+
 ## Ce qu'elle ne fait pas
 
-**Elle est en lecture seule par construction.** Seul `GET` est servi, l'état est ouvert en
-lecture seule, et aucune page ne propose d'action : ni collecte, ni export, ni réglage. C'est
-volontaire — le verrou de l'état, les identifiants SNMP et toutes les écritures restent dans la
-ligne de commande et dans l'interface en terminal (`snowth_my_net tui`), où l'on règle aussi un
-type à la main ou construit un rapport.
+**Elle ne change jamais ce qui a été collecté.** Seuls les noms donnés à la main sont écrits, et
+appuyer sur un bouton lance une commande au lieu de faire le travail dans le serveur : le verrou
+de l'état, les identifiants SNMP, les types réglés à la main et le constructeur de rapports
+restent dans la ligne de commande et dans l'interface en terminal (`snowth_my_net tui`).
 
 ## Connexion
 

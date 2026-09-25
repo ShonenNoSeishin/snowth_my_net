@@ -13,6 +13,7 @@ Design, on purpose:
 from __future__ import annotations
 
 import html
+import json
 import threading
 from dataclasses import dataclass
 from http import HTTPStatus
@@ -23,15 +24,16 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
 
 from snowth_my_net import __version__
-from snowth_my_net.clock import Clock
+from snowth_my_net.clock import Clock, local_zone
 from snowth_my_net.config.loader import LoadedConfig
+from snowth_my_net.config.manual import ManualError, normalize_address
 from snowth_my_net.config.schema import LOOPBACK
 from snowth_my_net.i18n import Translator, detect_language
 from snowth_my_net.logs import get_logger
-from snowth_my_net.names import MAX_LENGTH, NameError_, clean_mac, clean_name, store_for
+from snowth_my_net.names import MAX_LENGTH, NameError_, clean_mac, store_for
 from snowth_my_net.state.db import StateError, open_db
 from snowth_my_net.state.repo import Repo
-from snowth_my_net.web import pages
+from snowth_my_net.web import pages, snmp
 from snowth_my_net.web.accounts import (
     MIN_LENGTH,
     STORE_NAME,
@@ -49,7 +51,8 @@ from snowth_my_net.web.auth import (
     parse_hash,
     verify_password,
 )
-from snowth_my_net.web.pages import Cell
+from snowth_my_net.web.jobs import ACTIONS, Runner
+from snowth_my_net.web.pages import Cell, Editable
 
 LANGUAGES = ("en", "fr")
 LANG_COOKIE = "snowth_lang"
@@ -60,6 +63,7 @@ CONTENT_TYPES = {".csv": "text/csv; charset=utf-8", ".json": "application/json; 
                  ".html": "text/html; charset=utf-8", ".dot": "text/plain; charset=utf-8",
                  ".mmd": "text/plain; charset=utf-8"}
 MAX_FORM_BYTES = 4096
+JSON = "application/json; charset=utf-8"
 
 
 @dataclass(frozen=True)
@@ -70,6 +74,7 @@ class Page:
 
 NAV = (Page("/", "tab.devices"), Page("/nodes", "tab.nodes"), Page("/links", "tab.links"),
        Page("/runs", "tab.runs"), Page("/files", "web.tab.files"))
+SNMP_PAGE = Page("/snmp", "web.snmp.tab")
 
 
 class Site:
@@ -83,6 +88,7 @@ class Site:
         self.fixed = load_accounts(loaded)          # password_file / password_env accounts
         self.store = Store(loaded.paths.state_dir / STORE_NAME)
         self.labels = store_for(loaded.paths)      # MAC -> name given by hand
+        self.jobs = Runner(str(loaded.paths.config_file), loaded.cfg.general.run_timeout)
         self.writing = threading.Lock()
         self.sessions = Sessions(lifetime=loaded.cfg.web.auth.session_hours * 3600)
         self.logins = LoginLimiter()
@@ -115,6 +121,11 @@ class Site:
     def guarded(self) -> bool:
         """True when accounts are configured: every page then needs a session."""
         return bool(self.names)
+
+    @property
+    def manageable(self) -> bool:
+        """The SNMP page exists only with an account: it asks for that password again."""
+        return self.guarded and self.loaded.cfg.web.actions
 
     def bootstrap(self) -> None:
         """Give every declared account without a password a first one, and log it.
@@ -263,12 +274,13 @@ class Site:
     # ----------------------------------------------------------------- rendering
 
     def shell(self, active: str, title: str, body: str, subtitle: str = "",
-              logged_in: bool = True, t=None) -> bytes:
+              logged_in: bool = True, t=None, refresh: int = 0) -> bytes:
         t = t or self.t
+        pages_shown = (*NAV, SNMP_PAGE) if self.manageable else NAV
         nav = "".join(
             '<a href="{}" class="{}">{}</a>'.format(
                 page.path, "on" if page.path == active else "", esc(t(page.label_key)))
-            for page in NAV) if logged_in else ""
+            for page in pages_shown) if logged_in else ""
         tools = (f'<button type="button" id="theme" class="icon" '
                  f'title="{esc(t("web.theme"))}" aria-label="{esc(t("web.theme"))}"></button>'
                  + "".join(
@@ -285,6 +297,7 @@ class Site:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+{f'<meta http-equiv="refresh" content="{refresh}">' if refresh else ""}
 <title>{esc(title)} — snowth_my_net</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -298,34 +311,53 @@ class Site:
   <p class="subtitle">{esc(subtitle)}</p>
   {body}
 </main>
-<footer>{esc(t("web.read_only"))} · snowth_my_net {esc(__version__)}</footer>
+<footer>{esc(t("web.read_only"))} · {esc(t("web.times", zone=local_zone()))}
+ · snowth_my_net {esc(__version__)}</footer>
 <script src="/static/app.js"></script>
 </body>
 </html>
 """.encode()
 
     def table_page(self, active: str, title: str, table: pages.Table, subtitle: str,
-                   link_first: str = "", t=None, link_column: int = 0) -> bytes:
+                   link_first: str = "", t=None, link_column: int = 0, before: str = "",
+                   refresh: int = 0) -> bytes:
         t = t or self.t
         if not table.rows:
-            return self.shell(active, title, f'<p class="empty">{esc(table.empty)}</p>',
-                              subtitle, t=t)
-        head = "".join(f'<th class="{kind}"><button type="button">{esc(label)}'
+            return self.shell(active, title, before + f'<p class="empty">{esc(table.empty)}</p>',
+                              subtitle, t=t, refresh=refresh)
+        keys = table.keys or [None] * len(table.columns)
+        classes = [f"{kind} col-{key}" if key else kind
+                   for (_label, kind), key in zip(table.columns, keys, strict=True)]
+        head = "".join(f'<th class="{css}"><button type="button">{esc(label)}'
                        '<span class="arrow"></span></button></th>'
-                       for label, kind in table.columns)
+                       for (label, _kind), css in zip(table.columns, classes, strict=True))
         body = []
         for row in table.rows:
             cells = []
-            for index, (value, (_label, kind)) in enumerate(zip(row, table.columns,
-                                                                strict=True)):
-                main = value.text if isinstance(value, Cell) else str(value)
-                note = value.note if isinstance(value, Cell) else ""
+            for index, (value, kind) in enumerate(zip(row, classes, strict=True)):
+                title = ""
+                if isinstance(value, Cell | Editable):
+                    main, note = value.text, getattr(value, "note", "")
+                    title = getattr(value, "title", "")
+                else:
+                    main, note = str(value), ""
+                if isinstance(value, Editable):
+                    cells.append(f'<td class="{kind} write">'
+                                 f'{self.name_field(value, t)}</td>')
+                    continue
                 text = esc(main)
                 if index == link_column and link_first and main:
                     text = f'<a href="{link_first}{quote(main, safe=":")}">{text}</a>'
                 if note:
                     text += f' <span class="note">{esc(note)}</span>'
-                cells.append(f'<td class="{kind}">{text}</td>')
+                more = getattr(value, "more", ())
+                if more:
+                    items = "".join(f"<li>{esc(one)}</li>" for one in more)
+                    text += (f'<details class="more"><summary>+{len(more)}</summary>'
+                             f"<ul>{items}</ul></details>")
+                hover = f' title="{esc(title)}"' if title else ""
+                tone = f" {value.tone}" if getattr(value, "tone", "") else ""
+                cells.append(f'<td class="{kind}{tone}"{hover}>{text}</td>')
             body.append("<tr>" + "".join(cells) + "</tr>")
         shown = len(table.rows)
         count = t("web.count", total=table.total)
@@ -341,7 +373,175 @@ class Site:
                     f'<span class="count" id="count">{esc(count)}</span></div>')
         table_html = (f'<div class="wrap"><table id="rows"><thead><tr>{head}</tr></thead>'
                       f'<tbody>{"".join(body)}</tbody></table></div>')
-        return self.shell(active, title, panel + controls + table_html, subtitle, t=t)
+        return self.shell(active, title, before + panel + controls + table_html, subtitle, t=t,
+                          refresh=refresh)
+
+    def actions_panel(self, t, message: str = "") -> str:
+        """The buttons above the runs, and what the last one did."""
+        if not self.loaded.cfg.web.actions:
+            return ""
+        now = self.clock.now()
+        current = self.jobs.current
+        busy = "" if current is None else " disabled"
+        buttons = "".join(
+            f'<button type="submit" name="what" value="{what}"{busy}>'
+            f'{esc(t(f"web.do.{what}"))}</button>'
+            for what in ACTIONS if what != "push" or self.loaded.cfg.push.targets)
+        state = ""
+        if current is not None:
+            said = t("web.do.running", what=t(f"web.do.{current.what}"),
+                     seconds=current.seconds(now))
+            state = f'<p class="state running">{esc(said)}</p>'
+        elif self.jobs.last is not None:
+            last = self.jobs.last
+            said = t("web.do.last", what=t(f"web.do.{last.what}"),
+                     status=t(f"web.do.{last.status}"), seconds=last.seconds(now),
+                     detail=last.summary or "-")
+            state = f'<p class="state {esc(last.status)}">{esc(said)}</p>'
+        error = f'<p class="error">{esc(message)}</p>' if message else ""
+        return (f'<form class="actions" method="post" action="/action">'
+                f'<span class="what">{esc(t("web.do.title"))}</span>{buttons}'
+                f'<span class="note">{esc(t("web.do.hint"))}</span>{state}{error}</form>')
+
+    def start_job(self, what: str, user: str, t=None) -> tuple[int, str, bytes]:
+        """``(status, target, body)`` for POST /action: start it, then show the runs."""
+        t = t or self.t
+        if not self.loaded.cfg.web.actions or what not in ACTIONS:
+            return HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", b"not found\n"
+        if self.jobs.start(what, user) is None:
+            return (HTTPStatus.CONFLICT, "text/html; charset=utf-8",
+                    self.runs_page(t, t("web.do.busy")))
+        return HTTPStatus.SEE_OTHER, "/runs", b""
+
+    def runs_page(self, t=None, message: str = "") -> bytes:
+        t = t or self.t
+        with closing(self.state()) as repo:
+            table = pages.runs(repo, t)
+            subtitle = pages.summary(self.loaded, repo, self.clock.now(), t)
+        # While something runs, the page comes back on its own: no button to press to see it end.
+        refresh = 5 if self.jobs.current is not None else 0
+        return self.table_page("/runs", t("tab.runs"), table, subtitle, "", t, 0,
+                               before=self.actions_panel(t, message), refresh=refresh)
+
+    # ----------------------------------------------------------------- SNMP connections
+
+    def confirm_page(self, t, message: str = "") -> bytes:
+        """The password again, before anything that changes what the tool talks to."""
+        error = f'<p class="error">{esc(message)}</p>' if message else ""
+        body = (f'<form class="login" method="post" action="/confirm">'
+                f'<p class="note">{esc(t("web.snmp.locked"))}</p>'
+                f'<label for="password">{esc(t("web.password"))}</label>'
+                f'<input id="password" name="password" type="password" '
+                f'autocomplete="current-password" autofocus required>'
+                f'{error}<button type="submit">{esc(t("web.snmp.open"))}</button></form>')
+        return self.shell("/snmp", t("web.snmp.title"), body, t=t)
+
+    def snmp_page(self, t=None, message: str = "", tone: str = "") -> bytes:
+        t = t or self.t
+        names = snmp.credential_names(self.loaded)
+        with closing(self.state()) as repo:
+            rows = snmp.connections(self.loaded, repo)
+        body = [f'<p class="intro">{esc(t("web.snmp.intro"))}</p>']
+        if message:
+            body.append(f'<p class="state {esc(tone or "ok")}">{esc(message)}</p>')
+        body.append(
+            f'<form class="actions" method="post" action="/snmp">'
+            f'<input type="hidden" name="do" value="add">'
+            f'<span class="what">{esc(t("web.snmp.add"))}</span>'
+            f'<input name="address" placeholder="192.0.2.42" required>'
+            f'<button type="submit">{esc(t("web.snmp.add"))}</button>'
+            f'<span class="note">{esc(t("web.snmp.credentials_from", count=len(names)))}</span>'
+            f"</form>")
+        head = "".join(f"<th>{esc(t(key)) if key else ''}</th>" for key in
+                       ("col.address", "col.name", "col.origin", "col.credential",
+                        "col.status", "col.failures", ""))
+        lines = []
+        for row in rows:
+            chosen = "".join(
+                f'<option value="{esc(name)}"{" selected" if name == row.credential else ""}>'
+                f"{esc(name)}</option>" for name in names)
+            tone_class = {"ok": "", "failed": " bad", "never": " bad"}[row.status]
+            detail = f' <span class="note">{esc(row.error)}</span>' if row.error else ""
+            lines.append(
+                f"<tr><td>{esc(row.host)}</td><td>{esc(row.device_name)}</td>"
+                f"<td>{esc(row.origin)}</td>"
+                f'<td><form class="inline" method="post" action="/snmp">'
+                f'<input type="hidden" name="do" value="credential">'
+                f'<input type="hidden" name="address" value="{esc(row.host)}">'
+                f'<select name="credential">'
+                f'<option value="">{esc(t("web.snmp.any"))}</option>{chosen}</select>'
+                f'<button type="submit">{esc(t("web.snmp.save"))}</button></form></td>'
+                f'<td class="text{tone_class}">{esc(row.status)}{detail}</td>'
+                f"<td>{row.failures}</td>"
+                f'<td class="doing">'
+                f'<form class="inline" method="post" action="/snmp">'
+                f'<input type="hidden" name="do" value="test">'
+                f'<input type="hidden" name="address" value="{esc(row.host)}">'
+                f'<button type="submit">{esc(t("web.snmp.test"))}</button></form>'
+                f'<form class="inline" method="post" action="/snmp">'
+                f'<input type="hidden" name="do" value="remove">'
+                f'<input type="hidden" name="address" value="{esc(row.host)}">'
+                f'<button type="submit">{esc(t("web.snmp.remove"))}</button></form></td></tr>')
+        body.append(f'<div class="wrap"><table class="plain"><thead><tr>{head}</tr></thead>'
+                    f'<tbody>{"".join(lines)}</tbody></table></div>')
+        return self.shell("/snmp", t("web.snmp.title"), "".join(body), t=t)
+
+    def confirm(self, user: str, password: str, token: str | None, address: str, t=None
+                ) -> tuple[int, str, bytes]:
+        """POST /confirm: the password again, counted by the same limiter as a login."""
+        t = t or self.t
+        waiting = self.logins.locked_for(address)
+        if waiting > 0:
+            return (HTTPStatus.TOO_MANY_REQUESTS, "text/html; charset=utf-8",
+                    self.confirm_page(t, t("web.too_many", seconds=int(waiting) + 1)))
+        account = self.account_of(user)
+        if account is None or not verify_password(password, account.hash):
+            self.logins.failed(address)
+            log.warning("failed confirmation for %r from %s", user[:40], address)
+            return (HTTPStatus.UNAUTHORIZED, "text/html; charset=utf-8",
+                    self.confirm_page(t, t("web.bad_login")))
+        self.logins.succeeded(address)
+        self.sessions.confirm(token)
+        log.info("%s opened the SNMP page from %s", user, address)
+        return HTTPStatus.SEE_OTHER, "/snmp", b""
+
+    def manage_snmp(self, form: dict, user: str, t=None) -> tuple[int, str, bytes]:
+        """``(status, target or content type, body)`` for POST /snmp."""
+        t = t or self.t
+        what = (form.get("do") or [""])[0]
+        address = (form.get("address") or [""])[0]
+        if what not in snmp.ACTIONS:
+            return HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", b"not found\n"
+        try:
+            if what == "test":
+                host = normalize_address(address)
+                if self.jobs.start("collect", user, extra=("--device", host)) is None:
+                    return self._snmp_answer(t, t("web.do.busy"), "failed")
+                return self._snmp_answer(t, t("web.snmp.testing", address=host))
+            with closing(self.state_rw()) as repo:
+                now = self.clock.now()
+                if what == "add":
+                    host = snmp.add_target(repo, address, now)
+                    said = t("web.snmp.added", address=host)
+                elif what == "remove":
+                    host = snmp.remove_target(repo, address)
+                    said = t("web.snmp.removed", address=host)
+                else:
+                    name = (form.get("credential") or [""])[0]
+                    chosen = snmp.set_credential(self.loaded, repo, address, name, now)
+                    said = f"{normalize_address(address)}: {chosen or t('web.snmp.any')}"
+        except ManualError as exc:
+            return self._snmp_answer(t, str(exc), "failed")
+        log.info("snmp: %s %s by %s", what, address, user or "an anonymous reader")
+        return self._snmp_answer(t, said)
+
+    def _snmp_answer(self, t, message: str, tone: str = "ok") -> tuple[int, str, bytes]:
+        status = HTTPStatus.OK if tone == "ok" else HTTPStatus.BAD_REQUEST
+        return status, "text/html; charset=utf-8", self.snmp_page(t, message, tone)
+
+    def state_rw(self) -> Repo:
+        """A writing connection, for the few things this page changes (never the inventory)."""
+        return Repo(open_db(self.loaded.paths.state_file))
 
     def node_page(self, mac: str, t=None, message: str = "") -> bytes:
         t = t or self.t
@@ -353,6 +553,19 @@ class Site:
                 f'{self.name_form(mac, t, message)}'
                 f'<pre class="explain">{rendered}</pre>')
         return self.shell("/nodes", t("web.node_title", mac=mac), body, t=t)
+
+    def name_field(self, cell: Editable, t) -> str:
+        """The same form as on the MAC's own page, in the cell: a name is one keystroke away.
+
+        A real form, so that it works with no script at all; app.js sends it without reloading.
+        """
+        label = esc(t(f"web.{cell.field}.title"))
+        return (f'<form class="cell" method="post" action="/name">'
+                f'<input type="hidden" name="mac" value="{esc(cell.key)}">'
+                f'<input type="hidden" name="field" value="{esc(cell.field)}">'
+                f'<input name="name" value="{esc(cell.text)}" '
+                f'maxlength="{MAX_LENGTH[cell.field]}" '
+                f'aria-label="{label}" title="{label}" autocomplete="off"></form>')
 
     def name_form(self, mac: str, t, message: str = "") -> str:
         """Naming a MAC is the one thing a reader may write, and it is theirs, not collected."""
@@ -370,17 +583,28 @@ class Site:
                 f'<span class="note">{esc(t("web.name.hint"))} '
                 f'{esc(t("web.name.empty_clears"))}</span>{error}</form>')
 
-    def set_name(self, mac: str, name: str, t=None) -> tuple[int, str, bytes]:
-        """``(status, content type or target, body)`` for POST /name."""
+    def set_name(self, mac: str, name: str, t=None, as_json: bool = False,
+                 field: str = "name") -> tuple[int, str, bytes]:
+        """``(status, content type or target, body)`` for POST /name.
+
+        ``as_json`` answers the table's own script, which saves a cell without reloading the
+        page; the plain form answer is a redirect, so the page works with no script at all.
+        """
         t = t or self.t
         try:
             stored = clean_mac(mac)
             with self.writing:
-                self.labels.set(stored, name)
+                given = self.labels.set(stored, name, field)
         except NameError_ as exc:
+            if as_json:
+                return (HTTPStatus.BAD_REQUEST, JSON,
+                        json.dumps({"error": str(exc)}).encode())
             return (HTTPStatus.BAD_REQUEST, "text/html; charset=utf-8",
                     self.node_page(mac, t, str(exc)))
-        log.info("node %s named %r", stored, clean_name(name))
+        log.info("node %s: %s = %r", stored, field, given)
+        if as_json:
+            return HTTPStatus.OK, JSON, json.dumps({"mac": stored, "name": given,
+                                                    "field": field}).encode()
         return HTTPStatus.SEE_OTHER, "/node?mac=" + quote(stored, safe=":"), b""
 
     # ----------------------------------------------------------------- routing
@@ -404,6 +628,13 @@ class Site:
         if path == "/login":
             return HTTPStatus.SEE_OTHER, "/", b""       # already signed in
         who = self.sessions.user_of(token)
+        if path == "/snmp":
+            if not self.manageable:
+                return (HTTPStatus.NOT_FOUND, html_type,
+                        self.shell("/", t("web.not_found"), "", t=t))
+            if not self.sessions.confirmed(token):
+                return HTTPStatus.OK, html_type, self.confirm_page(t)
+            return HTTPStatus.OK, html_type, self.snmp_page(t)
         if path == "/password":
             if not self.guarded:
                 return (HTTPStatus.NOT_FOUND, html_type,
@@ -419,6 +650,8 @@ class Site:
         if path not in {page.path for page in NAV}:
             return (HTTPStatus.NOT_FOUND, html_type,
                     self.shell("/", t("web.not_found"), "", t=t))
+        if path == "/runs":
+            return HTTPStatus.OK, html_type, self.runs_page(t)
         with closing(self.state()) as repo:
             subtitle = pages.summary(self.loaded, repo, now, t)
             if path == "/":
@@ -430,14 +663,11 @@ class Site:
             elif path == "/links":
                 table = pages.links(self.loaded, repo, now, t)
                 title = t("tab.links")
-            elif path == "/runs":
-                table = pages.runs(repo, t)
-                title = t("tab.runs")
             else:
                 table = pages.files(self.loaded.paths.output_dir, t)
                 title = t("web.tab.files")
         link = "/node?mac=" if path == "/nodes" else ("/download/" if path == "/files" else "")
-        column = 1 if path == "/nodes" else 0      # the MAC, which the name column now precedes
+        column = 2 if path == "/nodes" else 0      # the MAC: the name and description precede it
         return (HTTPStatus.OK, html_type,
                 self.table_page(path, title, table, subtitle, link, t, column))
 
@@ -549,13 +779,22 @@ class Handler(BaseHTTPRequestHandler):
         site = self.server.site
         parsed = urlparse(self.path)
         token = parse_cookie(self.headers.get("Cookie"))
-        if parsed.path not in ("/login", "/logout", "/password", "/name"):
+        if parsed.path not in ("/login", "/logout", "/password", "/name", "/action",
+                               "/snmp", "/confirm"):
             self.send_error(HTTPStatus.NOT_FOUND)
             return
-        if parsed.path != "/name" and not site.guarded:
+        if parsed.path in ("/snmp", "/confirm"):
+            self.manage(parsed.path, token)
+            return
+        if parsed.path not in ("/name", "/action") and not site.guarded:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
-        if parsed.path == "/name" and site.guarded and site.sessions.user_of(token) is None:
+        if parsed.path in ("/name", "/action") and site.guarded and (
+                site.sessions.user_of(token) is None):
+            if "application/json" in (self.headers.get("Accept") or ""):
+                self.finish_response(HTTPStatus.UNAUTHORIZED, JSON,
+                                     json.dumps({"error": "sign in again"}).encode())
+                return
             self.finish_response(HTTPStatus.SEE_OTHER, "/login", b"")
             return
         form = self.read_form()
@@ -564,9 +803,16 @@ class Handler(BaseHTTPRequestHandler):
             self.finish_response(HTTPStatus.SEE_OTHER, "/login", b"", clear_cookie=True)
             return
         lang = site.translator(parse_cookie(self.headers.get("Cookie"), LANG_COOKIE))
+        if parsed.path == "/action":
+            status, where, body = site.start_job((form.get("what") or [""])[0],
+                                                 site.sessions.user_of(token) or "", lang)
+            self.finish_response(status, where, body)
+            return
         if parsed.path == "/name":
+            wants_json = "application/json" in (self.headers.get("Accept") or "")
             status, where, body = site.set_name((form.get("mac") or [""])[0],
-                                                (form.get("name") or [""])[0], lang)
+                                                (form.get("name") or [""])[0], lang, wants_json,
+                                                (form.get("field") or ["name"])[0])
             self.finish_response(status, where, body)
             return
         if parsed.path == "/password":
@@ -579,6 +825,29 @@ class Handler(BaseHTTPRequestHandler):
             return
         status, where, body, new_token = site.sign_in(form, self.caller(), lang)
         self.finish_response(status, where, body, set_cookie=new_token)
+
+    def manage(self, path: str, token: str | None) -> None:
+        """POST /confirm and POST /snmp: an account, its password again, then the change."""
+        site = self.server.site
+        lang = site.translator(parse_cookie(self.headers.get("Cookie"), LANG_COOKIE))
+        user = site.sessions.user_of(token)
+        if not site.manageable:
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        if user is None:
+            self.finish_response(HTTPStatus.SEE_OTHER, "/login", b"")
+            return
+        form = self.read_form()
+        if path == "/confirm":
+            status, where, body = site.confirm(user, (form.get("password") or [""])[0],
+                                               token, self.caller(), lang)
+            self.finish_response(status, where, body)
+            return
+        if not site.sessions.confirmed(token):
+            self.finish_response(HTTPStatus.SEE_OTHER, "/snmp", b"")   # ask again first
+            return
+        status, where, body = site.manage_snmp(form, user, lang)
+        self.finish_response(status, where, body)
 
     def read_form(self) -> dict:
         length = min(int(self.headers.get("Content-Length") or 0), MAX_FORM_BYTES)
@@ -617,7 +886,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Security-Policy",
                          "default-src 'none'; style-src 'self'; script-src 'self'; "
-                         "img-src 'self' data:; form-action 'self'; frame-ancestors 'none'")
+                         "img-src 'self' data:; connect-src 'self'; form-action 'self'; "
+                         "frame-ancestors 'none'")
 
     def caller(self) -> str:
         site = self.server.site

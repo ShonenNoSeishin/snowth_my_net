@@ -97,6 +97,39 @@ button.icon::after { content: "☾"; }
   :root:not([data-theme="light"]) button.icon::after { content: "☀"; }
 }
 td .note { color: var(--muted); font-size: 12px; }
+
+/* The whole table must fit: every column has a ceiling, and what does not fit is folded
+   (the addresses) or cut with an ellipsis, never pushed off the right edge. */
+td, th { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+td.col-name, th.col-name { max-width: 16ch; }
+td.col-description, th.col-description { max-width: 26ch; }
+td.col-vendor, th.col-vendor { max-width: 18ch; }
+td.col-dns, th.col-dns { max-width: 16ch; }
+td.col-switch, th.col-switch { max-width: 16ch; }
+td.col-port, th.col-port { max-width: 12ch; }
+td.col-vlan, th.col-vlan { max-width: 7ch; }
+td.col-ip, th.col-ip { max-width: 20ch; }
+td.col-seen, th.col-seen { max-width: 15ch; }
+
+/* The addresses an elected one hides: a fold that opens over the row, never widening it. */
+details.more { display: inline; }
+details.more > summary {
+  display: inline-block; cursor: pointer; margin-left: 6px; padding: 0 5px;
+  color: var(--muted); font-size: 11.5px; border: 1px solid var(--line); border-radius: 4px;
+}
+details.more > summary:hover { color: var(--accent); border-color: var(--accent); }
+details.more > summary::-webkit-details-marker { display: none; }
+details.more[open] { position: relative; }
+details.more > ul {
+  position: absolute; z-index: 3; left: 0; top: 100%; margin: 4px 0 0; padding: 6px 10px;
+  list-style: none; background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .18); white-space: nowrap;
+}
+details.more > ul li { padding: 1px 0; }
+/* A status that is not "ok" must be seen without being looked for. */
+td.bad { color: var(--bad); }
+td.warn { color: var(--warn); }
+td.bad .note, td.warn .note { color: inherit; opacity: .8; }
 form.out { margin-left: 0; }
 form.out button, .login button {
   font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line);
@@ -115,6 +148,59 @@ form.out button:hover, .login button:hover { border-color: var(--accent); color:
 .login input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .login button { margin-top: 10px; }
 .login .error { color: var(--bad); margin: 6px 0 0; font-size: 13px; }
+/* The SNMP page: a plain table with a form in a cell, no filter, no sort. */
+.intro { color: var(--muted); max-width: 80ch; }
+table.plain { width: 100%; border-collapse: collapse; }
+table.plain th {
+  text-align: left; font-size: 11.5px; letter-spacing: .06em; color: var(--muted);
+  border-bottom: 1px solid var(--line); padding: 8px 10px;
+}
+table.plain td { padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+table.plain td.bad { color: var(--bad); }
+form.inline { display: inline-flex; gap: 6px; align-items: center; margin: 0 6px 0 0; }
+form.inline select, form.inline input, .actions input {
+  font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 6px; padding: 5px 8px;
+}
+form.inline button, td.doing button {
+  font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 6px; padding: 5px 10px; cursor: pointer;
+}
+form.inline button:hover, td.doing button:hover { border-color: var(--accent); color: var(--accent); }
+
+/* The buttons that start a job, above the runs they produce. */
+.actions {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 0 0 16px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px;
+}
+.actions .what { color: var(--muted); font-size: 12.5px; }
+.actions button {
+  font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 14px; cursor: pointer;
+}
+.actions button:hover:enabled { border-color: var(--accent); color: var(--accent); }
+.actions button:disabled { color: var(--muted); cursor: default; }
+.actions .note { color: var(--muted); font-size: 12px; flex-basis: 100%; }
+.actions .state { margin: 0; flex-basis: 100%; font-size: 13px; }
+.actions .state.running { color: var(--accent); }
+.actions .state.ok { color: var(--muted); }
+.actions .state.partial { color: var(--warn); }
+.actions .state.failed { color: var(--bad); }
+.actions .error { color: var(--bad); margin: 0; flex-basis: 100%; font-size: 13px; }
+
+/* Naming a MAC straight in the table: a cell that looks like a cell until it is used. */
+td.write { padding: 0; }
+form.cell { margin: 0; }
+form.cell input {
+  font: inherit; color: var(--text); background: transparent; border: 1px solid transparent;
+  border-radius: 5px; padding: 5px 8px; width: 100%; min-width: 120px;
+}
+form.cell input:hover { border-color: var(--line); }
+form.cell input:focus { background: var(--bg); border-color: var(--accent); outline: none; }
+form.cell input::placeholder { color: var(--muted); }
+form.cell.saved input { border-color: var(--accent); }
+form.cell.bad input { border-color: var(--bad); }
+
 /* Naming a MAC: one line above its explanation, never in the way of it. */
 .rename {
   display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 0 0 14px;

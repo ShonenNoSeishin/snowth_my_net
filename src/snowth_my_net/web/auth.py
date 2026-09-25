@@ -20,6 +20,7 @@ COST, BLOCK, PARALLEL = 2 ** 14, 8, 1      # ~100 ms and 16 MB per attempt on a 
 SALT_BYTES, TOKEN_BYTES = 16, 32
 COOKIE = "snowth_session"
 MAX_FAILURES, LOCKOUT_SECONDS = 5, 60.0
+CONFIRM_SECONDS = 15 * 60          # how long a re-typed password unlocks the SNMP page
 
 
 def hash_password(password: str) -> str:
@@ -68,12 +69,21 @@ class Sessions:
     lifetime: float                                    # seconds
     clock: object = time.monotonic
     _open: dict[str, tuple[str, float]] = field(default_factory=dict)   # token -> (user, until)
+    _confirmed: dict[str, float] = field(default_factory=dict)          # token -> when
 
     def open(self, user: str) -> str:
         self.purge()
         token = secrets.token_urlsafe(TOKEN_BYTES)
         self._open[token] = (user, self.clock() + self.lifetime)
         return token
+
+    def confirm(self, token: str) -> None:
+        """The password was typed again: what it unlocks stays open for a while, not forever."""
+        self._confirmed[token] = self.clock()
+
+    def confirmed(self, token: str | None, within: float = CONFIRM_SECONDS) -> bool:
+        when = self._confirmed.get(token or "")
+        return when is not None and self.clock() - when < within
 
     def user_of(self, token: str | None) -> str | None:
         if not token:
@@ -90,11 +100,13 @@ class Sessions:
     def close(self, token: str | None) -> None:
         if token:
             self._open.pop(token, None)
+            self._confirmed.pop(token, None)
 
     def purge(self) -> None:
         now = self.clock()
         for token in [t for t, (_user, until) in self._open.items() if now >= until]:
             del self._open[token]
+            self._confirmed.pop(token, None)
 
     @property
     def count(self) -> int:

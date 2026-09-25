@@ -26,6 +26,19 @@
   var count = document.getElementById("count");
   var total = rows.length;
 
+  // A cell holding a form holds its text in an input: filter and sort must look there too.
+  function cellText(cell) {
+    var field = cell.querySelector("input[name]");
+    return (field ? field.value : cell.textContent).trim();
+  }
+
+  function rowText(row) {
+    var written = Array.prototype.map.call(row.querySelectorAll("input[name]"), function (i) {
+      return i.value;
+    }).join(" ");
+    return (row.textContent + " " + written).toLowerCase();
+  }
+
   Array.prototype.forEach.call(table.tHead.rows[0].cells, function (th, index) {
     th.querySelector("button").addEventListener("click", function () {
       var ascending = th.getAttribute("aria-sort") !== "ascending";
@@ -34,7 +47,7 @@
       });
       th.setAttribute("aria-sort", ascending ? "ascending" : "descending");
       rows.sort(function (a, b) {
-        var x = a.cells[index].textContent.trim(), y = b.cells[index].textContent.trim();
+        var x = cellText(a.cells[index]), y = cellText(b.cells[index]);
         if (x === "" || y === "") { return x === y ? 0 : (x === "" ? 1 : -1); }
         return (ascending ? 1 : -1) * collator.compare(x, y);
       });
@@ -47,7 +60,7 @@
       var words = input.value.toLowerCase().split(/\s+/).filter(Boolean);
       var shown = 0;
       rows.forEach(function (row) {
-        var text = row.textContent.toLowerCase();
+        var text = rowText(row);
         var visible = words.every(function (word) { return text.indexOf(word) !== -1; });
         row.hidden = !visible;
         if (visible) { shown += 1; }
@@ -63,4 +76,47 @@
       }
     });
   }
+})();
+
+// Names written straight in the table. The forms work on their own (a submit reloads the page);
+// this only saves them where the reader is, without losing their filter, their sort or their
+// place in a long list.
+(function () {
+  var forms = document.querySelectorAll("form.cell");
+  if (!forms.length || !window.fetch) { return; }
+  Array.prototype.forEach.call(forms, function (form) {
+    var field = form.querySelector('input[name="name"]');
+    var saved = field.value;
+
+    function save() {
+      if (field.value === saved) { return; }
+      var body = new URLSearchParams(new FormData(form));
+      form.classList.remove("saved", "bad");
+      fetch(form.action, {
+        method: "POST",
+        headers: {"Accept": "application/json",
+                  "Content-Type": "application/x-www-form-urlencoded"},
+        body: body.toString(),
+        credentials: "same-origin"
+      }).then(function (response) {
+        return response.json().then(function (data) { return {ok: response.ok, data: data}; });
+      }).then(function (answer) {
+        if (!answer.ok) { throw new Error(answer.data.error || "refused"); }
+        field.value = answer.data.name;        // as it was stored: trimmed, one line
+        saved = field.value;
+        field.removeAttribute("title");
+        form.classList.add("saved");
+        setTimeout(function () { form.classList.remove("saved"); }, 1200);
+      }).catch(function (error) {
+        form.classList.add("bad");
+        field.title = String(error.message || error);
+      });
+    }
+
+    form.addEventListener("submit", function (event) { event.preventDefault(); save(); });
+    field.addEventListener("blur", save);
+    field.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") { field.value = saved; field.blur(); }
+    });
+  });
 })();

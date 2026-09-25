@@ -360,6 +360,7 @@ class DevicesExportCfg:
 @dataclass
 class NodesExportCfg:
     include_name: bool = False       # a "Name" column: off, so that nodes.csv keeps its shape
+    include_description: bool = False
 
 
 @dataclass
@@ -573,6 +574,7 @@ class WebCfg:
     node_limit: int = 2000           # rows sent to the browser on the Nodes page
     auth: WebAuthCfg = field(default_factory=WebAuthCfg)
     trusted_proxies: list[Network] = field(default_factory=list)   # who may set X-Forwarded-For
+    actions: bool = True             # the buttons that start a collect, a discovery, an export
 
     def check(self) -> list[str]:
         errs = []

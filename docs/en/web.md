@@ -20,8 +20,9 @@ SNOWTH_HTTPS_PORT=9443 docker compose up -d
 
 | Page | Content |
 |---|---|
-| Devices | the inventory, as `devices.csv`: name, IP, vendor, model, OS, type, last collect |
-| Nodes | MAC addresses and where they are, as `nodes.csv`; a MAC opens its explanation, where it can also be named |
+| Devices | the inventory, as `devices.csv`: name, IP, vendor, model, OS, type, last collect — plus every address that was polled and did not answer, in red, with the reason |
+| Nodes | MAC addresses and where they are, as `nodes.csv`; the name and the description are written straight in the table |
+| SNMP | which addresses are polled, with which credential, and why one does not answer (an account and its password again) |
 | Links | the physical links found through LLDP/CDP, as `links.csv` |
 | Runs | the last 50 runs, their status and how many devices answered |
 | Files | the exported files present in the output directory, to download |
@@ -29,6 +30,11 @@ SNOWTH_HTTPS_PORT=9443 docker compose up -d
 A MAC seen in several places takes several lines, each marked with its number of positions; the
 IP column shows the elected address and then, in grey, the other addresses known for that MAC. In
 Devices, '+n MAC' marks a device known by several addresses.
+
+Times are shown in the time zone of the machine that serves the page (`TZ`, set in `.env`
+for the Compose stack), and the footer says which one; hovering a time shows the UTC value that
+is stored. Everything written — `nodes.csv`, `snapshot.json`, the logs — stays in UTC, because
+that is what an importer and a log reader need.
 
 Each page opens with **How to read this table**, a collapsed panel saying where every column
 comes from: which MIB, which rule, and why a cell can be empty. The ☾/☀ button in the header switches between light and dark (the choice is kept by the browser,
@@ -42,14 +48,20 @@ last collect ran and how it went. Clicking a MAC shows the same explanation as
 
 ## Naming a MAC
 
-Six hundred rows say little until the ones that matter carry a name. Click a MAC and give it
-one — `imprimante compta`, `poste de Julie`, `caméra hall`. The name then shows in the first
-column of the Nodes page, and the filter box finds it like anything else.
+Six hundred rows say little until the ones that matter carry a name. Write it straight in the
+first column of the Nodes page — `imprimante compta`, `poste de Julie`, `caméra hall` — and it
+saves itself when you leave the cell or press `Enter`, without reloading the page, losing your
+filter or your place in the list. `Escape` puts back what was there. The same field is on a
+MAC's own page, and the filter box finds a name like anything else.
+
+A **Description** column sits next to it, written the same way, for what a name cannot hold:
+where it hangs, what it is for, whom to call.
 
 ```bash
 snowth_my_net node name 00:11:22:33:44:55 "imprimante compta"
+snowth_my_net node describe 00:11:22:33:44:55 "2e étage, local technique"
 snowth_my_net node name 00:11:22:33:44:55        # empty: forget it
-snowth_my_net node                               # every name given so far
+snowth_my_net node                               # everything given so far
 ```
 
 **The name belongs to the MAC address, not to the row.** Positions move, addresses change, a
@@ -61,12 +73,49 @@ It reaches `snapshot.json` and `explain` too. It is left out of `nodes.csv` unle
 `export.nodes.include_name: true`, so that whatever reads that file keeps finding the columns it
 knows.
 
-## What it cannot do
+## SNMP connections
 
-**It is read-only by design.** Only `GET` is answered, the state is opened in read-only mode,
-and no page offers an action: no collect, no export, no setting. That is deliberate — the state
-lock, the SNMP credentials and every write stay in the CLI and in the terminal interface
-(`snowth_my_net tui`), which is also where you set a device type by hand or build a report.
+The **SNMP** tab exists only when an account is configured, and it **asks for that password
+again** before it opens — a session left on an unlocked screen is enough to read the inventory,
+not to change what the tool talks to. The confirmation lasts fifteen minutes, a sign-out ends it,
+and a wrong answer counts towards the same limiter as a login.
+
+It lists every address that is polled: where it came from (a seed, a neighbour, a sweep, or a
+hand), the credential chosen for it, the result of the last attempt and, when it failed, the
+reason. From there you can add an address, remove one, pin one to a credential — or let the tool
+try them all again — and test one, which runs a collect for that address alone.
+
+**A community is never shown here**, and never leaves its file: the state holds the *name* of a
+credential, never its value, and this page reads nothing else. Credentials themselves are
+declared in the configuration file, with their secrets in `secrets/`; this page can choose one
+for an address, never create one.
+
+`web.actions: false` removes this tab as well as the buttons below.
+
+## Running something
+
+The Runs page carries the buttons: **Collect**, **Discover**, **Export**, and **Push** when a
+push target is configured. The interface does not do the work itself — it starts the very
+command you would have typed, as a separate process, and shows what it reported:
+
+```
+Last: Collect, done, 47 s — 12/13 devices, 1 error(s)
+```
+
+One at a time: while something runs the buttons are disabled and the page comes back on its own
+every five seconds until it ends. The scheduler keeps its own pace; whoever gets the state lock
+first makes the other wait, exactly as two shells would.
+
+`web.actions: false` removes the buttons and refuses the requests, for an installation that
+wants the interface strictly read-only. **With no account configured, anyone who reaches the
+page can press them** — a reason to declare an account under `web.auth.users`.
+
+## What it does not do
+
+**It never changes what was collected.** Only names given by hand are written, and pressing a
+button starts a command instead of doing the work in the server: the state lock, the SNMP
+credentials, the device types set by hand and the report builder stay in the CLI and in the
+terminal interface (`snowth_my_net tui`).
 
 ## Login
 

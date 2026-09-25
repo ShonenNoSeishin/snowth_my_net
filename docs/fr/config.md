@@ -189,6 +189,7 @@ Comment les observations MAC et ARP deviennent des positions de nœuds (voir `ex
 | `export.csv.line_terminator` | `crlf` | `crlf` (RFC 4180) ou `lf`. |
 | `export.devices.include_type` | `true` | Colonne finale `"Device Type"`. |
 | `export.nodes.include_name` | `false` | Ajouter une première colonne `Name` à `nodes.csv` avec les noms donnés à la main (`node name`). Désactivé par défaut pour qu'un importateur continue de lire les mêmes colonnes. |
+| `export.nodes.include_description` | `false` | Idem, pour les descriptions (`node describe`). |
 | `export.links.include_endpoints` | `false` | Inclure téléphones et stations dans `links.csv` et sur la carte. |
 | `export.map.formats` | `[dot, mmd, html]` | Fichiers de carte. |
 | `export.map.endpoints` | `none` | Hôtes finaux sur la carte : `none`, `grouped` (une bulle par port), `all` (groupés au-delà de 2000 hôtes). |
@@ -250,6 +251,7 @@ Interface web en lecture seule (`snowth_my_net web`, ou le service `web` de Comp
 | `web.auth.users[].name` | obligatoire | Nom d'utilisateur saisi dans le formulaire. Un nom seul suffit : le premier mot de passe est inventé et journalisé, puis `web passwd` le change. |
 | `web.auth.users[].password_file` | | Facultatif : un fichier contenant l'empreinte affichée par `snowth_my_net web --hash-password` (relatif à `general.secrets_dir`), pour un mot de passe géré hors de l'outil. |
 | `web.auth.users[].password_env` | | La même empreinte, depuis une variable d'environnement. Jamais les deux formes à la fois. |
+| `web.actions` | `true` | Les boutons de la page Collectes qui lancent une collecte, une découverte, un export ou un envoi. `false` les retire et refuse les requêtes. Sans compte, quiconque atteint la page peut appuyer dessus. |
 | `web.trusted_proxies` | `[]` | Réseaux des proxys inverses autorisés à annoncer l'adresse du lecteur dans `X-Forwarded-For` (et `X-Forwarded-Proto`). Tout autre est ignoré. `--trusted-proxy CIDR` prime pour une exécution. |
 | `web.auth.session_hours` | `12` | Durée d'une session ; les sessions vivent dans le processus et sont perdues au redémarrage. |
 

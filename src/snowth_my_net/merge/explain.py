@@ -36,6 +36,8 @@ def explain_node(view: NodeView, node: Node, t: Text = ENGLISH) -> list[Line]:
                             kind=kind), "title")]
     if given := view.given_name(node.mac):
         lines.append((t("xp.given_name", name=given), "text"))
+    if about := view.given_description(node.mac):
+        lines.append((t("xp.given_description", text=about), "text"))
     if node.excluded:
         reason = t(f"xp.excl.{node.excluded.code}", detail=node.excluded.detail)
         lines.append((t("xp.not_node", reason=reason), "bad"))
@@ -130,6 +132,7 @@ def node_json(view: NodeView, node: Node) -> dict:
 
     return {
         "mac": node.mac, "name": view.given_name(node.mac) or None,
+        "description": view.given_description(node.mac) or None,
         "vendor": view.vendor(node), "random_mac": node.random_mac,
         "excluded": str(node.excluded) if node.excluded else None,
         "position_kind": node.position_kind,
