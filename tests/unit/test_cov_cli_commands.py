@@ -226,6 +226,12 @@ def test_show_text_outputs(cfg, monkeypatch, capsys, tmp_path):
     assert capsys.readouterr().out.rstrip().endswith("0 row(s)")
     assert run(cfg, "show", "runs") == 0
     assert "collect" in capsys.readouterr().out
+    assert run(cfg, "show", "uplinks") == 0
+    assert "uplink port(s)" in capsys.readouterr().out
+    assert run(cfg, "show", "uplinks", "--filter", "nothing") == 0
+    assert "0 uplink port(s)" in capsys.readouterr().out
+    assert run(cfg, "--json", "show", "uplinks") == 0
+    assert read_json(capsys) == []
 
 
 # --------------------------------------------------------------------------- check

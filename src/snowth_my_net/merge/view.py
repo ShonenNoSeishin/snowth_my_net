@@ -7,6 +7,7 @@ that all of them always agree.
 from __future__ import annotations
 
 import ipaddress
+from collections import Counter
 from dataclasses import dataclass, field
 
 from snowth_my_net.clock import iso_z
@@ -28,6 +29,7 @@ from snowth_my_net.merge.nodes import (
     resolve_mac,
 )
 from snowth_my_net.merge.topology import (
+    HARD,
     DeviceIndex,
     DeviceKeys,
     Link,
@@ -128,7 +130,27 @@ def load_topology(loaded: LoadedConfig, repo: Repo, inputs: MergeInputs, names: 
         if reason:
             inputs.neighbor_reasons.setdefault((rn.obs.device_id, rn.obs.ifindex),
                                                []).append(reason)
+    inherit_lag_reasons(inputs, port_name)
     return resolved, build_links(resolved, names, port_name)
+
+
+def inherit_lag_reasons(inputs: MergeInputs, port_name) -> None:
+    """A trunk is an uplink when one of its members has an infrastructure neighbour.
+
+    LLDP and CDP are seen on the physical port, while the MAC table reports the aggregate
+    (``Trk1``, ``Po1``, ``lag3``). Without this, a trunk between two switches is recognised
+    only by the "too many MACs" fallback — so a quiet trunk passes for an access port and the
+    MACs of the whole switch behind it are placed on it.
+    """
+    for (device_id, ifindex), reasons in list(inputs.neighbor_reasons.items()):
+        port = inputs.ports.get((device_id, ifindex))
+        lag = port.lag_ifindex if port else None
+        if not lag or lag == ifindex:
+            continue
+        member = port_name(device_id, ifindex) or str(ifindex)
+        inherited = [(code, f"{detail} on {member}, a member of this trunk", strength)
+                     for code, detail, strength in reasons]
+        inputs.neighbor_reasons.setdefault((device_id, lag), []).extend(inherited)
 
 
 @dataclass
@@ -226,6 +248,36 @@ class NodeView:
         macs = {(a.last_seen, a.mac) for obs in self.ctx.arp_by_mac.values()
                 for a in obs if a.ip == ip}
         return [resolve_mac(self.ctx, m) for _seen, m in sorted(macs, reverse=True)]
+
+    def uplink_ports(self) -> list[dict]:
+        """Every port treated as an uplink, why, and what it costs.
+
+        ``orphans`` is the number of MACs that have no position *because* of this port — seen
+        there and nowhere else. A port held as an uplink by the MAC count alone and with many
+        orphans is the one to look at: a Wi-Fi access point or a hypervisor that announces no
+        LLDP looks exactly like an uplink to the count.
+        """
+        orphans: Counter = Counter()
+        for node in self.nodes:
+            if node.positions or not node.sightings:
+                continue
+            for sighting in {(s.device_id, s.ifindex) for s in node.sightings}:
+                orphans[sighting] += 1
+        rows = []
+        for key in sorted(self.ctx.mac_count):
+            role = self.ctx.role(*key)
+            if not role.uplink:
+                continue
+            rows.append({
+                "device": self.device_name(key[0]), "port": self.port_name(*key),
+                "macs": self.ctx.mac_count[key],
+                "evidence": "proof" if role.strength == HARD else "guess",
+                "why": "; ".join(detail for _code, detail in role.reasons),
+                "codes": [code for code, _detail in role.reasons],
+                "orphans": orphans.get(key, 0),
+            })
+        rows.sort(key=lambda row: (row["evidence"] != "guess", -row["orphans"], -row["macs"]))
+        return rows
 
     def sighting_label(self, s: Sighting) -> str:
         return f"{self.device_name(s.device_id)} {self.port_name(s.device_id, s.ifindex)}"

@@ -453,6 +453,27 @@ def cmd_show(args: argparse.Namespace) -> int:
                             f"{x['os'] or ''} {x['os_version'] or ''}".strip(),
                             x["device_type"] or "", x["type_rule"] or "",
                             x["last_collect"] or "", x["last_seen"]] for x in data]))
+        elif args.what == "uplinks":
+            from snowth_my_net.merge.view import build_view
+
+            rows = build_view(loaded, repo, Clock().now()).uplink_ports()
+            if args.filter:
+                needle = args.filter.casefold()
+                rows = [r for r in rows
+                        if needle in f"{r['device']} {r['port']} {r['why']}".casefold()]
+            if args.json:
+                out_json(rows)
+            else:
+                out(table(["DEVICE", "PORT", "MACS", "EVIDENCE", "ORPHANS", "WHY"],
+                          [[r["device"], r["port"], str(r["macs"]), r["evidence"],
+                            str(r["orphans"]), r["why"][:70]] for r in rows]))
+                guesses = [r for r in rows if r["evidence"] == "guess"]
+                out(f"{len(rows)} uplink port(s); {len(guesses)} held by the MAC count alone, "
+                    f"costing {sum(r['orphans'] for r in guesses)} MAC(s) their position.")
+                if guesses:
+                    out("A port with many orphans and no LLDP may be an access point or a "
+                        "hypervisor: raise uplink_mac_threshold for that device, or list the "
+                        "port in access_ports.")
         elif args.what == "links":
             from snowth_my_net.merge.view import build_view
 
@@ -1336,7 +1357,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_health)
 
     p = sub.add_parser("show", parents=[common], help="print what the state knows")
-    p.add_argument("what", choices=["devices", "nodes", "links", "runs"])
+    p.add_argument("what", choices=["devices", "nodes", "links", "runs", "uplinks"])
     p.add_argument("--limit", type=int, default=0,
                    help="maximum rows (default: 20 runs, every device and node)")
     p.add_argument("--filter", help="only rows containing this text (any column)")

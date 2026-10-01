@@ -162,6 +162,7 @@ snowth_my_net collect --device 192.0.2.11
 ```bash
 snowth_my_net show devices                 # inventaire, type et comment il a été décidé
 snowth_my_net show nodes --filter 192.0.2  # adresses MAC et où elles se trouvent
+snowth_my_net show uplinks                 # ports tenus pour des uplinks, et ce que coûte chacun
 snowth_my_net show links                   # les liens physiques trouvés
 snowth_my_net show runs                    # les dernières exécutions et leur état
 snowth_my_net explain 00:00:5e:00:53:a0    # pourquoi cette MAC est sur ce port

@@ -145,8 +145,8 @@ Comment les observations MAC et ARP deviennent des positions de nœuds (voir `ex
 
 | Clé | Défaut | Description |
 |---|---|---|
-| `nodes.uplink_mac_threshold` | `50` | Un port qui porte davantage de MAC apprises au dernier parcours est un uplink (faible) : un filet de sécurité pour les uplinks sans LLDP. Élevé exprès : un AP, un hyperviseur ou un petit switch de bureau porte légitimement beaucoup de MAC. |
-| `nodes.lag_is_uplink` | `false` | Traiter les agrégats de liens comme des uplinks (un LAG vers un serveur est un port d'accès ; les LAG entre switches sont déjà repérés par LLDP/CDP et par la détection de transit). |
+| `nodes.uplink_mac_threshold` | `50` | Un port qui porte davantage de MAC apprises au dernier parcours est un uplink (faible) : un filet de sécurité pour les uplinks sans LLDP. Élevé exprès : un AP, un hyperviseur ou un petit switch de bureau porte légitimement beaucoup de MAC. Rien n'est supprimé quand il s'applique — l'observation reste, `explain` la montre avec sa raison — mais une MAC vue seulement là n'a pas de position. `show uplinks` liste ce qu'il décide et ce que chaque décision coûte. |
+| `nodes.lag_is_uplink` | `false` | Traiter tout agrégat de liens comme un uplink. Rarement nécessaire : un trunk hérite des voisins LLDP/CDP de ses ports membres, donc un trunk entre switches est reconnu même s'il porte peu de MAC. À activer si vos trunks ne portent aucun LLDP. |
 | `nodes.ap_ports_are_access` | `true` | Un port qui mène à un point d'accès non interrogé est un port d'accès (les clients Wi-Fi y sont positionnés). |
 | `nodes.uplink_fallback` | `false` | Une MAC vue uniquement derrière des uplinks faibles (seuil, bridge non interrogé) est placée sur celui qui porte le moins de MAC (`position_kind: behind_uplink`). Par défaut : pas de position. |
 | `nodes.include_unlocated` | `true` | Lignes sans switch ni port dans `nodes.csv` (ARP seul, ou seulement derrière des uplinks). |
@@ -154,6 +154,7 @@ Comment les observations MAC et ARP deviennent des positions de nœuds (voir `ex
 | `nodes.positions` | `all` | `all` : une ligne par position connue (historique d'itinérance, la plus récente d'abord) ; `current` : seulement la dernière. |
 | `nodes.retention_days` | `30` | Les observations MAC/ARP plus anciennes sont purgées. |
 | `nodes.prefer_ipv4` | `true` | L'IP courante est une IPv4 quand une IPv4 a été vue récemment. |
+| `nodes.elect_derived_link_local` | `false` | Une adresse `fe80::` qui n'est que la MAC réécrite (EUI-64) peut-elle être l'IP courante ? Désactivé : elle reste dans la liste des adresses mais n'est jamais élue, car elle ne dit rien que la colonne MAC ne dise déjà — une IP vide signifie alors honnêtement qu'aucune adresse n'a jamais été vue pour cette MAC. |
 | `nodes.current_ip_window` | `86400` | Candidates à l'IP courante : vues dans cette fenêtre par rapport à la plus récente. |
 | `nodes.transit_window` | `1800` | Une MAC vue sur deux ports d'accès dans cette fenêtre reste sur le port qui porte le moins de MAC ; l'autre est du transit. |
 | `nodes.ignore_macs` | `[]` | MAC jamais rapportées. |

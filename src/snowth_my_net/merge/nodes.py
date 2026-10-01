@@ -252,6 +252,27 @@ class MergeContext:
         return sorted(set(self.fdb_by_mac) | set(self.arp_by_mac))
 
 
+def derived_link_local(ip: str, mac: str) -> bool:
+    """``fe80::1e0b:8bff:fec0:eb62`` for ``1c:0b:8b:c0:eb:62``: the MAC written again.
+
+    A device with IPv6 enabled answers neighbour discovery with this address, so a switch's
+    neighbour cache is full of them. Shown as "the address of that MAC" it says nothing the MAC
+    column does not already say, and it hides the useful answer: no IPv4 was ever seen here.
+    """
+    try:
+        address = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    if address.version != 6 or not address.is_link_local:
+        return False
+    octets = [int(part, 16) for part in mac.split(":")] if mac.count(":") == 5 else []
+    if len(octets) != 6:
+        return False
+    octets[0] ^= 0x02
+    eui64 = bytes(octets[:3]) + b"\xff\xfe" + bytes(octets[3:])
+    return address.packed[8:] == eui64
+
+
 def _ip_rank(ip: IpSighting, prefer_ipv4: bool) -> tuple:
     address = ipaddress.ip_address(ip.ip)
     return (0 if (prefer_ipv4 and ip.family == 4) else 1,
@@ -321,6 +342,10 @@ def resolve_mac(ctx: MergeContext, mac: str) -> Node:
         ip.sources.sort(key=lambda src: -src[2])
     node.ips = sorted(by_ip.values(), key=lambda i: -i.last_seen)
     candidates = [i for i in node.ips if i.superseded_by is None]
+    if not cfg.elect_derived_link_local:
+        # It stays in node.ips (and in the fold, and in snapshot.json): it is simply never
+        # the answer to "which address is this?" when it only repeats the MAC.
+        candidates = [i for i in candidates if not derived_link_local(i.ip, mac)]
     if candidates:
         newest_ip = max(i.last_seen for i in candidates)
         recent = [i for i in candidates if i.last_seen >= newest_ip - cfg.current_ip_window]

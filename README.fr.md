@@ -108,6 +108,7 @@ Détails, unités systemd, durcissement et réseau : [docs/fr/deployment.md](doc
 | `cron print [--format crontab\|cron.d\|supercronic]` | Lignes de planification issues de `schedule:` |
 | `health [--max-age]` | Code 1 si la dernière collecte réussie est trop ancienne |
 | `tui` | Interface en terminal |
+| `show uplinks` | Ports tenus pour des uplinks, par preuve (LLDP/CDP) ou par le seul compte de MAC, et combien de MAC chacun laisse sans position |
 | `node [name\|describe MAC [TEXT]]` | Nommer ou décrire une adresse MAC à la main, ou lister ce qui a été donné (conservé d'une collecte à l'autre) |
 | `web [--bind] [--port]`, `web passwd [USER]` | Interface web en lecture seule (équipements, nœuds, liens, collectes, fichiers), avec comptes optionnels |
 

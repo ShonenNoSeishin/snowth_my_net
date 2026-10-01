@@ -141,8 +141,8 @@ How MAC and ARP observations become node positions (see `explain`).
 
 | Key | Default | Description |
 |---|---|---|
-| `nodes.uplink_mac_threshold` | `50` | A port with more learned MACs in the last walk is a (soft) uplink: a safety net for uplinks without LLDP. High on purpose: an AP, a hypervisor or a desk switch legitimately carries many MACs. |
-| `nodes.lag_is_uplink` | `false` | Treat link aggregations as uplinks (LAGs to servers are access ports; LAGs between switches are already found by LLDP/CDP and transit detection). |
+| `nodes.uplink_mac_threshold` | `50` | A port with more learned MACs in the last walk is a (soft) uplink: a safety net for uplinks without LLDP. High on purpose: an AP, a hypervisor or a desk switch legitimately carries many MACs. Nothing is deleted when it fires — the sighting stays, `explain` shows it with its reason — but a MAC seen only there has no position. `show uplinks` lists what it decides and what each decision costs. |
+| `nodes.lag_is_uplink` | `false` | Treat every link aggregation as an uplink. Rarely needed: a trunk inherits the LLDP/CDP neighbours of its member ports, so a switch-to-switch trunk is recognised even when it carries few MACs. Set it when your trunks carry no LLDP at all. |
 | `nodes.ap_ports_are_access` | `true` | A port leading to an unpolled access point is an access port (Wi-Fi clients are located there). |
 | `nodes.uplink_fallback` | `false` | A MAC seen only behind soft uplinks (threshold, unpolled bridge) is placed on the one with the fewest MACs (`position_kind: behind_uplink`). Default: no position. |
 | `nodes.include_unlocated` | `true` | Rows without switch/port in `nodes.csv` (ARP only, or only behind uplinks). |
@@ -150,6 +150,7 @@ How MAC and ARP observations become node positions (see `explain`).
 | `nodes.positions` | `all` | `all`: one row per known position (roaming history, most recent first); `current`: only the latest. |
 | `nodes.retention_days` | `30` | MAC/ARP observations older than that are purged. |
 | `nodes.prefer_ipv4` | `true` | The current IP is IPv4 when one was seen recently. |
+| `nodes.elect_derived_link_local` | `false` | May an `fe80::` address that is only the MAC rewritten (EUI-64) be the current IP? Off: it stays in the list of addresses but is never elected, because it says nothing the MAC column does not — an empty IP then honestly means no address was ever seen for that MAC. |
 | `nodes.current_ip_window` | `86400` | Candidates for the current IP: seen within this window of the newest one. |
 | `nodes.transit_window` | `1800` | A MAC seen on two access ports within this window stays on the port with the fewest MACs; the other is transit. |
 | `nodes.ignore_macs` | `[]` | MACs never reported. |
