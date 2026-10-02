@@ -166,7 +166,7 @@ Comment les observations MAC et ARP deviennent des positions de nœuds (voir `ex
 | Clé | Défaut | Description |
 |---|---|---|
 | `dns.enabled` | `true` | Résolutions inverses (PTR) des IP des nœuds au moment de l'export. |
-| `dns.resolvers` | système | IP des résolveurs (un conteneur peut interroger directement le DNS interne). |
+| `dns.resolvers` | système | IP des résolveurs (un conteneur peut interroger directement le DNS interne). `dns check IP` dit lesquels sont utilisés et ce qu'ils répondent. |
 | `dns.timeout` | `2` | Par résolution. |
 | `dns.concurrency` | `20` | Résolutions en parallèle. |
 | `dns.cache_ttl` | `86400` | Durée de vie d'un nom trouvé. |

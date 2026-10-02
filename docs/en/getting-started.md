@@ -159,6 +159,7 @@ snowth_my_net show nodes --filter 192.0.2  # MAC addresses and where they are
 snowth_my_net show uplinks                 # ports held as uplinks, and what each one costs
 snowth_my_net show excluded                # MACs the node list leaves out, and why
 snowth_my_net show tables                  # what every SNMP table returned on every device
+snowth_my_net dns check 192.0.2.121       # is the resolver right, and is there a reverse zone?
 snowth_my_net show links                   # the physical links found
 snowth_my_net show runs                    # the last runs and their status
 snowth_my_net explain 00:00:5e:00:53:a0    # why this MAC is on this port

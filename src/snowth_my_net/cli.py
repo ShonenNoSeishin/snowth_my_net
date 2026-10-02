@@ -1292,8 +1292,9 @@ def _set_web_password(loaded: LoadedConfig, name: str | None) -> int:
 
 
 def cmd_dns(args: argparse.Namespace) -> int:
-    """Forget the cached PTR answers, so the next export asks the resolver again."""
     loaded = load(args)
+    if args.action == "check":
+        return _dns_check(loaded, args)
     with Locked(loaded, "dns flush", loaded.cfg.general.lock_wait.default):
         conn = open_db(loaded.paths.state_file)
         try:
@@ -1306,6 +1307,45 @@ def cmd_dns(args: argparse.Namespace) -> int:
         out_json({"forgotten": dropped, "misses_only": args.misses_only})
     else:
         out(f"forgotten: {dropped} {kind}. The next export asks the resolver again.")
+    return EXIT_OK
+
+
+def _dns_check(loaded: LoadedConfig, args: argparse.Namespace) -> int:
+    """Ask the configured resolvers for these addresses, and say what came back.
+
+    The same code path as an export, with the configuration as it stands: it answers "is my
+    resolver the one I think, and does it hold a reverse zone for this address?" without
+    waiting for an export or reading a cache.
+    """
+    from snowth_my_net.enrich.dns import dnspython_ptr, make_resolver
+
+    cfg = loaded.cfg.dns
+    resolvers = make_resolver(cfg).nameservers
+    lookup = dnspython_ptr(cfg)
+    rows = []
+    for address in args.addresses:
+        host = normalize_address(address)
+        name, status = asyncio.run(lookup(host))
+        rows.append({"address": host, "name": name, "status": status})
+    if args.json:
+        out_json({"resolvers": [str(r) for r in resolvers], "enabled": cfg.enabled,
+                  "results": rows})
+        return EXIT_OK
+    out(f"resolvers: {', '.join(str(r) for r in resolvers) or '(none)'}"
+        + ("" if cfg.enabled else "   dns.enabled is false: an export resolves nothing"))
+    out(table(["ADDRESS", "NAME", "ANSWER"],
+              [[r["address"], r["name"] or "-", r["status"]] for r in rows]))
+    meaning = {
+        "ok": "a name was found: the DNS Name column will carry it",
+        "nxdomain": "the resolver answered 'no such name': either no reverse zone for this "
+                    "subnet, or nothing registered a PTR for this address",
+        "timeout": "no answer at all: the resolver is unreachable (port 53 open both UDP and "
+                   "TCP, from the host's address since the container is NATed?) or too slow "
+                   "for dns.timeout",
+        "error": "the resolver refused or failed: check it serves this client",
+    }
+    for status in dict.fromkeys(r["status"] for r in rows):
+        out(f"{status}: {meaning[status]}")
     return EXIT_OK
 
 
@@ -1578,10 +1618,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_web)
 
     p = sub.add_parser("dns", parents=[common],
-                       help="forget the cached PTR answers (after changing dns.resolvers)")
-    p.add_argument("action", choices=["flush"])
+                       help="check a reverse lookup, or forget the cached PTR answers")
+    p.add_argument("action", choices=["flush", "check"])
+    p.add_argument("addresses", nargs="*", metavar="IP",
+                   help="addresses to look up with 'check'")
     p.add_argument("--misses-only", action="store_true",
-                   help="keep the names already found, ask again only for the rest")
+                   help="flush: keep the names already found, ask again only for the rest")
     p.set_defaults(func=cmd_dns)
 
     p = sub.add_parser("node", parents=[common],

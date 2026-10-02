@@ -97,6 +97,7 @@ Details, systemd units, hardening and networking: [docs/en/deployment.md](docs/e
 | `cron print [--format crontab\|cron.d\|supercronic]` | Scheduler lines from `schedule:` |
 | `health [--max-age]` | Exit 1 when the last successful collect is too old |
 | `tui` | Terminal interface |
+| `dns check IP…` | Ask the configured resolvers for a reverse lookup and say what came back, and what it means |
 | `dns flush [--misses-only]` | Forget the cached PTR answers, so the next export asks the resolver again |
 | `show tables` | What every SNMP table returned on every device at the last collect: a MAC table that answered empty is why a node has no port |
 | `show excluded` | MACs the node list leaves out and why; for those known only by a neighbour cache, whether the same maker's MACs are seen on a port |

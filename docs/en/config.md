@@ -162,7 +162,7 @@ How MAC and ARP observations become node positions (see `explain`).
 | Key | Default | Description |
 |---|---|---|
 | `dns.enabled` | `true` | Reverse (PTR) lookups of node IPs at export time. |
-| `dns.resolvers` | system | Resolver IPs (a container can query the internal DNS directly). |
+| `dns.resolvers` | system | Resolver IPs (a container can query the internal DNS directly). `dns check IP` says which ones are in use and what they answer. |
 | `dns.timeout` | `2` | Per lookup. |
 | `dns.concurrency` | `20` | Parallel lookups. |
 | `dns.cache_ttl` | `86400` | Lifetime of a found name. |
