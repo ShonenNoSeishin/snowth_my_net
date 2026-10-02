@@ -116,7 +116,7 @@ function is `off`.
 | `devices[].features.arp` | `auto` | ARP/NDP tables (both IP-MIB tables, always). |
 | `devices[].features.lldp` | `auto` | LLDP neighbours: LLDP-MIB, or LLDP-V2-MIB (802.1AB-2009) when the agent serves that one instead. |
 | `devices[].features.cdp` | `auto` | CDP neighbours. |
-| `devices[].vlan_indexing` | `auto` | Cisco per-VLAN bridge instances (`community@vlan`, SNMPv3 context `vlan-N`): `auto` uses them when CISCO-VTP-MIB answers and Q-BRIDGE is empty; `cisco` always; `off` never. |
+| `devices[].vlan_indexing` | `auto` | Cisco per-VLAN bridge instances (`community@vlan`, SNMPv3 context `vlan-N`): `auto` uses them when CISCO-VTP-MIB answers and Q-BRIDGE is empty; `cisco` always; `off` never. A collect warns when a VLAN that carries ports returned no MAC at all — the shape of an instance that was not read — and `cisco` is what reads it. |
 | `devices[].vrfs` | `auto` | ARP caches of non-global VRFs, read in their own SNMP context: `auto` reads the VRFs the device lists (CISCO-VRF-MIB, then MPLS-L3VPN-STD-MIB), `off` reads only the global table, or give the context names to read (`[blue, dmz]`). The context name must match the VRF name; with SNMPv2c the community `community@vrf` is used. |
 | `devices[].uplinks` | `[]` | Ports (by name) always treated as uplinks. |
 | `devices[].access_ports` | `[]` | Ports always treated as access ports (e.g. a server LACP bond). |
@@ -150,8 +150,8 @@ How MAC and ARP observations become node positions (see `explain`).
 | `nodes.positions` | `all` | `all`: one row per known position (roaming history, most recent first); `current`: only the latest. |
 | `nodes.retention_days` | `30` | MAC/ARP observations older than that are purged. |
 | `nodes.prefer_ipv4` | `true` | The current IP is IPv4 when one was seen recently. |
-| `nodes.include_link_local_only` | `false` | List a MAC known by nothing but the `fe80::` form of itself, in a neighbour cache: no port, no address. Off, because a router that keeps an IPv6 neighbour cache produces hundreds of such rows, each one a MAC and six empty columns. `explain` still answers for them. |
-| `nodes.elect_derived_link_local` | `false` | May an `fe80::` address that is only the MAC rewritten (EUI-64) be the current IP? Off: it stays in the list of addresses but is never elected, because it says nothing the MAC column does not — an empty IP then honestly means no address was ever seen for that MAC. |
+| `nodes.include_link_local_only` | `false` | List a MAC known by nothing but a link-local address, in a neighbour cache: no port, and nothing to reach it by. Off, because every IPv6 host leaves such an entry, so a router that keeps a neighbour cache produces hundreds of these rows, each one a MAC and six empty columns. `explain` still answers for them, and any other evidence brings the row back. |
+| `nodes.elect_link_local` | `false` | May a link-local (`fe80::`) address be the current IP? Off: it stays in the list of addresses, in `explain` and in `snapshot.json`, but is never elected — nothing routes to it, no name resolves it, and no importer can use it. Whether it repeats the MAC (`fe80::1e0b:8bff:fec0:eb62` for `1c:0b:8b:c0:eb:62`) or carries a random identifier, as Windows makes them, an empty IP then honestly means no usable address was seen. |
 | `nodes.current_ip_window` | `86400` | Candidates for the current IP: seen within this window of the newest one. |
 | `nodes.transit_window` | `1800` | A MAC seen on two access ports within this window stays on the port with the fewest MACs; the other is transit. |
 | `nodes.ignore_macs` | `[]` | MACs never reported. |

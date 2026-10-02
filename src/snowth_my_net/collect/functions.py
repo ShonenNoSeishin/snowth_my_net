@@ -183,6 +183,8 @@ async def fdb(client: SnmpClient, r: DeviceResult, rows: Rows) -> None:
             return
         await walk_into(client, rows, "vtp", oids.VTP_VLAN_STATE)
         vlans = bridge.operational_vlans(rows.column("vtp"))
+        if qbridge and vlans:
+            r.warnings += silent_vlans(vlans, port_pvid, {e.vlan for e in found.values()})
         if not vlans or (qbridge and indexing != "cisco"):
             return
         await walk_into(client, rows, "vtpname", oids.VTP_VLAN_NAME)
@@ -254,6 +256,26 @@ async def arp(client: SnmpClient, r: DeviceResult, rows: Rows) -> None:
             r.vrf_arp,
         )
         rows.columns["entries"] = {(i,): e for i, e in enumerate(r.arp)}
+
+
+def silent_vlans(operational: list[int], port_pvid: dict[int, int],
+                 with_entries: set[int]) -> list[str]:
+    """VLANs that carry ports but whose MAC table came back empty: a gap, said out loud.
+
+    A VLAN nobody is in has no MACs, which is normal. A VLAN that is the native VLAN of a port
+    and still shows nothing is the shape of a bridge instance that was not read — the reason a
+    phone on VLAN 81 ends up with no port while another tool, walking each VLAN with its own
+    community, places it. Nothing is guessed from this: it is reported, and the setting that
+    reads those instances is named.
+    """
+    used = set(port_pvid.values())
+    missing = [vlan for vlan in operational if vlan in used and vlan not in with_entries]
+    if not missing:
+        return []
+    shown = ", ".join(str(vlan) for vlan in missing[:8])
+    more = f" (+{len(missing) - 8})" if len(missing) > 8 else ""
+    return [f"VLAN {shown}{more}: ports live there but the MAC table returned nothing for them; "
+            "devices[].vlan_indexing: cisco reads each VLAN's own bridge instance"]
 
 
 async def vrf_names(client: SnmpClient, setting) -> list[str]:

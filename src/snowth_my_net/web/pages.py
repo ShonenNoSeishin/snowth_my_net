@@ -12,7 +12,7 @@ from pathlib import Path
 from snowth_my_net.clock import iso_z, local_time
 from snowth_my_net.config.loader import LoadedConfig
 from snowth_my_net.export.run import exported_devices
-from snowth_my_net.merge.nodes import derived_link_local
+from snowth_my_net.merge.nodes import is_link_local
 from snowth_my_net.merge.view import build_view
 from snowth_my_net.snmp.target import split_host_port
 from snowth_my_net.state.repo import Repo
@@ -141,10 +141,10 @@ def nodes(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int,
             continue
         vendor = view.vendor(node)
         current = node.current_ip.ip if node.current_ip else ""
-        # An address that is only the MAC rewritten is not folded away either: a bare "+1"
-        # promised something to read and held nothing.
+        # Link-local addresses are not folded away either: a bare "+1" promised something to
+        # read and held an address nothing can be reached by.
         others = [ip.ip for ip in node.ips if node.current_ip is not ip
-                  and not derived_link_local(ip.ip, node.mac)]
+                  and not is_link_local(ip.ip)]
         address = Cell(current, more=tuple(others))
         dns = view.dns_name(current) if current else ""
         positions = node.positions if cfg.positions == "all" else node.positions[:1]

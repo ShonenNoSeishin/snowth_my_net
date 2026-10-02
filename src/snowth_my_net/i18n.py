@@ -680,6 +680,10 @@ EXPLAIN = {
     "xp.title": ("MAC {mac} — {vendor} ({kind})", "MAC {mac} — {vendor} ({kind})"),
     "xp.given_name": ("Named by hand: {name}", "Nommée à la main : {name}"),
     "xp.given_description": ("Description: {text}", "Description : {text}"),
+    "xp.is_the_mac": ("(this MAC rewritten: it reaches nothing)",
+                      "(cette MAC réécrite : elle ne joint rien)"),
+    "xp.link_local": ("(link-local: valid on that segment only)",
+                      "(lien-local : valable sur ce segment seulement)"),
     "xp.vendor_unknown": ("unknown vendor", "constructeur inconnu"),
     "xp.random": ("locally administered (random or virtual)",
                   "administrée localement (aléatoire ou virtuelle)"),
@@ -738,11 +742,11 @@ EXPLAIN = {
                            "MAC d'un équipement interrogé ({detail})"),
     "xp.excl.ignored_mac": ("listed in nodes.ignore_macs", "listée dans nodes.ignore_macs"),
     "xp.excl.link_local_only": (
-        "known by nothing but the fe80:: form of its own MAC, in a neighbour cache: no port, no "
-        "address (nodes.include_link_local_only to list it anyway)",
-        "connue par rien d'autre que la forme fe80:: de sa propre MAC, dans un cache de "
-        "voisinage : aucun port, aucune adresse (nodes.include_link_local_only pour la lister "
-        "quand même)"),
+        "known by nothing but a link-local address, in a neighbour cache: no port, and nothing "
+        "to reach it by (nodes.include_link_local_only to list it anyway)",
+        "connue par rien d'autre qu'une adresse lien-local, dans un cache de voisinage : aucun "
+        "port, et rien pour la joindre (nodes.include_link_local_only pour la lister quand "
+        "même)"),
     "xp.excl.ignored_prefix": ("matches nodes.ignore_mac_prefixes ({detail})",
                                "correspond à nodes.ignore_mac_prefixes ({detail})"),
 }

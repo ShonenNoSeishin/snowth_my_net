@@ -179,6 +179,7 @@ def _render_report(report: RunReport, loaded: LoadedConfig) -> str:
                  f"{s.get('failing', 0)} failing, {s.get('aliases', 0)} alias(es), "
                  f"{s.get('duration_s', 0)}s")
     lines += [f"note: {n}" for n in report.notes]
+    lines += [f"note: {r.target}: {w}" for r in report.results for w in r.warnings]
     lines += [f"error: {e}" for e in report.errors]
     return "\n".join(lines)
 
@@ -453,6 +454,68 @@ def cmd_show(args: argparse.Namespace) -> int:
                             f"{x['os'] or ''} {x['os_version'] or ''}".strip(),
                             x["device_type"] or "", x["type_rule"] or "",
                             x["last_collect"] or "", x["last_seen"]] for x in data]))
+        elif args.what == "tables":
+            last = repo.last_successful_collect()
+            if last is None:
+                out("no collect yet")
+                return EXIT_OK
+            names = {d["id"]: (d["sys_name"] or d["mgmt_address"])
+                     for d in repo.devices()}
+            rows = [{"device": names.get(st["device_id"], f"#{st['device_id']}"),
+                     "table": st["function"], "status": st["status"], "rows": st["rows"] or 0,
+                     "ms": st["duration_ms"] or 0, "detail": st["detail"] or ""}
+                    for st in repo.statuses(last["id"])]
+            if args.filter:
+                needle = args.filter.casefold()
+                rows = [r for r in rows
+                        if needle in f"{r['device']} {r['table']} {r['status']}".casefold()]
+            rows.sort(key=lambda r: (r["status"] == "ok", r["device"], r["table"]))
+            if args.json:
+                out_json(rows)
+            else:
+                out(table(["DEVICE", "TABLE", "STATUS", "ROWS", "MS", "DETAIL"],
+                          [[r["device"], r["table"], r["status"], str(r["rows"]), str(r["ms"]),
+                            r["detail"][:60]] for r in rows]))
+                out(f"collect #{last['id']} of {iso_z(last['started_at'])}. "
+                    "A MAC table that answered 'empty', or with far fewer rows than the switch "
+                    "shows, is why a node has no port: see devices[].vlan_indexing for a Cisco "
+                    "that keeps one bridge instance per VLAN.")
+        elif args.what == "excluded":
+            import collections
+
+            from snowth_my_net.merge.view import build_view
+
+            rows = build_view(loaded, repo, Clock().now()).left_out()
+            if args.filter:
+                needle = args.filter.casefold()
+                rows = [r for r in rows if needle in f"{r['mac']} {r['reason']} "
+                        f"{r['vendor']} {' '.join(r['seen_by'])}".casefold()]
+            if args.json:
+                out_json(rows)
+            else:
+                by_reason = collections.Counter(r["reason"] for r in rows)
+                out(table(["LEFT OUT BECAUSE", "MACS", "EXAMPLE"],
+                          [[reason, str(count),
+                            next(r["mac"] for r in rows if r["reason"] == reason)]
+                           for reason, count in by_reason.most_common()]))
+                ghosts = [r for r in rows if r["reason"] == "link_local_only"]
+                if ghosts:
+                    out("")
+                    families = collections.Counter(r["mac"][:8] for r in ghosts)
+                    out(table(["MAKER PREFIX", "LEFT OUT", "ON A PORT", "VENDOR", "SEEN BY"],
+                              [[prefix, str(count),
+                                str(next(r["siblings"] for r in ghosts
+                                         if r["mac"].startswith(prefix))),
+                                next(r["vendor"] for r in ghosts
+                                     if r["mac"].startswith(prefix))[:28],
+                                ", ".join(sorted({d for r in ghosts
+                                                  if r["mac"].startswith(prefix)
+                                                  for d in r["seen_by"]}))[:40]]
+                               for prefix, count in families.most_common()]))
+                    out("ON A PORT counts the MACs of the same maker prefix that a MAC table "
+                        "does see: more than zero means the same hardware is known on both "
+                        "sides (a second interface of equipment you already have); zero means "
+                        "nothing was ever seen on a wire.")
         elif args.what == "uplinks":
             from snowth_my_net.merge.view import build_view
 
@@ -1380,7 +1443,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_health)
 
     p = sub.add_parser("show", parents=[common], help="print what the state knows")
-    p.add_argument("what", choices=["devices", "nodes", "links", "runs", "uplinks"])
+    p.add_argument("what", choices=["devices", "nodes", "links", "runs", "uplinks",
+                                    "excluded", "tables"])
     p.add_argument("--limit", type=int, default=0,
                    help="maximum rows (default: 20 runs, every device and node)")
     p.add_argument("--filter", help="only rows containing this text (any column)")

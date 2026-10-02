@@ -9,7 +9,7 @@ from collections.abc import Callable
 
 from snowth_my_net.clock import iso_z
 from snowth_my_net.i18n import Translator
-from snowth_my_net.merge.nodes import Node
+from snowth_my_net.merge.nodes import Node, derived_link_local, is_link_local
 from snowth_my_net.merge.view import NodeView
 
 # (text, kind): kind is one of title, ok, bad, transit, dim, text — renderers pick the style.
@@ -96,6 +96,10 @@ def explain_node(view: NodeView, node: Node, t: Text = ENGLISH) -> list[Line]:
     for ip in node.ips:
         sources = ", ".join(f"{view.device_name(d)} ({table})" for d, table, _s in ip.sources[:3])
         base = f"{ip.ip:<39} {sources:<34} {t('xp.last')} {iso_z(ip.last_seen)}"
+        if derived_link_local(ip.ip, node.mac):
+            base += "  " + t("xp.is_the_mac")
+        elif is_link_local(ip.ip):
+            base += "  " + t("xp.link_local")
         if node.current_ip is ip:
             lines.append((f"  {base}  " + t("xp.current_ip"), "ok"))
         elif ip.superseded_by:

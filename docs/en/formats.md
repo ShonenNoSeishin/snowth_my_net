@@ -44,9 +44,9 @@ the most recent line as the current position; the other lines are its roaming hi
 |---|---|
 | Name | Only with `export.nodes.include_name: true`: the name given by hand to that MAC (`node name`), empty otherwise. The column is absent by default, so as not to change the columns an importer reads. |
 | Description | Only with `export.nodes.include_description: true`: the description given by hand (`node describe`). |
-| MAC Address | Lowercase with colons. Broadcast, multicast, zero, VRRP/HSRP virtual MACs, MACs of polled devices, and MACs known by nothing but the `fe80::` form of themselves (`nodes.include_link_local_only`) are excluded. |
+| MAC Address | Lowercase with colons. Broadcast, multicast, zero, VRRP/HSRP virtual MACs, MACs of polled devices, and MACs known by nothing but a link-local address (`nodes.include_link_local_only`) are excluded. |
 | Vendor | IEEE registry (MA-L/MA-M/MA-S), cleaned; empty for locally administered (random) MACs. |
-| IP Address | Current IP of the MAC: among the addresses no other MAC claimed since, those seen within `nodes.current_ip_window` (24 h) of the most recent one, IPv4 first. An IPv6 alone means no recent IPv4 is known: raise `current_ip_window` (say `30d`) so that an IPv4 wins whenever one exists within the retention. Every address of a MAC stays in `snapshot.json` and in the web interface. |
+| IP Address | Current IP of the MAC: among the addresses no other MAC claimed since, those seen within `nodes.current_ip_window` (24 h) of the most recent one, IPv4 first. Link-local (`fe80::`) addresses are never elected (`nodes.elect_link_local`). A global IPv6 alone means no recent IPv4 is known: raise `current_ip_window` (say `30d`) so that an IPv4 wins whenever one exists within the retention. Every address of a MAC stays in `snapshot.json`. |
 | DNS Name | PTR name of that IP (cached). |
 | Switch | Exactly a `Device Name` of `devices.csv`; empty when no access port is known. |
 | Port | Short interface name (`Gi1/0/5`, `1/1/12`, `ge-0/0/3`). |

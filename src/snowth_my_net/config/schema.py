@@ -291,8 +291,8 @@ class NodesCfg:
     positions: Literal["all", "current"] = "all"
     retention_days: int = 30
     prefer_ipv4: bool = True
-    elect_derived_link_local: bool = False   # an fe80:: that is the MAC rewritten is not an answer
-    include_link_local_only: bool = False    # a MAC known by nothing but that address: no row
+    elect_link_local: bool = False        # an fe80:: is not an answer to "which address is it?"
+    include_link_local_only: bool = False    # a MAC known by nothing else at all: no row
     current_ip_window: Duration = 86400
     transit_window: Duration = 1800
     ignore_macs: list[str] = field(default_factory=list)

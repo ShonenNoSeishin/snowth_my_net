@@ -255,6 +255,13 @@ class MergeContext:
         return sorted(set(self.fdb_by_mac) | set(self.arp_by_mac))
 
 
+def is_link_local(ip: str) -> bool:
+    try:
+        return ipaddress.ip_address(ip).is_link_local
+    except ValueError:
+        return False
+
+
 def derived_link_local(ip: str, mac: str) -> bool:
     """``fe80::1e0b:8bff:fec0:eb62`` for ``1c:0b:8b:c0:eb:62``: the MAC written again.
 
@@ -345,10 +352,13 @@ def resolve_mac(ctx: MergeContext, mac: str) -> Node:
         ip.sources.sort(key=lambda src: -src[2])
     node.ips = sorted(by_ip.values(), key=lambda i: -i.last_seen)
     candidates = [i for i in node.ips if i.superseded_by is None]
-    if not cfg.elect_derived_link_local:
-        # It stays in node.ips (and in the fold, and in snapshot.json): it is simply never
-        # the answer to "which address is this?" when it only repeats the MAC.
-        candidates = [i for i in candidates if not derived_link_local(i.ip, mac)]
+    if not cfg.elect_link_local:
+        # A link-local address is never the answer to "which address is this?": it is not
+        # routable, no name resolves it, and no importer can use it. Whether it repeats the MAC
+        # (fe80::1e0b:8bff:fec0:eb62 for 1c:0b:8b:c0:eb:62) or is a random identifier, as
+        # Windows makes them, it says only "this stack spoke IPv6 on that segment". It stays in
+        # node.ips, in explain and in snapshot.json.
+        candidates = [i for i in candidates if not is_link_local(i.ip)]
     if candidates:
         newest_ip = max(i.last_seen for i in candidates)
         recent = [i for i in candidates if i.last_seen >= newest_ip - cfg.current_ip_window]
@@ -365,15 +375,16 @@ def resolve_mac(ctx: MergeContext, mac: str) -> Node:
 
 
 def nothing_known(node: Node) -> bool:
-    """A MAC a neighbour cache heard once over IPv6, and nothing else, anywhere.
+    """A MAC a neighbour cache heard over IPv6, and nothing else, anywhere.
 
-    No MAC table ever saw it, so there is no port; its only address is the ``fe80::`` form of
-    that same MAC, so there is no address either. The row would carry a MAC, a vendor, and six
-    empty columns — and there are hundreds of them on a network where a router keeps an IPv6
-    neighbour cache. ``explain`` still answers for it: it is left out of the list, not forgotten.
+    No MAC table ever saw it, so there is no port; every address known for it is link-local, so
+    there is nothing to reach it by either. The row would carry a MAC, a vendor, and six empty
+    columns — and there are hundreds of them wherever a router keeps an IPv6 neighbour cache,
+    because every IPv6 host leaves one. ``explain`` still answers for it: it is left out of the
+    list, not forgotten.
     """
     return not node.sightings and bool(node.ips) and all(
-        derived_link_local(ip.ip, node.mac) for ip in node.ips)
+        is_link_local(ip.ip) for ip in node.ips)
 
 
 def is_live(ctx: MergeContext, node: Node) -> bool:

@@ -226,6 +226,19 @@ def test_show_text_outputs(cfg, monkeypatch, capsys, tmp_path):
     assert capsys.readouterr().out.rstrip().endswith("0 row(s)")
     assert run(cfg, "show", "runs") == 0
     assert "collect" in capsys.readouterr().out
+    assert run(cfg, "show", "tables") == 0
+    printed = capsys.readouterr().out
+    assert printed.splitlines()[0].startswith("DEVICE") and "collect #" in printed
+    assert run(cfg, "show", "tables", "--filter", "nothing") == 0
+    capsys.readouterr()
+    assert run(cfg, "--json", "show", "tables") == 0
+    assert read_json(capsys) == []
+    assert run(cfg, "show", "excluded") == 0
+    assert "LEFT OUT BECAUSE" in capsys.readouterr().out
+    assert run(cfg, "show", "excluded", "--filter", "nothing") == 0
+    capsys.readouterr()
+    assert run(cfg, "--json", "show", "excluded") == 0
+    assert read_json(capsys) == []
     assert run(cfg, "show", "uplinks") == 0
     assert "uplink port(s)" in capsys.readouterr().out
     assert run(cfg, "show", "uplinks", "--filter", "nothing") == 0

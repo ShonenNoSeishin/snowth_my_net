@@ -108,6 +108,8 @@ Détails, unités systemd, durcissement et réseau : [docs/fr/deployment.md](doc
 | `cron print [--format crontab\|cron.d\|supercronic]` | Lignes de planification issues de `schedule:` |
 | `health [--max-age]` | Code 1 si la dernière collecte réussie est trop ancienne |
 | `tui` | Interface en terminal |
+| `show tables` | Ce que chaque table SNMP a rendu sur chaque équipement à la dernière collecte : une table MAC vide explique qu'un nœud n'ait pas de port |
+| `show excluded` | MAC que la liste écarte et pourquoi ; pour celles connues d'un seul cache de voisinage, si des MAC du même constructeur sont vues sur un port |
 | `show uplinks` | Ports tenus pour des uplinks, par preuve (LLDP/CDP) ou par le seul compte de MAC, et combien de MAC chacun laisse sans position |
 | `node reset --yes` | Oublier toutes les observations MAC et ARP ; équipements, liens et noms restent |
 | `node [name\|describe MAC [TEXT]]` | Nommer ou décrire une adresse MAC à la main, ou lister ce qui a été donné (conservé d'une collecte à l'autre) |

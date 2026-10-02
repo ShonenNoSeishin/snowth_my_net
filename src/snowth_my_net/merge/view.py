@@ -174,6 +174,34 @@ class NodeView:
                            if (n := resolve_mac(self.ctx, mac)).excluded is None]
         return self._nodes
 
+    def left_out(self) -> list[dict]:
+        """Every MAC the node list leaves out, why, and what else is known about its family.
+
+        The counterpart of the exclusions: a reader who wonders where a MAC went, or what the
+        hundreds of addresses a neighbour cache holds actually are, gets an answer here instead
+        of a query to write by hand. ``siblings`` is how many MACs of the same first three
+        octets — the same maker, usually the same box — *are* in a MAC table: that is what tells
+        a second interface of known equipment from a device nobody ever saw on a port.
+        """
+        on_a_port = set(self.ctx.fdb_by_mac)
+        families = Counter(mac[:8] for mac in on_a_port)
+        rows = []
+        for mac in self.ctx.all_macs():
+            node = resolve_mac(self.ctx, mac)
+            if node.excluded is None:
+                continue
+            rows.append({
+                "mac": mac, "reason": node.excluded.code, "detail": node.excluded.detail,
+                "vendor": self.vendor(node),
+                "addresses": [ip.ip for ip in node.ips],
+                "seen_by": sorted({self.device_name(device) for ip in node.ips
+                                   for device, _table, _when in ip.sources}),
+                "last_seen": node.last_seen,
+                "siblings": families.get(mac[:8], 0),
+            })
+        rows.sort(key=lambda row: (row["reason"], row["mac"]))
+        return rows
+
     def given_name(self, mac: str) -> str:
         """The name someone gave this MAC, or nothing. It outlives every collect."""
         return self.given.get(mac, {}).get("name", "")

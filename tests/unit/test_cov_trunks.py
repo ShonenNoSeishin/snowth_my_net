@@ -150,7 +150,7 @@ def test_an_address_that_repeats_the_mac_is_kept_but_never_elected(tmp_path):
         node = next(n for n in view.nodes if n.mac == AP)
         assert node.current_ip is None                      # honestly: no address known
         assert [i.ip for i in node.ips] == ["fe80::1e0b:8bff:fec0:eb62"]   # still in the list
-        loaded.cfg.nodes.elect_derived_link_local = True
+        loaded.cfg.nodes.elect_link_local = True
         again = build_view(loaded, repo, NOW)
         assert next(n for n in again.nodes if n.mac == AP).current_ip is not None
     finally:
@@ -196,8 +196,9 @@ def test_a_real_address_is_elected_as_before(tmp_path):
         repo.conn.close()
 
 
-def test_the_rule_applies_to_the_mac_it_belongs_to(tmp_path):
-    """Another MAC's link-local is a real sighting: it is elected when nothing better exists."""
+def test_a_link_local_that_is_not_the_mac_is_not_an_answer_either(tmp_path):
+    """Windows gives its link-local a random identifier, so it does not repeat the MAC — and it
+    is still an address nothing can be reached by."""
     from snowth_my_net.collect.tables.arp import ArpEntry
 
     repo = Repo(open_db(tmp_path / "state" / "state.sqlite"))
@@ -210,10 +211,15 @@ def test_the_rule_applies_to_the_mac_it_belongs_to(tmp_path):
     repo.finish_run(run, "ok", NOW, {"devices": 1})
     repo.conn.close()
     loaded = make_loaded(tmp_path)
+    loaded.cfg.nodes.include_link_local_only = True
     rw = Repo(open_db(loaded.paths.state_file, readonly=True))
     try:
         node = next(n for n in build_view(loaded, rw, NOW).nodes if n.mac == other)
-        assert node.current_ip.ip == "fe80::1e0b:8bff:fec0:eb62"
+        assert node.current_ip is None                      # nothing elected
+        assert [i.ip for i in node.ips] == ["fe80::1e0b:8bff:fec0:eb62"]
+        loaded.cfg.nodes.elect_link_local = True
+        again = next(n for n in build_view(loaded, rw, NOW).nodes if n.mac == other)
+        assert again.current_ip.ip == "fe80::1e0b:8bff:fec0:eb62"
     finally:
         rw.conn.close()
 
@@ -360,7 +366,7 @@ def test_the_table_promises_nothing_it_cannot_show(tmp_path):
     row = next(r for r in table.rows if any(AP in str(cell) for cell in r))
     address = row[4]
     assert address.text == "" and address.more == ()        # nothing, honestly
-    loaded.cfg.nodes.elect_derived_link_local = True
+    loaded.cfg.nodes.elect_link_local = True
     repo = Repo(open_db(loaded.paths.state_file, readonly=True))
     try:
         again = pages.nodes(loaded, repo, NOW, Translator("en"), 2000)
@@ -368,3 +374,140 @@ def test_the_table_promises_nothing_it_cannot_show(tmp_path):
         repo.conn.close()
     shown = next(r for r in again.rows if any(AP in str(cell) for cell in r))[4]
     assert shown.text == "fe80::1e0b:8bff:fec0:eb62"        # for whoever wants it anyway
+
+
+# --------------------------------------------------------------------------- what is left out
+
+
+def ghost_lab(tmp_path):
+    """A firewall whose IPv6 neighbour cache holds two families of Ubiquiti MACs; one of those
+    families has a sibling that a MAC table does see."""
+    from snowth_my_net.collect.tables.arp import ArpEntry
+
+    def link_local(mac):
+        octets = [int(part, 16) for part in mac.split(":")]
+        octets[0] ^= 0x02
+        return "fe80::{:x}{:02x}:{:02x}ff:fe{:02x}:{:02x}{:02x}".format(*octets)
+
+    heard = [f"1c:0b:8b:c0:eb:{i:02x}" for i in range(1, 4)] + ["1c:6a:1b:62:37:01"]
+    repo = Repo(open_db(tmp_path / "state" / "state.sqlite"))
+    run = repo.start_run("collect", NOW)
+    repo.save_device(device("10.0.0.1", "FW", "00:00:5e:00:53:01", "firewall",
+                            interfaces={1: Interface(1, "port1")},
+                            arp=[ArpEntry(m, link_local(m), 6, 1, "physical") for m in heard]),
+                     NOW, run)
+    repo.save_device(device("10.0.0.2", "SW", "00:00:5e:00:53:02",
+                            interfaces={1: Interface(1, "1")},
+                            fdb=[fdb("1c:0b:8b:c0:eb:00", 1), fdb("01:00:5e:00:00:fb", 1)]),
+                     NOW, run)
+    repo.finish_run(run, "ok", NOW, {"devices": 2})
+    repo.conn.close()
+    return make_loaded(tmp_path)
+
+
+def test_what_the_list_leaves_out_and_why(tmp_path):
+    rows = view_of(ghost_lab(tmp_path)).left_out()
+    reasons = {row["reason"] for row in rows}
+    assert reasons == {"link_local_only", "multicast"}
+    ghost = next(r for r in rows if r["mac"] == "1c:0b:8b:c0:eb:01")
+    assert ghost["vendor"].startswith("Ubiquiti") or ghost["vendor"]
+    assert ghost["seen_by"] == ["FW"]
+    assert ghost["addresses"] == ["fe80::1e0b:8bff:fec0:eb01"]
+    assert ghost["last_seen"] == NOW
+
+
+def test_siblings_tell_a_second_interface_from_a_stranger(tmp_path):
+    """The decisive question: is the same hardware known on a port, under another MAC?"""
+    rows = {r["mac"]: r for r in view_of(ghost_lab(tmp_path)).left_out()}
+    assert rows["1c:0b:8b:c0:eb:01"]["siblings"] == 1    # 1c:0b:8b:c0:eb:00 is on a port
+    assert rows["1c:6a:1b:62:37:01"]["siblings"] == 0    # that family, never on a wire
+
+
+def test_nothing_is_left_out_of_an_empty_state(tmp_path):
+    repo = Repo(open_db(tmp_path / "state" / "state.sqlite"))
+    repo.conn.close()
+    assert view_of(make_loaded(tmp_path)).left_out() == []
+
+
+def test_a_windows_laptop_heard_over_ipv6_is_not_a_row_either(tmp_path):
+    """Its link-local has a random identifier, so it does not repeat the MAC — and it still
+    says nothing but "an IPv6 stack spoke on that segment"."""
+    from snowth_my_net.collect.tables.arp import ArpEntry
+
+    intel = "34:fd:70:f0:71:20"
+    random_iid = "fe80::10c2:5b7e:7947:5107"
+    assert not derived_link_local(random_iid, intel)         # not the MAC rewritten
+    repo = Repo(open_db(tmp_path / "state" / "state.sqlite"))
+    run = repo.start_run("collect", NOW)
+    repo.save_device(device("10.0.0.1", "FW", "00:00:5e:00:53:01", "firewall",
+                            interfaces={1: Interface(1, "port1")},
+                            arp=[ArpEntry(intel, random_iid, 6, 1, "physical")]), NOW, run)
+    repo.finish_run(run, "ok", NOW, {"devices": 1})
+    repo.conn.close()
+    loaded = make_loaded(tmp_path)
+    assert [n.mac for n in view_of(loaded).nodes] == []
+    left = view_of(loaded).left_out()
+    assert [r["reason"] for r in left] == ["link_local_only"]
+    loaded.cfg.nodes.include_link_local_only = True
+    node = next(n for n in view_of(loaded).nodes if n.mac == intel)
+    assert node.current_ip is None and [i.ip for i in node.ips] == [random_iid]
+
+
+def test_the_tables_of_the_last_collect_are_listed_with_what_they_returned(tmp_path):
+    """"Netdisco gives me a port and you do not" has two causes: a port held as an uplink, or a
+    MAC table that was not read. This is how the second one is seen."""
+    from snowth_my_net.collect.model import OK, TIMEOUT, Outcome
+
+    repo = Repo(open_db(tmp_path / "state" / "state.sqlite"))
+    run = repo.start_run("collect", NOW)
+    switch = device("10.0.0.2", "SW", "00:00:5e:00:53:02",
+                    interfaces={1: Interface(1, "1")}, fdb=[fdb(PHONE, 1)])
+    switch.outcomes["fdb"] = Outcome("fdb", TIMEOUT, 0, detail="per-VLAN bridge instances failed")
+    switch.outcomes["arp"] = Outcome("arp", OK, 12)
+    repo.save_device(switch, NOW, run)
+    repo.finish_run(run, "ok", NOW, {"devices": 1})
+    statuses = {s["function"]: s for s in repo.statuses(run)}
+    repo.conn.close()
+    assert statuses["fdb"]["status"] == "timeout"
+    assert "per-VLAN" in statuses["fdb"]["detail"]
+    assert statuses["arp"]["rows"] == 12
+
+
+# --------------------------------------------------------------------------- a VLAN not read
+
+
+def test_a_vlan_with_ports_and_no_macs_is_reported_not_guessed():
+    """Why another tool places a phone on VLAN 81 and this one does not: the bridge instance of
+    that VLAN was never read. Said out loud, with the setting that reads it."""
+    from snowth_my_net.collect.functions import silent_vlans
+
+    # VLAN 81 is the native VLAN of port 30, and nothing was learned in it.
+    said = silent_vlans([1, 30, 81], {30: 81, 2: 1}, {1})
+    assert len(said) == 1
+    assert "VLAN 81" in said[0] and "vlan_indexing: cisco" in said[0]
+    assert "30" not in said[0].split(":")[1]          # VLAN 30 has no port: not suspicious
+
+    # A VLAN nobody is in says nothing, and neither does one that answered.
+    assert silent_vlans([1, 90], {2: 1}, {1}) == []
+    assert silent_vlans([1, 81], {30: 81}, {1, 81}) == []
+
+
+def test_many_silent_vlans_are_counted_not_listed_endlessly():
+    from snowth_my_net.collect.functions import silent_vlans
+
+    pvids = {port: 100 + port for port in range(12)}
+    said = silent_vlans(sorted(pvids.values()), pvids, set())
+    assert said[0].count(",") == 7 and "(+4)" in said[0]
+
+
+def test_a_device_warning_is_printed_after_a_collect(tmp_path):
+    """It was only in snapshot.json, where nobody looks after a collect."""
+    from snowth_my_net.cli import _render_report
+    from snowth_my_net.collect.engine import RunReport
+
+    report = RunReport(command="collect", run_id=7, status="ok")
+    result = device("10.0.0.2", "SW", "00:00:5e:00:53:02")
+    result.warnings.append("VLAN 81: ports live there but the MAC table returned nothing")
+    report.results.append(result)
+    printed = _render_report(report, make_loaded(tmp_path))
+    assert "note: 10.0.0.2: VLAN 81" in printed

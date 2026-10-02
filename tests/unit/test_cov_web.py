@@ -474,5 +474,6 @@ def test_the_addresses_a_row_hides_fold_instead_of_widening_it(site):
 
     _status, _type, body = get(site, "/nodes")
     row = next(line for line in body.split("<tr>") if D in line)
-    assert '<details class="more"><summary>+2</summary>' in row
+    assert '<details class="more"><summary>+1</summary>' in row
     assert "<li>192.0.2.60</li>" in row                     # there when opened, not before
+    assert "fe80::60" not in row                            # nothing can be reached by it

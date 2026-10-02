@@ -97,6 +97,8 @@ Details, systemd units, hardening and networking: [docs/en/deployment.md](docs/e
 | `cron print [--format crontab\|cron.d\|supercronic]` | Scheduler lines from `schedule:` |
 | `health [--max-age]` | Exit 1 when the last successful collect is too old |
 | `tui` | Terminal interface |
+| `show tables` | What every SNMP table returned on every device at the last collect: a MAC table that answered empty is why a node has no port |
+| `show excluded` | MACs the node list leaves out and why; for those known only by a neighbour cache, whether the same maker's MACs are seen on a port |
 | `show uplinks` | Ports treated as uplinks, whether by proof (LLDP/CDP) or by the MAC count alone, and how many MACs each one leaves without a position |
 | `node reset --yes` | Forget every MAC and ARP observation; the devices, links and names stay |
 | `node [name\|describe MAC [TEXT]]` | Name or describe a MAC address by hand, or list what was given (kept across collects) |
