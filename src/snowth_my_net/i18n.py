@@ -737,6 +737,12 @@ EXPLAIN = {
     "xp.excl.device_mac": ("MAC of a polled device ({detail})",
                            "MAC d'un équipement interrogé ({detail})"),
     "xp.excl.ignored_mac": ("listed in nodes.ignore_macs", "listée dans nodes.ignore_macs"),
+    "xp.excl.link_local_only": (
+        "known by nothing but the fe80:: form of its own MAC, in a neighbour cache: no port, no "
+        "address (nodes.include_link_local_only to list it anyway)",
+        "connue par rien d'autre que la forme fe80:: de sa propre MAC, dans un cache de "
+        "voisinage : aucun port, aucune adresse (nodes.include_link_local_only pour la lister "
+        "quand même)"),
     "xp.excl.ignored_prefix": ("matches nodes.ignore_mac_prefixes ({detail})",
                                "correspond à nodes.ignore_mac_prefixes ({detail})"),
 }

@@ -150,6 +150,7 @@ How MAC and ARP observations become node positions (see `explain`).
 | `nodes.positions` | `all` | `all`: one row per known position (roaming history, most recent first); `current`: only the latest. |
 | `nodes.retention_days` | `30` | MAC/ARP observations older than that are purged. |
 | `nodes.prefer_ipv4` | `true` | The current IP is IPv4 when one was seen recently. |
+| `nodes.include_link_local_only` | `false` | List a MAC known by nothing but the `fe80::` form of itself, in a neighbour cache: no port, no address. Off, because a router that keeps an IPv6 neighbour cache produces hundreds of such rows, each one a MAC and six empty columns. `explain` still answers for them. |
 | `nodes.elect_derived_link_local` | `false` | May an `fe80::` address that is only the MAC rewritten (EUI-64) be the current IP? Off: it stays in the list of addresses but is never elected, because it says nothing the MAC column does not — an empty IP then honestly means no address was ever seen for that MAC. |
 | `nodes.current_ip_window` | `86400` | Candidates for the current IP: seen within this window of the newest one. |
 | `nodes.transit_window` | `1800` | A MAC seen on two access ports within this window stays on the port with the fewest MACs; the other is transit. |

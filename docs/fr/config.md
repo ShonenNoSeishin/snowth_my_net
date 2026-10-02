@@ -154,6 +154,7 @@ Comment les observations MAC et ARP deviennent des positions de nœuds (voir `ex
 | `nodes.positions` | `all` | `all` : une ligne par position connue (historique d'itinérance, la plus récente d'abord) ; `current` : seulement la dernière. |
 | `nodes.retention_days` | `30` | Les observations MAC/ARP plus anciennes sont purgées. |
 | `nodes.prefer_ipv4` | `true` | L'IP courante est une IPv4 quand une IPv4 a été vue récemment. |
+| `nodes.include_link_local_only` | `false` | Lister une MAC connue par rien d'autre que la forme `fe80::` d'elle-même, dans un cache de voisinage : aucun port, aucune adresse. Désactivé, car un routeur qui tient un cache de voisinage IPv6 produit des centaines de ces lignes, chacune une MAC et six colonnes vides. `explain` répond toujours pour elles. |
 | `nodes.elect_derived_link_local` | `false` | Une adresse `fe80::` qui n'est que la MAC réécrite (EUI-64) peut-elle être l'IP courante ? Désactivé : elle reste dans la liste des adresses mais n'est jamais élue, car elle ne dit rien que la colonne MAC ne dise déjà — une IP vide signifie alors honnêtement qu'aucune adresse n'a jamais été vue pour cette MAC. |
 | `nodes.current_ip_window` | `86400` | Candidates à l'IP courante : vues dans cette fenêtre par rapport à la plus récente. |
 | `nodes.transit_window` | `1800` | Une MAC vue sur deux ports d'accès dans cette fenêtre reste sur le port qui porte le moins de MAC ; l'autre est du transit. |

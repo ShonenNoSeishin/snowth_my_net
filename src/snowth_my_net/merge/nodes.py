@@ -359,7 +359,21 @@ def resolve_mac(ctx: MergeContext, mac: str) -> Node:
     node.last_seen = max(seen, default=0)
     node.first_seen = min(firsts, default=0)
     node.live = is_live(ctx, node)
+    if node.excluded is None and not cfg.include_link_local_only and nothing_known(node):
+        node.excluded = Exclusion("link_local_only")
     return node
+
+
+def nothing_known(node: Node) -> bool:
+    """A MAC a neighbour cache heard once over IPv6, and nothing else, anywhere.
+
+    No MAC table ever saw it, so there is no port; its only address is the ``fe80::`` form of
+    that same MAC, so there is no address either. The row would carry a MAC, a vendor, and six
+    empty columns — and there are hundreds of them on a network where a router keeps an IPv6
+    neighbour cache. ``explain`` still answers for it: it is left out of the list, not forgotten.
+    """
+    return not node.sightings and bool(node.ips) and all(
+        derived_link_local(ip.ip, node.mac) for ip in node.ips)
 
 
 def is_live(ctx: MergeContext, node: Node) -> bool:

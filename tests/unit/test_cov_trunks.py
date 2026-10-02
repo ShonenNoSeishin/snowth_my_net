@@ -143,6 +143,7 @@ def arp_lab(tmp_path, *addresses):
 
 def test_an_address_that_repeats_the_mac_is_kept_but_never_elected(tmp_path):
     loaded = arp_lab(tmp_path, "fe80::1e0b:8bff:fec0:eb62")
+    loaded.cfg.nodes.include_link_local_only = True         # keep the row, to look at it
     repo = Repo(open_db(loaded.paths.state_file, readonly=True))
     try:
         view = build_view(loaded, repo, NOW)
@@ -154,6 +155,33 @@ def test_an_address_that_repeats_the_mac_is_kept_but_never_elected(tmp_path):
         assert next(n for n in again.nodes if n.mac == AP).current_ip is not None
     finally:
         repo.conn.close()
+
+
+def test_a_mac_known_by_nothing_but_that_address_is_not_a_row(tmp_path):
+    """What a router's IPv6 neighbour cache produces by the hundred: a MAC and six empty
+    columns. Left out of the list, still explained when asked about."""
+    loaded = arp_lab(tmp_path, "fe80::1e0b:8bff:fec0:eb62")
+    repo = Repo(open_db(loaded.paths.state_file, readonly=True))
+    try:
+        view = build_view(loaded, repo, NOW)
+        assert [n.mac for n in view.nodes] == []            # no row at all
+        found = view.find(AP)                               # explain still answers for it
+        assert found and found[0].excluded.code == "link_local_only"
+        assert "neighbour cache" in str(found[0].excluded)
+    finally:
+        repo.conn.close()
+
+
+def test_the_same_mac_with_anything_else_stays_a_row(tmp_path):
+    """One real address, or one MAC table sighting, and the row is worth showing."""
+    with_address = arp_lab(tmp_path / "ip", "fe80::1e0b:8bff:fec0:eb62", "10.1.50.42")
+    repo = Repo(open_db(with_address.paths.state_file, readonly=True))
+    try:
+        assert [n.mac for n in build_view(with_address, repo, NOW).nodes] == [AP]
+    finally:
+        repo.conn.close()
+    seen_on_a_port = lab(tmp_path / "port")                 # the AP is in a MAC table there
+    assert AP in [n.mac for n in view_of(seen_on_a_port).nodes]
 
 
 def test_a_real_address_is_elected_as_before(tmp_path):
@@ -323,6 +351,7 @@ def test_the_table_promises_nothing_it_cannot_show(tmp_path):
     from snowth_my_net.web import pages
 
     loaded = arp_lab(tmp_path, "fe80::1e0b:8bff:fec0:eb62")
+    loaded.cfg.nodes.include_link_local_only = True          # whoever wants the row anyway
     repo = Repo(open_db(loaded.paths.state_file, readonly=True))
     try:
         table = pages.nodes(loaded, repo, NOW, Translator("en"), 2000)
