@@ -18,6 +18,7 @@ from snowth_my_net.enrich.oui import OuiDatabase, load_database
 from snowth_my_net.export.run import exported_devices
 from snowth_my_net.merge.nodes import (
     DAY,
+    SOFT,
     ArpObs,
     DeviceInfo,
     FdbObs,
@@ -308,6 +309,18 @@ class NodeView:
             })
         rows.sort(key=lambda row: (row["evidence"] != "guess", -row["orphans"], -row["macs"]))
         return rows
+
+    def behind_soft_uplinks(self) -> int:
+        """MACs with no position that ``nodes.uplink_fallback`` would place.
+
+        Every one of them was seen only behind a port held as an uplink by weak evidence — the
+        MAC count, or a bridge nobody polls — which is exactly the shape of an unmanaged switch.
+        The fallback puts them on that port, as a tool that reports the learning port would;
+        this counts them first, so the choice is made on a number rather than on a guess.
+        """
+        return sum(1 for node in self.nodes
+                   if not node.positions and node.sightings
+                   and all(s.role.strength == SOFT for s in node.sightings))
 
     def sighting_label(self, s: Sighting) -> str:
         return f"{self.device_name(s.device_id)} {self.port_name(s.device_id, s.ifindex)}"

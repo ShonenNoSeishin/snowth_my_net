@@ -511,3 +511,56 @@ def test_a_device_warning_is_printed_after_a_collect(tmp_path):
     report.results.append(result)
     printed = _render_report(report, make_loaded(tmp_path))
     assert "note: 10.0.0.2: VLAN 81" in printed
+
+
+# --------------------------------------------------------------------------- an unmanaged switch
+
+
+def dumb_switch(tmp_path, how_many: int):
+    """A switch nobody manages behind port 7, with that many devices behind it."""
+    behind = [f"00:11:22:00:{i // 256:02x}:{i % 256:02x}" for i in range(how_many)]
+    repo = Repo(open_db(tmp_path / "state" / "state.sqlite"))
+    run = repo.start_run("collect", NOW)
+    repo.save_device(device("10.0.0.2", "SW-OFFICE", "00:00:5e:00:53:02",
+                            interfaces={7: Interface(7, "Gi1/0/7"), 8: Interface(8, "Gi1/0/8")},
+                            fdb=[fdb(m, 7) for m in behind] + [fdb("00:aa:bb:cc:dd:ee", 8)]),
+                     NOW, run)
+    repo.finish_run(run, "ok", NOW, {"devices": 1})
+    repo.conn.close()
+    return make_loaded(tmp_path), behind
+
+
+def test_a_small_unmanaged_switch_needs_no_setting_at_all(tmp_path):
+    """Six devices behind a dumb switch: the port is an access port, every one is placed —
+    the same answer another tool gives, with no configuration."""
+    loaded, behind = dumb_switch(tmp_path, 6)
+    view = view_of(loaded)
+    placed = [n for n in view.nodes if n.mac in behind and n.positions]
+    assert len(placed) == 6
+    assert {n.position_kind for n in placed} == {"access"}
+    assert {view.port_name(p.device_id, p.ifindex) for n in placed for p in n.positions} == {
+        "Gi1/0/7"}
+
+
+def test_a_crowded_unmanaged_switch_is_where_the_two_tools_differ(tmp_path):
+    """Above the threshold the port is held as an uplink, so nothing is placed — and the count
+    of what the fallback would recover is what the choice is made on."""
+    loaded, behind = dumb_switch(tmp_path, 60)
+    view = view_of(loaded)
+    assert [n for n in view.nodes if n.mac in behind and n.positions] == []
+    assert view.behind_soft_uplinks() == 60
+
+    loaded.cfg.nodes.uplink_fallback = True
+    with_fallback = view_of(loaded)
+    placed = [n for n in with_fallback.nodes if n.mac in behind and n.positions]
+    assert len(placed) == 60
+    assert {n.position_kind for n in placed} == {"behind_uplink"}
+    assert with_fallback.behind_soft_uplinks() == 0      # nothing left to recover
+
+
+def test_what_sits_behind_a_switch_we_do_poll_is_not_recovered_that_way(tmp_path):
+    """A hard uplink means the device is behind a switch we poll: its real port comes from
+    there, and inventing one here would be the false positive to avoid."""
+    loaded = lab(tmp_path)                               # LLDP on a member of the trunk
+    view = view_of(loaded)
+    assert view.behind_soft_uplinks() == 0

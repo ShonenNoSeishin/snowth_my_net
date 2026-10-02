@@ -519,7 +519,8 @@ def cmd_show(args: argparse.Namespace) -> int:
         elif args.what == "uplinks":
             from snowth_my_net.merge.view import build_view
 
-            rows = build_view(loaded, repo, Clock().now()).uplink_ports()
+            view = build_view(loaded, repo, Clock().now())
+            rows = view.uplink_ports()
             if args.filter:
                 needle = args.filter.casefold()
                 rows = [r for r in rows
@@ -537,6 +538,13 @@ def cmd_show(args: argparse.Namespace) -> int:
                     out("A port with many orphans and no LLDP may be an access point or a "
                         "hypervisor: raise uplink_mac_threshold for that device, or list the "
                         "port in access_ports.")
+                recoverable = view.behind_soft_uplinks()
+                if recoverable:
+                    out(f"{recoverable} MAC(s) would get a position with "
+                        "nodes.uplink_fallback: true — the port they were learned on, marked "
+                        "'behind that port, not necessarily on it'. That is what a tool "
+                        "reporting the learning port gives you, and the shape of an unmanaged "
+                        "switch.")
         elif args.what == "links":
             from snowth_my_net.merge.view import build_view
 
