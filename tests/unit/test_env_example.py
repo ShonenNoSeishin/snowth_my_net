@@ -70,3 +70,15 @@ def test_the_front_resolves_the_interface_again_instead_of_pinning_an_address():
     assert "resolver 127.0.0.11" in template          # Docker's own DNS
     assert "proxy_pass http://$interface;" in template   # a variable: resolved per request
     assert "proxy_pass http://web:8080" not in template  # the pinned form
+
+
+def test_the_interface_can_write_what_its_buttons_produce():
+    """The Export and Push buttons run in the web container: a read-only /output broke them."""
+    import yaml
+
+    services = yaml.safe_load(COMPOSE)["services"]
+    for name in ("snowth", "web"):
+        mounts = {entry.split(":")[1]: entry for entry in services[name]["volumes"]}
+        assert not mounts["/output"].endswith(":ro"), name
+        assert not mounts["/var/lib/snowth_my_net"].endswith(":ro"), name
+    assert services["web"]["volumes"][0].endswith(":ro")        # the configuration stays read-only

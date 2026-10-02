@@ -74,7 +74,9 @@ services:
       - ./config/extensions:/etc/snowth_my_net/extensions:ro
       - ./secrets:/run/secrets:ro
       - ./data:/var/lib/snowth_my_net          # read-only queries, but SQLite needs the mount
-      - ./output:/output:ro
+      # Writable: the Export and Push buttons of the Runs page, and 'exec web … export', write
+      # here. Read-only looked right while the interface only read — it made those buttons fail.
+      - ./output:/output
     # No "ports:": the nginx service below is the way in, over TLS. To reach the interface in
     # clear anyway (an SSH tunnel, another proxy), add the mapping in a compose.override.yml.
     restart: unless-stopped
