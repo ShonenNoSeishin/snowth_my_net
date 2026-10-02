@@ -372,10 +372,17 @@ class Site:
             '<a class="view{}" href="{}">{}</a>'.format(" on" if active else "", href,
                                                         esc(label))
             for label, href, active in table.views)
+        # The chooser and the drag handles are the browser's work; the page only names them,
+        # and stays whole without a script (hidden until one fills it).
+        columns = (f'<details class="cols" id="cols" hidden>'
+                   f'<summary>{esc(t("web.columns"))}</summary>'
+                   f'<div class="pick"><button type="button" class="reset">'
+                   f'{esc(t("web.columns.reset"))}</button></div>'
+                   f"</details>")
         controls = (f'<div class="bar"><input type="search" id="q" '
                     f'placeholder="{esc(t("web.search"))}" aria-label="{esc(t("web.search"))}">'
                     f'<span class="count" id="count">{esc(count)}</span>'
-                    f'<span class="views">{views}</span></div>'
+                    f'{columns}<span class="views">{views}</span></div>'
                     + (f'<p class="note">{esc(table.note)}</p>' if table.note else ""))
         table_html = (f'<div class="wrap"><table id="rows"><thead><tr>{head}</tr></thead>'
                       f'<tbody>{"".join(body)}</tbody></table></div>')

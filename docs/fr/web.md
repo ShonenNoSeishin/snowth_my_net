@@ -34,9 +34,11 @@ UTC stockée. Tout ce qui est écrit — `nodes.csv`, `snapshot.json`, les journ
 parce que c'est ce qu'attendent un importateur et un lecteur de journaux.
 
 Chaque page s'ouvre sur **Comment lire ce tableau**, un panneau replié qui dit d'où vient chaque
-colonne : quelle MIB, quelle règle, et pourquoi une case peut être vide. Chaque tableau a un champ
-de filtre (la touche `/` y place le curseur) et des colonnes triables ; le filtre et le tri se
-font dans le navigateur, sur les lignes déjà envoyées. La ligne sous le
+colonne : quelle MIB, quelle règle, et pourquoi une case peut être vide. Chaque tableau a un champ de filtre (la touche `/` y place le curseur) et des colonnes
+triables ; le filtre et le tri se font dans le navigateur, sur les lignes déjà envoyées.
+**Colonnes** choisit lesquelles afficher, tirer le bord droit d'un en-tête règle sa largeur, et
+survoler une valeur qui a dû être coupée en montre l'entier. Ces trois réglages sont gardés par
+le navigateur, par page, et rien n'en atteint l'état. La ligne sous le
 titre indique quand la dernière collecte a eu lieu et comment elle s'est passée. Cliquer sur une
 MAC affiche la même explication que `snowth_my_net explain`, dans la langue de l'interface.
 

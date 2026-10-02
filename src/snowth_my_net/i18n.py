@@ -430,6 +430,8 @@ WEB = {
                   "Heures en {zone} ; survolez-en une pour la valeur UTC stockée"),
     "web.not_found": ("Nothing here.", "Rien ici."),
     "web.how": ("How to read this table", "Comment lire ce tableau"),
+    "web.columns": ("Columns", "Colonnes"),
+    "web.columns.reset": ("Reset the widths", "Réinitialiser les largeurs"),
     "web.view.live": ("Seen at the last collect ({count})",
                       "Vues à la dernière collecte ({count})"),
     "web.view.all": ("Everything, history included ({count})",

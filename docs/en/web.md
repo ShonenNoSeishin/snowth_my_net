@@ -40,9 +40,11 @@ Each page opens with **How to read this table**, a collapsed panel saying where 
 comes from: which MIB, which rule, and why a cell can be empty. The ☾/☀ button in the header switches between light and dark (the choice is kept by the browser,
 otherwise the system one applies), and EN/FR changes the language.
 
-Each table has a filter box (the
-`/` key focuses it) and sortable columns; the filter and the sort happen in the browser, on the
-rows already sent. The line under the title says when the
+Each table has a filter box (the `/` key focuses it) and sortable columns; the filter and the
+sort happen in the browser, on the rows already sent. **Columns** chooses which ones to show,
+dragging the right edge of a heading sets its width, and hovering a value that had to be cut
+shows the whole of it. Those three are kept by the browser, per page, and nothing of them
+reaches the state. The line under the title says when the
 last collect ran and how it went. Clicking a MAC shows the same explanation as
 `snowth_my_net explain`, in the interface's language.
 

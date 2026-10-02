@@ -477,3 +477,16 @@ def test_the_addresses_a_row_hides_fold_instead_of_widening_it(site):
     assert '<details class="more"><summary>+1</summary>' in row
     assert "<li>192.0.2.60</li>" in row                     # there when opened, not before
     assert "fe80::60" not in row                            # nothing can be reached by it
+
+
+def test_the_table_carries_what_a_browser_needs_to_let_the_reader_arrange_it(site):
+    """The chooser and the drag handles are the browser's work; the page names the columns and
+    stays whole without a script."""
+    _status, _type, body = get(site, "/nodes")
+    assert 'class="cols" id="cols" hidden' in body        # revealed by the script, not before
+    assert 'class="pick"' in body and 'class="reset"' in body
+    for key in ("col-name", "col-mac", "col-vendor", "col-ip", "col-seen"):
+        assert f'<th class="text {key}"' in body or f'class="text {key}"' in body
+    script = (site.asset("app.js")[2]).decode()
+    assert "scrollWidth > cell.clientWidth" in script    # a tooltip only when really cut
+    assert "localStorage" in script and "col-" in script
