@@ -78,6 +78,15 @@ recharger la page, sans perdre votre filtre ni votre place dans la liste. `Escap
 Une colonne **Description** est à côté, écrite de la même façon, pour ce qu'un nom ne peut pas
 porter : où c'est accroché, à quoi ça sert, qui appeler.
 
+La colonne `DNS Name` est une résolution inverse (`dns check IP` dit quel résolveur répond et si
+une zone inverse contient cette adresse). Quand aucune zone ne la contient, on peut encore
+demander son nom à l'hôte lui-même — `dns probe IP` essaie NetBIOS, LLMNR et mDNS, comme le font
+`nbtstat -A` et un scanner. C'est un diagnostic, pas une source : sur un parc durci les trois
+sont muets, et un nom qu'un hôte déclare sur lui-même est une preuve plus faible qu'un nom que
+le réseau détient. Un bail DHCP (MAC, adresse, nom annoncé par le client) est la source fiable
+pour les appareils qu'aucune zone DNS ne connaît, et un nom donné à une MAC survit au changement
+d'adresse.
+
 ```bash
 snowth_my_net node name 00:11:22:33:44:55 "imprimante compta"
 snowth_my_net node describe 00:11:22:33:44:55 "2e étage, local technique"

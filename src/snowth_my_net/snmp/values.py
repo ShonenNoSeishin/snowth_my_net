@@ -81,18 +81,39 @@ def is_locally_administered(mac: str) -> bool:
     return bool(int(mac[:2], 16) & 0x02)
 
 
+_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
+HIGH_SHARE = 0.25          # above this, Latin-1 "letters" are bytes, not a word
+
+
 def decode_text(value: bytes | str | None) -> str:
-    """Display string from an OctetString: UTF-8 if valid, else Latin-1; NULs removed."""
+    """Display string from an OctetString: UTF-8 if valid, else Latin-1; NULs removed.
+
+    An OctetString is not always text. A chassis identifier or a device name can hold raw bytes
+    — a MAC address, a binary serial — and Latin-1 never fails, so those used to come out as
+    mojibake ("ýtÇp") and were shown as a neighbour's name. Three things tell them apart from a
+    legitimate accented label, in order of certainty: a control character is never in a name;
+    six bytes that are not UTF-8 are a MAC address, which is what a device puts in a field meant
+    for its name; and beyond a quarter of high bytes, "letters" are bytes (``Café switch`` is one
+    in eleven, ``ýtÇp`` is two in four). What is not a display string is shown in hex, which is
+    readable, searchable, and recognised as a MAC when it is one.
+    """
     if value is None:
         return ""
     if isinstance(value, str):
-        text = value
-    else:
-        raw = bytes(value).replace(b"\x00", b"")
-        try:
-            text = raw.decode("utf-8")
-        except UnicodeDecodeError:
-            text = raw.decode("latin-1")
+        return value.strip()
+    raw = bytes(value)
+    stripped = raw.replace(b"\x00", b"")
+    try:
+        text = stripped.decode("utf-8")
+    except UnicodeDecodeError:
+        if len(raw) == 6:
+            return normalize_mac(raw) or raw.hex(":")
+        text = stripped.decode("latin-1")
+        high = sum(1 for char in text if ord(char) > 0x7E)
+        if text and high / len(text) > HIGH_SHARE:
+            return raw.hex(":")
+    if _CONTROL.search(text):
+        return raw.hex(":")
     return text.strip()
 
 

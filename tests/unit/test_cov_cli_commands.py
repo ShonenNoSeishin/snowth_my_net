@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -679,27 +680,47 @@ def test_dns_flush_forgets_what_a_wrong_resolver_cached(cfg, capsys, tmp_path):
 
 def test_dns_check_asks_the_configured_resolvers_and_says_what_came_back(cfg, capsys, tmp_path,
                                                                         monkeypatch):
-    """The same code path as an export: "is my resolver the one I think, and does it hold a
-    reverse zone for this address?" — without waiting for an export or reading a cache."""
+    """"Is my resolver the one I think, and does it hold a reverse zone for this address?" —
+    including which server answered, because attributing an answer to the wrong resolver sends
+    you looking in the wrong place."""
+    import dns.exception
+    import dns.resolver
+
     state(tmp_path).conn.close()
-    answers = {"10.0.0.1": ("sw.example.net", "ok"), "10.0.0.2": (None, "nxdomain"),
-               "10.0.0.3": (None, "timeout")}
 
-    async def lookup(ip):
-        return answers[ip]
+    class Record:
+        def __init__(self, name):
+            self.name = name
 
-    monkeypatch.setattr("snowth_my_net.enrich.dns.dnspython_ptr", lambda cfg: lookup)
-    assert run(cfg, "dns", "check", "10.0.0.1", "10.0.0.2", "10.0.0.3") == 0
+        def to_text(self):
+            return self.name + "."
+
+    class Reply(list):
+        nameserver = "10.0.0.53"
+
+    async def resolve_address(ip):
+        if ip == "10.0.0.2":
+            raise dns.resolver.NXDOMAIN
+        if ip == "10.0.0.3":
+            raise dns.exception.Timeout
+        if ip == "10.0.0.4":
+            raise dns.resolver.NoNameservers
+        return Reply([Record("sw.example.net")])
+
+    fake = SimpleNamespace(nameservers=["10.0.0.53"], resolve_address=resolve_address)
+    monkeypatch.setattr("snowth_my_net.enrich.dns.make_resolver", lambda cfg: fake)
+    assert run(cfg, "dns", "check", "10.0.0.1", "10.0.0.2", "10.0.0.3", "10.0.0.4") == 0
     printed = capsys.readouterr().out
-    assert "resolvers:" in printed
+    assert "resolvers:" in printed and "10.0.0.53" in printed      # which one answered
     assert "sw.example.net" in printed and "nxdomain" in printed and "timeout" in printed
+    assert "error" in printed                                      # a refusal is not a timeout
     assert "no reverse zone for this subnet" in printed      # what nxdomain means here
     assert "unreachable" in printed                          # what a timeout means
     assert "dns.enabled is false" in printed                 # said, since this config has it off
     assert run(cfg, "--json", "dns", "check", "10.0.0.1") == 0
     answer = read_json(capsys)
     assert answer["results"] == [{"address": "10.0.0.1", "name": "sw.example.net",
-                                 "status": "ok"}]
+                                 "status": "ok", "server": "10.0.0.53"}]
     assert answer["enabled"] is False and isinstance(answer["resolvers"], list)
 
 

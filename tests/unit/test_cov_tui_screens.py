@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -132,8 +133,20 @@ def make_app(tmp_path):
         ctx.close()
 
 
-async def settle(app, pilot, rounds: int = 3):
+async def settle(app, pilot, rounds: int = 3, timeout: float = 15.0):
+    """Let the interface catch up — until it is quiet, not for a fixed number of frames.
+
+    A frame count assumes every frame takes the same time. Under coverage, or on a machine busy
+    with something else, it does not: these tests failed now and then for a reason that had
+    nothing to do with the code. A worker can also start another one (a refresh that loads, then
+    renders), so waiting once is not waiting until the end. This waits for no worker to be left,
+    bounded by a deadline so a hang is still a failure.
+    """
+    deadline = time.monotonic() + timeout
     for _ in range(rounds):
+        await pilot.pause()
+        await app.workers.wait_for_complete()
+    while len(app.workers) and time.monotonic() < deadline:
         await pilot.pause()
         await app.workers.wait_for_complete()
     await pilot.pause()

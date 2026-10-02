@@ -81,6 +81,14 @@ MAC's own page, and the filter box finds a name like anything else.
 A **Description** column sits next to it, written the same way, for what a name cannot hold:
 where it hangs, what it is for, whom to call.
 
+The `DNS Name` column is a reverse lookup (`dns check IP` says which resolver answers and
+whether a reverse zone holds that address). When no zone holds it, a host can still be asked its
+own name — `dns probe IP` tries NetBIOS, LLMNR and mDNS, the way `nbtstat -A` and a scanner do.
+That is a diagnostic, not a source: on a hardened fleet all three are silent, and a name a host
+declares about itself is weaker evidence than one the network holds. A DHCP lease (MAC, address,
+the name the client announced) is the reliable source for devices no DNS zone knows, and a name
+given to a MAC survives the address changing.
+
 ```bash
 snowth_my_net node name 00:11:22:33:44:55 "imprimante compta"
 snowth_my_net node describe 00:11:22:33:44:55 "2e étage, local technique"

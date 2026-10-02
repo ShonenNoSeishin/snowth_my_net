@@ -43,13 +43,15 @@ def test_lldp_encodings_and_malformed_rows():
     assert set(found) == {"r1", "r2", "r3"}
     assert found["r1"].chassis_id == "192.0.2.9" and found["r1"].port_id == "0901"
     assert sorted(found["r1"].mgmt_addresses) == ["192.0.2.10", "192.0.2.9"]
-    assert found["r2"].chassis_id == "" and found["r2"].port_id == "\x01\x02"
+    # Two control bytes are not a port name: they are shown as the bytes they are.
+    assert found["r2"].chassis_id == "" and found["r2"].port_id == "01:02"
     assert not found["r2"].port_is_mac and found["r2"].caps == frozenset()
     assert found["r3"].chassis_id == "2021:2223:2425:2627:2829:2a2b:2c2d:2e2f"
     assert (found["r3"].port_id, found["r3"].port_is_mac) == (MAC.hex(), False)  # not an address
     assert nb.decode_port_id(4, bytes([1, 192, 0, 2, 1])) == ("192.0.2.1", False)
-    assert nb.decode_chassis_id(4, b"\x01\x02") == "\x01\x02"
-    assert nb.decode_port_id(3, b"\x01\x02") == ("\x01\x02", False)
+    # Subtype 4 says "a MAC", but two bytes are not one: shown as the bytes, not as letters.
+    assert nb.decode_chassis_id(4, b"\x01\x02") == "01:02"
+    assert nb.decode_port_id(3, b"\x01\x02") == ("01:02", False)
     assert nb.decode_port_id(5, 7) == ("", False)                   # not an OCTET STRING
 
 

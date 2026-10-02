@@ -280,3 +280,21 @@ def test_value_helpers_edges():
     assert normalize_mac(b"not-a-mac") is None
     assert is_locally_administered("02:00:00:00:00:01")
     assert not is_locally_administered("00:00:5e:00:53:01")
+
+
+def test_an_octet_string_that_is_not_text_is_shown_as_bytes():
+    """A neighbour's name came out as "ýtÇp": Latin-1 never fails, so raw bytes became letters."""
+    from snowth_my_net.snmp.values import decode_text, normalize_mac
+
+    assert decode_text(b"Office-SW01") == "Office-SW01"
+    assert decode_text(b"Caf\xe9 switch") == "Café switch"          # Latin-1 that is a word
+    assert decode_text(b"sw-office\x00\x00") == "sw-office"         # NUL padding
+    assert decode_text(b"Cisco IOS\r\nVersion 15") == "Cisco IOS\r\nVersion 15"
+    assert decode_text("MikroTik") == "MikroTik"
+    assert decode_text(None) == ""
+
+    mac = decode_text(b"\x00\x0c\x29\x1b\x88\xfc")                  # six bytes: a MAC address
+    assert mac == "00:0c:29:1b:88:fc" and normalize_mac(mac) == mac
+    assert decode_text(b"\xfd\x74\x00\xc7\x70\x00") == "fd:74:00:c7:70:00"
+    assert decode_text(b"\xfd\x74\xc7\x70") == "fd:74:c7:70"        # what was shown as ýtÇp
+    assert decode_text(b"\x01\x02") == "01:02"                      # control bytes

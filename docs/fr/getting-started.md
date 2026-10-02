@@ -166,6 +166,7 @@ snowth_my_net show uplinks                 # ports tenus pour des uplinks, et ce
 snowth_my_net show excluded                # MAC que la liste des nœuds écarte, et pourquoi
 snowth_my_net show tables                  # ce que chaque table SNMP a rendu, par équipement
 snowth_my_net dns check 192.0.2.121       # le résolveur est-il le bon, la zone inverse existe-t-elle ?
+snowth_my_net dns probe 192.0.2.121       # demander à l'hôte lui-même : NetBIOS, LLMNR, mDNS
 snowth_my_net show links                   # les liens physiques trouvés
 snowth_my_net show runs                    # les dernières exécutions et leur état
 snowth_my_net explain 00:00:5e:00:53:a0    # pourquoi cette MAC est sur ce port

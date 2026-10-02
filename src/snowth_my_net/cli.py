@@ -1295,6 +1295,8 @@ def cmd_dns(args: argparse.Namespace) -> int:
     loaded = load(args)
     if args.action == "check":
         return _dns_check(loaded, args)
+    if args.action == "probe":
+        return _dns_probe(loaded, args)
     with Locked(loaded, "dns flush", loaded.cfg.general.lock_wait.default):
         conn = open_db(loaded.paths.state_file)
         try:
@@ -1317,35 +1319,88 @@ def _dns_check(loaded: LoadedConfig, args: argparse.Namespace) -> int:
     resolver the one I think, and does it hold a reverse zone for this address?" without
     waiting for an export or reading a cache.
     """
-    from snowth_my_net.enrich.dns import dnspython_ptr, make_resolver
+    import dns.exception
+    import dns.resolver
+
+    from snowth_my_net.enrich.dns import make_resolver
 
     cfg = loaded.cfg.dns
-    resolvers = make_resolver(cfg).nameservers
-    lookup = dnspython_ptr(cfg)
-    rows = []
-    for address in args.addresses:
-        host = normalize_address(address)
-        name, status = asyncio.run(lookup(host))
-        rows.append({"address": host, "name": name, "status": status})
+    resolver = make_resolver(cfg)
+    resolvers = [str(r) for r in resolver.nameservers]
+
+    async def one(host: str) -> dict:
+        """The same call an export makes, plus which server answered: a list of resolvers
+        hides that, and attributing an answer to the wrong one sends you looking in the
+        wrong place."""
+        try:
+            answer = await resolver.resolve_address(host)
+        except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
+            return {"address": host, "name": None, "status": "nxdomain", "server": ""}
+        except dns.exception.Timeout:
+            return {"address": host, "name": None, "status": "timeout", "server": ""}
+        except dns.exception.DNSException as exc:
+            return {"address": host, "name": None, "status": "error",
+                    "server": "", "detail": type(exc).__name__}
+        name = next((r.to_text().rstrip(".") for r in answer), None)
+        return {"address": host, "name": name, "status": "ok" if name else "nxdomain",
+                "server": str(getattr(answer, "nameserver", ""))}
+
+    rows = [asyncio.run(one(normalize_address(address))) for address in args.addresses]
     if args.json:
-        out_json({"resolvers": [str(r) for r in resolvers], "enabled": cfg.enabled,
-                  "results": rows})
+        out_json({"resolvers": resolvers, "enabled": cfg.enabled, "results": rows})
         return EXIT_OK
-    out(f"resolvers: {', '.join(str(r) for r in resolvers) or '(none)'}"
+    out(f"resolvers: {', '.join(resolvers) or '(none)'}"
         + ("" if cfg.enabled else "   dns.enabled is false: an export resolves nothing"))
-    out(table(["ADDRESS", "NAME", "ANSWER"],
-              [[r["address"], r["name"] or "-", r["status"]] for r in rows]))
+    out(table(["ADDRESS", "NAME", "ANSWER", "ANSWERED BY"],
+              [[r["address"], r["name"] or "-", r["status"], r["server"]] for r in rows]))
     meaning = {
         "ok": "a name was found: the DNS Name column will carry it",
         "nxdomain": "the resolver answered 'no such name': either no reverse zone for this "
                     "subnet, or nothing registered a PTR for this address",
-        "timeout": "no answer at all: the resolver is unreachable (port 53 open both UDP and "
-                   "TCP, from the host's address since the container is NATed?) or too slow "
-                   "for dns.timeout",
+        "timeout": "no resolver answered at all: unreachable (port 53 open both UDP and TCP, "
+                   "from the host's address since the container is NATed?) or slower than "
+                   "dns.timeout. Every resolver in the list was tried",
         "error": "the resolver refused or failed: check it serves this client",
     }
     for status in dict.fromkeys(r["status"] for r in rows):
         out(f"{status}: {meaning[status]}")
+    return EXIT_OK
+
+
+def _dns_probe(loaded: LoadedConfig, args: argparse.Namespace) -> int:
+    """Ask a host its own name, the three ways, and show what each one answers.
+
+    A reverse zone is declared by whoever runs the DNS; NetBIOS and mDNS ask the host itself,
+    which is what 'ping -a', 'nbtstat -A' and a scanner do. This measures which of them answers
+    on a given network before anything is wired into a collect.
+    """
+    from snowth_my_net.enrich.dns import dnspython_ptr
+    from snowth_my_net.enrich.probe import Answer, ask_all
+
+    cfg = loaded.cfg.dns
+    ptr = dnspython_ptr(cfg)
+
+    async def ask(host: str) -> list[Answer]:
+        name, status = await ptr(host)
+        return [Answer("ptr", name=name or "", detail="" if name else status),
+                *await ask_all(host, cfg.timeout)]
+
+    rows = []
+    for address in args.addresses:
+        host = normalize_address(address)
+        for answer in asyncio.run(ask(host)):
+            rows.append({"address": host, "source": answer.source, "name": answer.name,
+                         "detail": answer.detail, "mac": answer.mac})
+    if args.json:
+        out_json(rows)
+        return EXIT_OK
+    out(table(["ADDRESS", "ASKED", "NAME", "WHY NOT", "MAC"],
+              [[r["address"], r["source"], r["name"] or "-", r["detail"], r["mac"]]
+               for r in rows]))
+    out("ptr: what the network says about the host (a reverse zone someone maintains).")
+    out("netbios, mdns: what the host says about itself, like 'nbtstat -A' and a scanner. "
+        "Useful, and weaker evidence: tell me which of them answers on your network and I "
+        "wire it into the collect.")
     return EXIT_OK
 
 
@@ -1619,9 +1674,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("dns", parents=[common],
                        help="check a reverse lookup, or forget the cached PTR answers")
-    p.add_argument("action", choices=["flush", "check"])
+    p.add_argument("action", choices=["flush", "check", "probe"])
     p.add_argument("addresses", nargs="*", metavar="IP",
-                   help="addresses to look up with 'check'")
+                   help="addresses for 'check' (reverse DNS) or 'probe' (and NetBIOS, mDNS)")
     p.add_argument("--misses-only", action="store_true",
                    help="flush: keep the names already found, ask again only for the rest")
     p.set_defaults(func=cmd_dns)
