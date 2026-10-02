@@ -629,3 +629,18 @@ def test_cli_addresses_use_the_configured_snmp_port(tmp_path, capsys, monkeypatc
         assert [row["address"] for row in repo.targets()] == ["192.0.2.42:1161"]
     finally:
         repo.conn.close()
+
+
+def test_node_reset_asks_before_forgetting(cfg, capsys, tmp_path):
+    repo = state(tmp_path)
+    add_device(repo)
+    repo.conn.execute("INSERT INTO fdb_obs(mac, device_id, ifindex, vlan, vlan_source, "
+                      "first_seen, last_seen, last_run_id) VALUES "
+                      "('aa:bb:cc:dd:ee:ff', 1, 1, 10, 'fdb', ?, ?, 1)", (NOW, NOW))
+    repo.conn.commit()
+    repo.conn.close()
+    assert run(cfg, "node", "reset") == 2            # refused: it must be confirmed
+    assert run(cfg, "node", "reset", "--yes") == 0
+    assert "1 MAC observation(s)" in capsys.readouterr().out
+    assert run(cfg, "--json", "node", "reset", "--yes") == 0
+    assert read_json(capsys) == {"fdb": 0, "arp": 0}

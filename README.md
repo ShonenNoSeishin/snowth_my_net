@@ -98,6 +98,7 @@ Details, systemd units, hardening and networking: [docs/en/deployment.md](docs/e
 | `health [--max-age]` | Exit 1 when the last successful collect is too old |
 | `tui` | Terminal interface |
 | `show uplinks` | Ports treated as uplinks, whether by proof (LLDP/CDP) or by the MAC count alone, and how many MACs each one leaves without a position |
+| `node reset --yes` | Forget every MAC and ARP observation; the devices, links and names stay |
 | `node [name\|describe MAC [TEXT]]` | Name or describe a MAC address by hand, or list what was given (kept across collects) |
 | `web [--bind] [--port]`, `web passwd [USER]` | Read-only web interface (devices, nodes, links, runs, files), with optional accounts |
 

@@ -24,7 +24,7 @@ from snowth_my_net.config.manual import ManualError, normalize_address
 from snowth_my_net.snmp.target import split_host_port
 from snowth_my_net.state.repo import Repo
 
-ACTIONS = ("add", "remove", "credential", "test")
+ACTIONS = ("add", "remove", "credential", "test", "forget")
 
 
 @dataclass(frozen=True)

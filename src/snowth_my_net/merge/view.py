@@ -82,7 +82,9 @@ def load_inputs(loaded: LoadedConfig, repo: Repo, now: int) -> tuple[MergeInputs
            for r in conn.execute("SELECT * FROM arp_obs WHERE last_seen >= ?", (horizon,))]
     device_macs = {r["mac"]: r["device_id"]
                    for r in conn.execute("SELECT mac, device_id FROM device_macs")}
-    inputs = MergeInputs(infos, ports, fdb, arp, device_macs)
+    full = repo.last_successful_collect()
+    inputs = MergeInputs(infos, ports, fdb, arp, device_macs,
+                         last_full_walk=full["started_at"] if full else 0)
     return inputs, names
 
 

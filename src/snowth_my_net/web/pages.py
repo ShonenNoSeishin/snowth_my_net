@@ -12,6 +12,7 @@ from pathlib import Path
 from snowth_my_net.clock import iso_z, local_time
 from snowth_my_net.config.loader import LoadedConfig
 from snowth_my_net.export.run import exported_devices
+from snowth_my_net.merge.nodes import derived_link_local
 from snowth_my_net.merge.view import build_view
 from snowth_my_net.snmp.target import split_host_port
 from snowth_my_net.state.repo import Repo
@@ -53,6 +54,8 @@ class Table:
     empty: str = ""                         # what to say when there is nothing
     help: list[tuple[str, str]] = field(default_factory=list)   # (label, where it comes from)
     keys: list[str | None] = field(default_factory=list)        # one per column, for its width
+    views: list[tuple[str, str, bool]] = field(default_factory=list)   # (label, href, active)
+    note: str = ""                          # one line under the controls
 
 
 def help_for(t, page: str, columns: list[tuple[str, str]], keys: list[str | None],
@@ -127,14 +130,21 @@ def _devices_and_names(loaded: LoadedConfig, repo: Repo, now: int):
     return found, [names[d["id"]] for d in found]
 
 
-def nodes(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int) -> Table:
+def nodes(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int,
+          live_only: bool = False) -> Table:
     view = build_view(loaded, repo, now)
     cfg = loaded.cfg.nodes
     rows = []
+    stale = sum(1 for node in view.nodes if not node.live)
     for node in view.nodes:
+        if live_only and not node.live:
+            continue
         vendor = view.vendor(node)
         current = node.current_ip.ip if node.current_ip else ""
-        others = [ip.ip for ip in node.ips if node.current_ip is not ip]
+        # An address that is only the MAC rewritten is not folded away either: a bare "+1"
+        # promised something to read and held nothing.
+        others = [ip.ip for ip in node.ips if node.current_ip is not ip
+                  and not derived_link_local(ip.ip, node.mac)]
         address = Cell(current, more=tuple(others))
         dns = view.dns_name(current) if current else ""
         positions = node.positions if cfg.positions == "all" else node.positions[:1]
@@ -157,8 +167,13 @@ def nodes(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int) -> Table:
                (t("col.port"), "text"), (t("col.vlan"), "number"), (t("col.seen"), "text")]
     keys = ["name", "description", "mac", "vendor", "ip", "dns", "switch", "port", "vlan",
             "seen"]
+    live = len(view.nodes) - stale
+    views = [(t("web.view.live", count=live), "/nodes?live=1", live_only),
+             (t("web.view.all", count=len(view.nodes)), "/nodes", not live_only)]
     return Table(columns, rows[:limit], len(rows), t("web.no_nodes"),
-                 help_for(t, "nodes", columns, keys, extra=["hint.nodes.click"]), keys)
+                 help_for(t, "nodes", columns, keys,
+                          extra=["hint.nodes.live", "hint.nodes.click"]), keys, views,
+                 t("web.view.stale", count=stale) if stale and not live_only else "")
 
 
 def text_of(value) -> str:

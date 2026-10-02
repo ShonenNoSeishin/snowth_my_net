@@ -368,9 +368,15 @@ class Site:
                         for label, text in table.help)
         panel = (f'<details class="hint"><summary>{esc(t("web.how"))}</summary>'
                  f"<dl>{hints}</dl></details>") if table.help else ""
+        views = "".join(
+            '<a class="view{}" href="{}">{}</a>'.format(" on" if active else "", href,
+                                                        esc(label))
+            for label, href, active in table.views)
         controls = (f'<div class="bar"><input type="search" id="q" '
                     f'placeholder="{esc(t("web.search"))}" aria-label="{esc(t("web.search"))}">'
-                    f'<span class="count" id="count">{esc(count)}</span></div>')
+                    f'<span class="count" id="count">{esc(count)}</span>'
+                    f'<span class="views">{views}</span></div>'
+                    + (f'<p class="note">{esc(table.note)}</p>' if table.note else ""))
         table_html = (f'<div class="wrap"><table id="rows"><thead><tr>{head}</tr></thead>'
                       f'<tbody>{"".join(body)}</tbody></table></div>')
         return self.shell(active, title, before + panel + controls + table_html, subtitle, t=t,
@@ -484,6 +490,12 @@ class Site:
                 f'<button type="submit">{esc(t("web.snmp.remove"))}</button></form></td></tr>')
         body.append(f'<div class="wrap"><table class="plain"><thead><tr>{head}</tr></thead>'
                     f'<tbody>{"".join(lines)}</tbody></table></div>')
+        body.append(
+            f'<details class="danger"><summary>{esc(t("web.snmp.forget"))}</summary>'
+            f'<p class="note">{esc(t("web.snmp.forget_why"))}</p>'
+            f'<form method="post" action="/snmp">'
+            f'<input type="hidden" name="do" value="forget">'
+            f'<button type="submit">{esc(t("web.snmp.forget_do"))}</button></form></details>')
         return self.shell("/snmp", t("web.snmp.title"), "".join(body), t=t)
 
     def confirm(self, user: str, password: str, token: str | None, address: str, t=None
@@ -526,6 +538,12 @@ class Site:
                 elif what == "remove":
                     host = snmp.remove_target(repo, address)
                     said = t("web.snmp.removed", address=host)
+                elif what == "forget":
+                    counts = repo.forget_nodes()
+                    log.warning("the MAC and ARP memory was emptied from the web interface "
+                                "by %s: %s + %s rows", user or "an anonymous reader",
+                                counts["fdb"], counts["arp"])
+                    said = t("web.snmp.forgotten", fdb=counts["fdb"], arp=counts["arp"])
                 else:
                     name = (form.get("credential") or [""])[0]
                     chosen = snmp.set_credential(self.loaded, repo, address, name, now)
@@ -658,7 +676,8 @@ class Site:
                 table = pages.devices(self.loaded, repo, now, t)
                 title = t("tab.devices")
             elif path == "/nodes":
-                table = pages.nodes(self.loaded, repo, now, t, self.loaded.cfg.web.node_limit)
+                table = pages.nodes(self.loaded, repo, now, t, self.loaded.cfg.web.node_limit,
+                                    live_only=bool(query.get("live")))
                 title = t("tab.nodes")
             elif path == "/links":
                 table = pages.links(self.loaded, repo, now, t)

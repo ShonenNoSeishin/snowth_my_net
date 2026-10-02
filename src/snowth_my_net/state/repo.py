@@ -542,6 +542,20 @@ class Repo:
             "SELECT * FROM collect_status WHERE run_id = ? ORDER BY device_id, function",
             (run_id,)).fetchall()
 
+    def forget_nodes(self) -> dict[str, int]:
+        """Drop every MAC and ARP observation, keeping the devices, the links and the names.
+
+        A MAC table remembers for weeks and an old mistake (a trunk taken for an access port,
+        a device that has moved) stays visible for as long. This empties the memory so that the
+        next collect fills it again from what the network says today. Nothing else is touched:
+        the inventory, the topology, the names given by hand and the runs stay.
+        """
+        with self.conn:
+            counts = {"fdb": self.conn.execute("DELETE FROM fdb_obs").rowcount,
+                      "arp": self.conn.execute("DELETE FROM arp_obs").rowcount}
+        self.conn.execute("VACUUM")          # a MAC table is most of the file
+        return counts
+
     # ------------------------------------------------------------------ retention
 
     def purge(self, now: int, retention_days: int, forget_after_days: int,

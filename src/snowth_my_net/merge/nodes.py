@@ -93,6 +93,7 @@ class MergeInputs:
     fdb: list[FdbObs]
     arp: list[ArpObs]
     device_macs: dict[str, int]          # MAC -> device id owning it
+    last_full_walk: int = 0              # start of the last collect of every device
     # (device, ifIndex) -> reasons from LLDP/CDP neighbours: (code, detail, hard|soft)
     neighbor_reasons: dict[tuple[int, int], list[tuple[str, str, str]]] = field(
         default_factory=dict)
@@ -164,6 +165,7 @@ class Node:
     current_ip: IpSighting | None = None
     first_seen: int = 0
     last_seen: int = 0
+    live: bool = False                   # seen during the last walk of a device that saw it
 
     @property
     def current(self) -> Sighting | None:
@@ -207,6 +209,7 @@ class MergeContext:
         for o in kept:
             self.fdb_by_mac[o.mac].append(o)
             latest_run[o.device_id] = max(latest_run.get(o.device_id, 0), o.last_run_id)
+        self.latest_run = latest_run
         # MACs per port in the most recent FDB walk of each device
         counted = {(o.device_id, o.ifindex, o.mac) for o in kept
                    if o.last_run_id == latest_run[o.device_id]}
@@ -355,7 +358,20 @@ def resolve_mac(ctx: MergeContext, mac: str) -> Node:
     firsts = [s.first_seen for s in node.sightings] + [i.first_seen for i in node.ips]
     node.last_seen = max(seen, default=0)
     node.first_seen = min(firsts, default=0)
+    node.live = is_live(ctx, node)
     return node
+
+
+def is_live(ctx: MergeContext, node: Node) -> bool:
+    """Was this MAC still there during the last collect of the whole network?
+
+    A MAC table is kept for ``retention_days`` here, so a list of nodes is part inventory and
+    part memory. This tells the two apart. The reference is the last *full* collect, never a
+    collect of one address alone, which would otherwise make the rest of the network look gone.
+    """
+    if not ctx.inputs.last_full_walk:
+        return True                      # nothing to compare to yet: nothing is called stale
+    return node.last_seen >= ctx.inputs.last_full_walk
 
 
 def resolve_nodes(inputs: MergeInputs, cfg: NodesCfg, now: int) -> list[Node]:

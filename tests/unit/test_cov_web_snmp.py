@@ -321,3 +321,26 @@ def test_nothing_is_managed_when_the_tab_does_not_exist(tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_forgetting_the_mac_memory_from_the_page(tmp_path):
+    """The one irreversible button: folded away, explained, and behind the password."""
+    site = managed(tmp_path)
+    page = site.respond("/snmp", {}, confirmed(site), "en")[2].decode()
+    assert 'class="danger"' in page and 'value="forget"' in page
+    assert "Forget the MAC and ARP memory" in page
+    repo = writing(site)
+    try:
+        before = repo.conn.execute("SELECT COUNT(*) FROM fdb_obs").fetchone()[0]
+        devices = repo.conn.execute("SELECT COUNT(*) FROM devices").fetchone()[0]
+    finally:
+        repo.conn.close()
+    assert before > 0
+    status, _type, body = site.manage_snmp({"do": ["forget"]}, "alice", Translator("en"))
+    assert status == HTTPStatus.OK and "Forgotten:" in body.decode()
+    repo = writing(site)
+    try:
+        assert repo.conn.execute("SELECT COUNT(*) FROM fdb_obs").fetchone()[0] == 0
+        assert repo.conn.execute("SELECT COUNT(*) FROM devices").fetchone()[0] == devices
+    finally:
+        repo.conn.close()

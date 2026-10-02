@@ -14,6 +14,7 @@ import pytest
 from snowth_my_net.clock import FrozenClock
 from snowth_my_net.collect.tables.interfaces import Interface
 from snowth_my_net.collect.tables.neighbors import Neighbor
+from snowth_my_net.i18n import Translator
 from snowth_my_net.merge.nodes import derived_link_local, resolve_mac
 from snowth_my_net.merge.view import build_view
 from snowth_my_net.state.db import open_db
@@ -226,3 +227,115 @@ def test_the_guesses_come_first(tmp_path):
     rows = view_of(lab(tmp_path, macs_on_trunk=60)).uplink_ports()
     assert [row["evidence"] for row in rows] == sorted(
         (row["evidence"] for row in rows), key=lambda e: e != "guess")
+
+
+# --------------------------------------------------------------------------- memory vs now
+
+
+def old_and_new(tmp_path):
+    """One MAC seen at both collects, one seen only at the first: memory."""
+    repo = Repo(open_db(tmp_path / "state" / "state.sqlite"))
+    gone = "00:00:5e:00:70:01"
+    week_ago = NOW - 6 * 86400
+    early = repo.start_run("collect", week_ago)
+    switch = device("192.0.2.20", "sw", "00:00:5e:00:53:20",
+                    interfaces={1: Interface(1, "1"), 2: Interface(2, "2")},
+                    fdb=[fdb(PHONE, 1), fdb(gone, 2)])
+    device_id = repo.save_device(switch, week_ago, early)
+    repo.finish_run(early, "ok", week_ago, {"devices": 1})
+    run = repo.start_run("collect", NOW)
+    again = device("192.0.2.20", "sw", "00:00:5e:00:53:20",
+                   interfaces={1: Interface(1, "1"), 2: Interface(2, "2")},
+                   fdb=[fdb(PHONE, 1)])
+    again.device_id = device_id            # the same switch, polled again
+    repo.save_device(again, NOW, run)
+    repo.finish_run(run, "ok", NOW, {"devices": 1})
+    repo.conn.close()
+    return make_loaded(tmp_path), gone
+
+
+def test_what_the_last_collect_saw_and_what_is_only_remembered(tmp_path):
+    loaded, gone = old_and_new(tmp_path)
+    view = view_of(loaded)
+    live = {n.mac: n.live for n in view.nodes}
+    assert live[PHONE] is True
+    assert live[gone] is False                    # still listed, but it is memory
+
+
+def test_a_collect_of_one_address_does_not_make_the_rest_look_gone(tmp_path):
+    """The reference is the last full collect: a single-device test must not change the view."""
+    loaded, gone = old_and_new(tmp_path)
+    repo = Repo(open_db(loaded.paths.state_file))
+    try:
+        single = repo.start_run("collect", NOW + 60)
+        repo.finish_run(single, "ok", NOW + 60, {"devices": 1, "only": ["192.0.2.99"]})
+    finally:
+        repo.conn.close()
+    live = {n.mac: n.live for n in view_of(loaded).nodes}
+    assert live[PHONE] is True and live[gone] is False
+
+
+def test_with_no_collect_yet_nothing_is_called_memory(tmp_path):
+    repo = Repo(open_db(tmp_path / "state" / "state.sqlite"))
+    run = repo.start_run("collect", NOW)
+    repo.save_device(device("192.0.2.20", "sw", "00:00:5e:00:53:20",
+                            interfaces={1: Interface(1, "1")}, fdb=[fdb(PHONE, 1)]), NOW, run)
+    repo.conn.close()                             # the run was never finished
+    assert all(n.live for n in view_of(make_loaded(tmp_path)).nodes)
+
+
+def test_the_page_can_show_only_what_is_there_now(tmp_path):
+    from snowth_my_net.web import pages
+
+    loaded, _gone = old_and_new(tmp_path)
+    repo = Repo(open_db(loaded.paths.state_file, readonly=True))
+    try:
+        everything = pages.nodes(loaded, repo, NOW, Translator("en"), 2000)
+        only_live = pages.nodes(loaded, repo, NOW, Translator("en"), 2000, live_only=True)
+    finally:
+        repo.conn.close()
+    assert everything.total == 2 and only_live.total == 1
+    assert "1 row(s) are memory" in everything.note
+    assert only_live.note == ""
+    labels = [label for label, _href, _active in everything.views]
+    assert "Seen at the last collect (1)" in labels[0]
+    assert "Everything, history included (2)" in labels[1]
+    assert [active for _label, _href, active in only_live.views] == [True, False]
+
+
+def test_forgetting_the_memory_leaves_the_inventory_alone(tmp_path):
+    loaded, _gone = old_and_new(tmp_path)
+    repo = Repo(open_db(loaded.paths.state_file))
+    try:
+        counts = repo.forget_nodes()
+        assert counts["fdb"] == 2 and counts["arp"] == 0
+        assert repo.conn.execute("SELECT COUNT(*) FROM fdb_obs").fetchone()[0] == 0
+        assert repo.conn.execute("SELECT COUNT(*) FROM devices").fetchone()[0] == 1
+        assert repo.conn.execute("SELECT COUNT(*) FROM interfaces").fetchone()[0] == 2
+        assert repo.conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0] == 2
+    finally:
+        repo.conn.close()
+    assert view_of(loaded).nodes == []
+
+
+def test_the_table_promises_nothing_it_cannot_show(tmp_path):
+    """A bare "+1" offered an address to read and held only the MAC again."""
+    from snowth_my_net.web import pages
+
+    loaded = arp_lab(tmp_path, "fe80::1e0b:8bff:fec0:eb62")
+    repo = Repo(open_db(loaded.paths.state_file, readonly=True))
+    try:
+        table = pages.nodes(loaded, repo, NOW, Translator("en"), 2000)
+    finally:
+        repo.conn.close()
+    row = next(r for r in table.rows if any(AP in str(cell) for cell in r))
+    address = row[4]
+    assert address.text == "" and address.more == ()        # nothing, honestly
+    loaded.cfg.nodes.elect_derived_link_local = True
+    repo = Repo(open_db(loaded.paths.state_file, readonly=True))
+    try:
+        again = pages.nodes(loaded, repo, NOW, Translator("en"), 2000)
+    finally:
+        repo.conn.close()
+    shown = next(r for r in again.rows if any(AP in str(cell) for cell in r))[4]
+    assert shown.text == "fe80::1e0b:8bff:fec0:eb62"        # for whoever wants it anyway

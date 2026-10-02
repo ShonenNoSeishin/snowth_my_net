@@ -46,6 +46,28 @@ rows already sent. The line under the title says when the
 last collect ran and how it went. Clicking a MAC shows the same explanation as
 `snowth_my_net explain`, in the interface's language.
 
+## Inventory, or memory
+
+A MAC table keeps what it has learned for `nodes.retention_days` (30 days), so the Nodes page is
+part inventory and part memory. Two pills above the table tell them apart:
+
+| | |
+|---|---|
+| Seen at the last collect | what was still there the last time every device was polled |
+| Everything, history included | the same, plus what the network no longer shows |
+
+The reference is the last **full** collect — testing one address alone never makes the rest of
+the network look gone. A line under the table says how many rows are memory.
+
+To empty that memory and let the next collect fill it from what the network says today:
+
+```bash
+snowth_my_net node reset --yes
+```
+
+The devices, the links and the names given by hand stay; only the MAC and ARP observations go.
+The same button is at the bottom of the SNMP page, folded away and behind the password.
+
 ## Naming a MAC
 
 Six hundred rows say little until the ones that matter carry a name. Write it straight in the

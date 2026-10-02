@@ -1225,6 +1225,8 @@ def cmd_node(args: argparse.Namespace) -> int:
     from snowth_my_net.names import NameError_, clean_mac, store_for
 
     loaded = load(args)
+    if args.action == "reset":
+        return _forget_nodes(loaded, args)
     names = store_for(loaded.paths)
     field = "description" if args.action == "describe" else "name"
     if args.mac is None:
@@ -1247,6 +1249,27 @@ def cmd_node(args: argparse.Namespace) -> int:
         out_json({"mac": mac, "field": field, "value": given or None})
     else:
         out(f"{mac}: {field} = {given}" if given else f"{mac}: {field} forgotten")
+    return EXIT_OK
+
+
+def _forget_nodes(loaded: LoadedConfig, args: argparse.Namespace) -> int:
+    """Empty the MAC and ARP memory; the next collect fills it from today's network."""
+    if not args.yes:
+        raise ManualError("this deletes every MAC and ARP observation (the devices, the links "
+                          "and the names stay); add --yes to confirm")
+    with Locked(loaded, "node reset", loaded.cfg.general.lock_wait.default):
+        conn = open_db(loaded.paths.state_file)
+        try:
+            counts = Repo(conn).forget_nodes()
+        finally:
+            conn.close()
+    log.info("node reset: %s MAC and %s ARP observation(s) forgotten",
+             counts["fdb"], counts["arp"])
+    if args.json:
+        out_json(counts)
+    else:
+        out(f"forgotten: {counts['fdb']} MAC observation(s), {counts['arp']} ARP entry(ies). "
+            "Run a collect to fill them again.")
     return EXIT_OK
 
 
@@ -1466,10 +1489,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("node", parents=[common],
                        help="name a MAC address by hand (kept across collects), or list names")
-    p.add_argument("action", nargs="?", choices=["name", "describe"],
-                   help="name or describe a MAC (omit everything to list what was given)")
+    p.add_argument("action", nargs="?", choices=["name", "describe", "reset"],
+                   help="name or describe a MAC, or reset: forget every MAC and ARP "
+                        "observation (omit everything to list what was given)")
     p.add_argument("mac", nargs="?", metavar="MAC")
     p.add_argument("name", nargs="*", metavar="TEXT", help="empty: forget that field")
+    p.add_argument("--yes", action="store_true", help="confirm 'node reset'")
     p.set_defaults(func=cmd_node)
 
     p = sub.add_parser("tui", parents=[common], help="open the terminal management interface")

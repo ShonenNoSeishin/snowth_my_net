@@ -155,7 +155,26 @@ form.out button:hover, .login button:hover { border-color: var(--accent); color:
 .login button { margin-top: 10px; }
 .login .error { color: var(--bad); margin: 6px 0 0; font-size: 13px; }
 /* The SNMP page: a plain table with a form in a cell, no filter, no sort. */
+/* Which rows the table shows: the inventory, or the inventory plus what is remembered. */
+.views { display: inline-flex; gap: 8px; margin-left: auto; }
+.views a {
+  color: var(--muted); text-decoration: none; font-size: 12.5px; padding: 3px 9px;
+  border: 1px solid var(--line); border-radius: 999px;
+}
+.views a:hover { color: var(--text); border-color: var(--accent); }
+.views a.on { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+main > .note { color: var(--muted); font-size: 12.5px; margin: 6px 0 0; }
+
 .intro { color: var(--muted); max-width: 80ch; }
+/* Something that cannot be undone: folded away, explained, then confirmed. */
+details.danger { margin: 22px 0 0; max-width: 80ch; }
+details.danger > summary { cursor: pointer; color: var(--bad); font-size: 13px; }
+details.danger > p { margin: 8px 0; }
+details.danger button {
+  font: inherit; color: var(--bad); background: var(--panel); border: 1px solid var(--bad);
+  border-radius: 6px; padding: 6px 12px; cursor: pointer;
+}
+details.danger button:hover { color: var(--bg); background: var(--bad); }
 table.plain { width: 100%; border-collapse: collapse; }
 table.plain th {
   text-align: left; font-size: 11.5px; letter-spacing: .06em; color: var(--muted);

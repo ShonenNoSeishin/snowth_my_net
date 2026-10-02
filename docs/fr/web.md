@@ -40,6 +40,31 @@ font dans le navigateur, sur les lignes déjà envoyées. La ligne sous le
 titre indique quand la dernière collecte a eu lieu et comment elle s'est passée. Cliquer sur une
 MAC affiche la même explication que `snowth_my_net explain`, dans la langue de l'interface.
 
+## Inventaire, ou mémoire
+
+Une table MAC garde ce qu'elle a appris pendant `nodes.retention_days` (30 jours), donc la page
+Nœuds est en partie un inventaire, en partie une mémoire. Deux pastilles au-dessus du tableau
+font la différence :
+
+| | |
+|---|---|
+| Vues à la dernière collecte | ce qui était encore là au dernier passage sur tous les équipements |
+| Tout, historique compris | la même chose, plus ce que le réseau ne montre plus |
+
+La référence est la dernière collecte **complète** — tester une seule adresse ne fait jamais
+paraître le reste du réseau disparu. Une ligne sous le tableau dit combien de lignes sont de la
+mémoire.
+
+Pour vider cette mémoire et laisser la prochaine collecte la remplir avec ce que dit le réseau
+aujourd'hui :
+
+```bash
+snowth_my_net node reset --yes
+```
+
+Les équipements, les liens et les noms donnés à la main restent ; seules les observations MAC et
+ARP partent. Le même bouton est en bas de la page SNMP, replié et derrière le mot de passe.
+
 ## Nommer une MAC
 
 Six cents lignes ne disent pas grand-chose tant que celles qui comptent n'ont pas de nom.

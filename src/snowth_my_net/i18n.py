@@ -430,6 +430,12 @@ WEB = {
                   "Heures en {zone} ; survolez-en une pour la valeur UTC stockée"),
     "web.not_found": ("Nothing here.", "Rien ici."),
     "web.how": ("How to read this table", "Comment lire ce tableau"),
+    "web.view.live": ("Seen at the last collect ({count})",
+                      "Vues à la dernière collecte ({count})"),
+    "web.view.all": ("Everything, history included ({count})",
+                     "Tout, historique compris ({count})"),
+    "web.view.stale": ("{count} row(s) are memory: last seen before the last collect.",
+                       "{count} ligne(s) sont de la mémoire : vues avant la dernière collecte."),
     "web.theme": ("Light or dark", "Clair ou sombre"),
     "web.positions": ("{count} positions", "{count} positions"),
     "web.more_ips": (" +{count} more", " +{count} autres"),
@@ -528,6 +534,13 @@ WEB = {
         "à un commutateur voisin, est traité comme un uplink et jamais comme une position."),
     "hint.nodes.vlan": ("From the MAC table, else the VLAN of the port (PVID).",
                         "D'après la table MAC, sinon le VLAN du port (PVID)."),
+    "hint.nodes.live": (
+        "A MAC table keeps what it learned for nodes.retention_days, so this list is part "
+        "inventory and part memory. 'Seen at the last collect' keeps what was still there the "
+        "last time every device was polled.",
+        "Une table MAC garde ce qu'elle a appris pendant nodes.retention_days, donc cette liste "
+        "est en partie un inventaire, en partie une mémoire. « Vues à la dernière collecte » ne "
+        "garde que ce qui était encore là au dernier passage sur tous les équipements."),
     "hint.nodes.seen": (
         "Last time that position was observed, in the time zone of the server (the exports stay "
         "in UTC). A MAC may appear on several lines: that is its roaming history, most recent "
@@ -581,6 +594,21 @@ WEB = {
                        "l'une ne répond pas. Une communauté n'est jamais affichée ici : l'état "
                        "ne garde que le nom d'un identifiant, sa valeur reste dans son fichier."),
     "web.snmp.add": ("Add an address", "Ajouter une adresse"),
+    "web.snmp.forget": ("Forget the MAC and ARP memory",
+                        "Oublier la mémoire MAC et ARP"),
+    "web.snmp.forget_why": (
+        "A MAC table is remembered for weeks: an old mistake, or a device that has moved, stays "
+        "visible for as long. This empties that memory — the devices, the links and the names "
+        "given by hand stay — and the next collect fills it from what the network says today.",
+        "Une table MAC est mémorisée pendant des semaines : une vieille erreur, ou un "
+        "équipement qui a déménagé, reste visible aussi longtemps. Ceci vide cette mémoire — "
+        "les équipements, les liens et les noms donnés à la main restent — et la prochaine "
+        "collecte la remplit avec ce que dit le réseau aujourd'hui."),
+    "web.snmp.forget_do": ("Yes, forget them", "Oui, les oublier"),
+    "web.snmp.forgotten": ("Forgotten: {fdb} MAC observation(s), {arp} ARP entry(ies). "
+                           "Run a collect to fill them again.",
+                           "Oubliées : {fdb} observation(s) MAC, {arp} entrée(s) ARP. "
+                           "Lancez une collecte pour les reconstituer."),
     "web.snmp.added": ("{address} will be polled from the next collect on.",
                        "{address} sera interrogée dès la prochaine collecte."),
     "web.snmp.removed": ("{address} is no longer polled.",
