@@ -1291,6 +1291,24 @@ def _set_web_password(loaded: LoadedConfig, name: str | None) -> int:
     return EXIT_OK
 
 
+def cmd_dns(args: argparse.Namespace) -> int:
+    """Forget the cached PTR answers, so the next export asks the resolver again."""
+    loaded = load(args)
+    with Locked(loaded, "dns flush", loaded.cfg.general.lock_wait.default):
+        conn = open_db(loaded.paths.state_file)
+        try:
+            dropped = Repo(conn).forget_dns(only_misses=args.misses_only)
+        finally:
+            conn.close()
+    kind = "unresolved address(es)" if args.misses_only else "cached answer(s)"
+    log.info("dns flush: %s %s forgotten", dropped, kind)
+    if args.json:
+        out_json({"forgotten": dropped, "misses_only": args.misses_only})
+    else:
+        out(f"forgotten: {dropped} {kind}. The next export asks the resolver again.")
+    return EXIT_OK
+
+
 def cmd_node(args: argparse.Namespace) -> int:
     """Name a MAC by hand, or list the names. The name outlives every collect."""
     from snowth_my_net.names import NameError_, clean_mac, store_for
@@ -1558,6 +1576,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--hash-password", action="store_true",
                    help="print the hash of a password, for web.auth.users[].password_file")
     p.set_defaults(func=cmd_web)
+
+    p = sub.add_parser("dns", parents=[common],
+                       help="forget the cached PTR answers (after changing dns.resolvers)")
+    p.add_argument("action", choices=["flush"])
+    p.add_argument("--misses-only", action="store_true",
+                   help="keep the names already found, ask again only for the rest")
+    p.set_defaults(func=cmd_dns)
 
     p = sub.add_parser("node", parents=[common],
                        help="name a MAC address by hand (kept across collects), or list names")

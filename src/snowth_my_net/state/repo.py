@@ -542,6 +542,19 @@ class Repo:
             "SELECT * FROM collect_status WHERE run_id = ? ORDER BY device_id, function",
             (run_id,)).fetchall()
 
+    def forget_dns(self, only_misses: bool = False) -> int:
+        """Drop the cached PTR answers so the next export asks again.
+
+        A "no name" is remembered for ``dns.negative_ttl`` (an hour), which is right in normal
+        running and wrong right after the resolver is corrected: the fix would stay invisible
+        for as long. ``only_misses`` keeps the names already found.
+        """
+        with self.conn:
+            if only_misses:
+                return self.conn.execute(
+                    "DELETE FROM dns_cache WHERE status != 'ok'").rowcount
+            return self.conn.execute("DELETE FROM dns_cache").rowcount
+
     def forget_nodes(self) -> dict[str, int]:
         """Drop every MAC and ARP observation, keeping the devices, the links and the names.
 

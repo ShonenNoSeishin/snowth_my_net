@@ -657,3 +657,21 @@ def test_node_reset_asks_before_forgetting(cfg, capsys, tmp_path):
     assert "1 MAC observation(s)" in capsys.readouterr().out
     assert run(cfg, "--json", "node", "reset", "--yes") == 0
     assert read_json(capsys) == {"fdb": 0, "arp": 0}
+
+
+def test_dns_flush_forgets_what_a_wrong_resolver_cached(cfg, capsys, tmp_path):
+    """A 'no name' is cached for an hour: right in normal running, wrong just after the
+    resolver is corrected."""
+    repo = state(tmp_path)
+    repo.conn.executemany(
+        "INSERT INTO dns_cache(address, name, status, resolved_at, expires_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        [("10.0.0.1", "sw.example.net", "ok", NOW, NOW + 3600),
+         ("10.0.0.2", None, "none", NOW, NOW + 3600),
+         ("10.0.0.3", None, "timeout", NOW, NOW + 3600)])
+    repo.conn.commit()
+    repo.conn.close()
+    assert run(cfg, "dns", "flush", "--misses-only") == 0
+    assert "2 unresolved address(es)" in capsys.readouterr().out
+    assert run(cfg, "--json", "dns", "flush") == 0
+    assert read_json(capsys) == {"forgotten": 1, "misses_only": False}   # the name went too
