@@ -109,6 +109,7 @@ def test_the_exported_csv_keeps_its_columns_unless_asked(tmp_path):
     from snowth_my_net.state.repo import Repo
 
     loaded = named(tmp_path)
+    loaded.cfg.export.nodes.merge_hostnames = False      # the hostname column is another story
     repo = Repo(open_db(loaded.paths.state_file, readonly=True))
     try:
         plain = nodes_csv(loaded, repo, 1_800_000_000).decode()
@@ -129,6 +130,7 @@ def test_the_description_is_a_column_of_its_own(tmp_path):
 
     loaded = named(tmp_path)
     mod.store_for(loaded.paths).set(D, "au fond du couloir", "description")
+    loaded.cfg.export.nodes.merge_hostnames = False
     loaded.cfg.export.nodes.include_description = True
     repo = Repo(open_db(loaded.paths.state_file, readonly=True))
     try:

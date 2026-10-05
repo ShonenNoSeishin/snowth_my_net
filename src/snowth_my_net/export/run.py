@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -86,6 +87,34 @@ def refresh_dns(loaded: LoadedConfig, repo: Repo, ips: list[str], now: int,
     return len(results)
 
 
+def refresh_probes(loaded: LoadedConfig, repo: Repo, ips: list[str], now: int) -> int:
+    """Ask the hosts their own names, for the protocols ``names.probe`` lists.
+
+    One packet per address and per protocol, only inside ``names.networks``, cached like a PTR
+    answer. Off unless asked for: this sends traffic to every node rather than to the devices
+    being polled.
+    """
+    from snowth_my_net.enrich.probe import in_networks, probe_many
+
+    cfg = loaded.cfg.names
+    if not cfg.probe:
+        return 0
+    asked = 0
+    for source in cfg.probe:
+        fresh = repo.probe_fresh(now, source)
+        wanted = sorted({ip for ip in ips
+                         if ip and ip not in fresh and in_networks(ip, cfg.networks)})
+        if not wanted:
+            continue
+        results = asyncio.run(probe_many(source, wanted, cfg.timeout, cfg.budget))
+        repo.save_probes(source, results, now, cfg.cache_ttl, cfg.negative_ttl)
+        asked += len(results)
+        if len(results) < len(wanted):
+            log.warning("%s budget spent: %d of %d asked, the rest at the next export",
+                        source, len(results), len(wanted))
+    return asked
+
+
 class ViewCache:
     """Builds the node view (and refreshes DNS) once per export, only if an output needs it."""
 
@@ -101,6 +130,8 @@ class ViewCache:
             ips = [n.current_ip.ip for n in view.nodes if n.current_ip]
             if refresh_dns(self.loaded, self.repo, ips, self.now, self.ptr_lookup):
                 view.dns = self.repo.dns_names(self.now)
+            if refresh_probes(self.loaded, self.repo, ips, self.now):
+                view.load_probes(self.repo, self.now)
             self._view = view
         return self._view
 

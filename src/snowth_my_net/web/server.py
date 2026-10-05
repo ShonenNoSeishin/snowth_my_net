@@ -320,7 +320,7 @@ class Site:
 
     def table_page(self, active: str, title: str, table: pages.Table, subtitle: str,
                    link_first: str = "", t=None, link_column: int = 0, before: str = "",
-                   refresh: int = 0) -> bytes:
+                   refresh: int = 0, disagreeing_only: bool = False) -> bytes:
         t = t or self.t
         if not table.rows:
             return self.shell(active, title, before + f'<p class="empty">{esc(table.empty)}</p>',
@@ -368,6 +368,12 @@ class Site:
                         for label, text in table.help)
         panel = (f'<details class="hint"><summary>{esc(t("web.how"))}</summary>'
                  f"<dl>{hints}</dl></details>") if table.help else ""
+        warning = ""
+        if table.disagreeing:
+            where = "/nodes" if disagreeing_only else "/nodes?disagree=1"
+            label = t("web.disagree.all") if disagreeing_only else t("web.disagree.show")
+            warning = (f'<p class="disagree">{esc(t("web.disagree", count=table.disagreeing))} '
+                       f'<a href="{where}">{esc(label)}</a></p>')
         views = "".join(
             '<a class="view{}" href="{}">{}</a>'.format(" on" if active else "", href,
                                                         esc(label))
@@ -386,8 +392,8 @@ class Site:
                     + (f'<p class="note">{esc(table.note)}</p>' if table.note else ""))
         table_html = (f'<div class="wrap"><table id="rows"><thead><tr>{head}</tr></thead>'
                       f'<tbody>{"".join(body)}</tbody></table></div>')
-        return self.shell(active, title, before + panel + controls + table_html, subtitle, t=t,
-                          refresh=refresh)
+        return self.shell(active, title, before + warning + panel + controls + table_html,
+                          subtitle, t=t, refresh=refresh)
 
     def actions_panel(self, t, message: str = "") -> str:
         """The buttons above the runs, and what the last one did."""
@@ -684,7 +690,8 @@ class Site:
                 title = t("tab.devices")
             elif path == "/nodes":
                 table = pages.nodes(self.loaded, repo, now, t, self.loaded.cfg.web.node_limit,
-                                    live_only=bool(query.get("live")))
+                                    live_only=bool(query.get("live")),
+                                    disagreeing_only=bool(query.get("disagree")))
                 title = t("tab.nodes")
             elif path == "/links":
                 table = pages.links(self.loaded, repo, now, t)
@@ -693,9 +700,10 @@ class Site:
                 table = pages.files(self.loaded.paths.output_dir, t)
                 title = t("web.tab.files")
         link = "/node?mac=" if path == "/nodes" else ("/download/" if path == "/files" else "")
-        column = 2 if path == "/nodes" else 0      # the MAC: the name and description precede it
+        column = 4 if path == "/nodes" else 0    # the MAC: three hostnames and a description first
         return (HTTPStatus.OK, html_type,
-                self.table_page(path, title, table, subtitle, link, t, column))
+                self.table_page(path, title, table, subtitle, link, t, column,
+                                disagreeing_only=bool(query.get("disagree"))))
 
     def asset(self, name: str) -> tuple[int, str, bytes]:
         if name not in ASSETS:

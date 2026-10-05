@@ -542,6 +542,53 @@ class Repo:
             "SELECT * FROM collect_status WHERE run_id = ? ORDER BY device_id, function",
             (run_id,)).fetchall()
 
+    def probe_names(self, now: int, source: str | None = None) -> dict[str, tuple[str, str]]:
+        """``{address: (name, source)}`` for names a host stated about itself, still valid.
+
+        When several sources answered for one address, the order of ``names.probe`` decides;
+        the caller passes them one at a time, most trusted first.
+        """
+        sql = ("SELECT address, name, source, mac FROM name_probe "
+               "WHERE status = 'ok' AND expires_at >= ?")
+        args: list = [now]
+        if source:
+            sql += " AND source = ?"
+            args.append(source)
+        return {r[0]: (r[1], r[2]) for r in self.conn.execute(sql, args) if r[1]}
+
+    def probe_claims(self, now: int) -> dict[str, str]:
+        """``{address: mac}`` as the host stated it: a name whose MAC contradicts the node's
+        belongs to something else (a proxy, a NAT, an address that moved)."""
+        return {r[0]: r[1] for r in self.conn.execute(
+            "SELECT address, mac FROM name_probe WHERE mac IS NOT NULL AND mac != '' "
+            "AND expires_at >= ?", (now,)) if r[1]}
+
+    def probe_fresh(self, now: int, source: str) -> set[str]:
+        return {r[0] for r in self.conn.execute(
+            "SELECT address FROM name_probe WHERE source = ? AND expires_at >= ?",
+            (source, now))}
+
+    def save_probes(self, source: str, results: dict, now: int, positive_ttl: int,
+                    negative_ttl: int) -> None:
+        """``results`` maps an address to ``(name, mac, status)``."""
+        with self.conn:
+            self.conn.executemany(
+                "INSERT INTO name_probe(address, source, name, mac, status, resolved_at, "
+                "expires_at) VALUES (?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(address, source) DO UPDATE SET name = excluded.name, "
+                "mac = excluded.mac, status = excluded.status, "
+                "resolved_at = excluded.resolved_at, expires_at = excluded.expires_at",
+                [(ip, source, name, mac, status, now,
+                  now + (positive_ttl if status == "ok" else negative_ttl))
+                 for ip, (name, mac, status) in results.items()])
+
+    def forget_probes(self, only_misses: bool = False) -> int:
+        with self.conn:
+            if only_misses:
+                return self.conn.execute(
+                    "DELETE FROM name_probe WHERE status != 'ok'").rowcount
+            return self.conn.execute("DELETE FROM name_probe").rowcount
+
     def forget_dns(self, only_misses: bool = False) -> int:
         """Drop the cached PTR answers so the next export asks again.
 
@@ -585,6 +632,7 @@ class Repo:
                 "DELETE FROM neighbors WHERE last_seen < ?",
                 (now - retention_days * DAY,)).rowcount
             c.execute("DELETE FROM dns_cache WHERE expires_at < ?", (now - 30 * DAY,))
+            c.execute("DELETE FROM name_probe WHERE expires_at < ?", (now - 30 * DAY,))
             c.execute("DELETE FROM custom_values WHERE last_seen < ?",
                       (now - retention_days * DAY,))
             counts["devices"] = c.execute(

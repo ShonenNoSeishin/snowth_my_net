@@ -110,6 +110,15 @@ def explain_node(view: NodeView, node: Node, t: Text = ENGLISH) -> list[Line]:
         name = view.dns_name(node.current_ip.ip)
         lines.append(("", "text"))
         lines.append((t("xp.dns", name=name or t("xp.dns_none")), "text" if name else "dim"))
+    probed = view.probed_name(node)
+    if probed:
+        lines.append((t("xp.probed", name=probed,
+                        source=view.probed[node.current_ip.ip][1]), "text"))
+    used, source = view.hostname(node)
+    if used:
+        lines.append((t("xp.hostname", name=used, source=t(f"xp.src.{source}")), "ok"))
+    if view.hostnames_disagree(node):
+        lines.append((t("xp.hostname_clash"), "bad"))
     return lines
 
 
@@ -143,6 +152,8 @@ def node_json(view: NodeView, node: Node) -> dict:
         "first_seen": iso_z(node.first_seen), "last_seen": iso_z(node.last_seen),
         "current_ip": node.current_ip.ip if node.current_ip else None,
         "dns_name": view.dns_name(node.current_ip.ip) if node.current_ip else None,
+        "hostname": dict(zip(("name", "source"), view.hostname(node), strict=True)),
+        "probed_name": view.probed_name(node) or None,
         "positions": [dict(sighting(s), current=s is node.current) for s in node.positions],
         "sightings": [sighting(s) for s in node.sightings],
         "ips": [{"ip": i.ip, "first_seen": iso_z(i.first_seen), "last_seen": iso_z(i.last_seen),

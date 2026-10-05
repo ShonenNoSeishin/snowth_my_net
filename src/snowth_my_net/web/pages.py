@@ -56,6 +56,7 @@ class Table:
     keys: list[str | None] = field(default_factory=list)        # one per column, for its width
     views: list[tuple[str, str, bool]] = field(default_factory=list)   # (label, href, active)
     note: str = ""                          # one line under the controls
+    disagreeing: int = 0                    # rows where two sources name the same thing twice
 
 
 def help_for(t, page: str, columns: list[tuple[str, str]], keys: list[str | None],
@@ -131,13 +132,16 @@ def _devices_and_names(loaded: LoadedConfig, repo: Repo, now: int):
 
 
 def nodes(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int,
-          live_only: bool = False) -> Table:
+          live_only: bool = False, disagreeing_only: bool = False) -> Table:
     view = build_view(loaded, repo, now)
     cfg = loaded.cfg.nodes
     rows = []
     stale = sum(1 for node in view.nodes if not node.live)
+    disagreeing = sum(1 for node in view.nodes if view.hostnames_disagree(node))
     for node in view.nodes:
         if live_only and not node.live:
+            continue
+        if disagreeing_only and not view.hostnames_disagree(node):
             continue
         vendor = view.vendor(node)
         current = node.current_ip.ip if node.current_ip else ""
@@ -149,31 +153,36 @@ def nodes(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int,
         dns = view.dns_name(current) if current else ""
         positions = node.positions if cfg.positions == "all" else node.positions[:1]
         roaming = t("web.positions", count=len(positions)) if len(positions) > 1 else ""
+        tone = "warn" if view.hostnames_disagree(node) else ""
         given = Editable(node.mac, view.given_name(node.mac))
+        probed = Cell(view.probed_name(node), tone=tone)
         about = Editable(node.mac, view.given_description(node.mac), "description")
+        named = Cell(dns.text if isinstance(dns, Cell) else str(dns), tone=tone)
         for p in positions:
-            rows.append([given, about, Cell(node.mac, roaming), vendor, address, dns,
+            rows.append([given, named, probed, about, Cell(node.mac, roaming), vendor, address,
                          view.device_name(p.device_id),
                          view.port_name(p.device_id, p.ifindex), str(p.vlan or ""),
                          When(p.last_seen)])
         if not positions and cfg.include_unlocated:
-            rows.append([given, about, Cell(node.mac), vendor, address, dns, "", "", "",
-                         When(node.last_seen)])
-    rows.sort(key=lambda row: (str(row[9]), text_of(row[2]), str(row[6]), str(row[7])))
-    rows.sort(key=lambda row: str(row[9]), reverse=True)
-    columns = [(t("col.name"), "text"), (t("col.description"), "text"),
-               (t("col.mac"), "text"), (t("col.vendor"), "text"),
-               (t("col.ip"), "text"), (t("col.dns"), "text"), (t("col.switch"), "text"),
-               (t("col.port"), "text"), (t("col.vlan"), "number"), (t("col.seen"), "text")]
-    keys = ["name", "description", "mac", "vendor", "ip", "dns", "switch", "port", "vlan",
-            "seen"]
+            rows.append([given, named, probed, about, Cell(node.mac), vendor, address, "", "",
+                         "", When(node.last_seen)])
+    rows.sort(key=lambda row: (str(row[10]), text_of(row[4]), str(row[7]), str(row[8])))
+    rows.sort(key=lambda row: str(row[10]), reverse=True)
+    columns = [(t("col.hostname.manual"), "text"), (t("col.hostname.dns"), "text"),
+               (t("col.hostname.probe"), "text"), (t("col.description"), "text"),
+               (t("col.mac"), "text"), (t("col.vendor"), "text"), (t("col.ip"), "text"),
+               (t("col.switch"), "text"), (t("col.port"), "text"), (t("col.vlan"), "number"),
+               (t("col.seen"), "text")]
+    keys = ["hostname_manual", "hostname_dns", "hostname_probe", "description", "mac", "vendor",
+            "ip", "switch", "port", "vlan", "seen"]
     live = len(view.nodes) - stale
     views = [(t("web.view.live", count=live), "/nodes?live=1", live_only),
              (t("web.view.all", count=len(view.nodes)), "/nodes", not live_only)]
+    note = t("web.view.stale", count=stale) if stale and not live_only else ""
     return Table(columns, rows[:limit], len(rows), t("web.no_nodes"),
                  help_for(t, "nodes", columns, keys,
-                          extra=["hint.nodes.live", "hint.nodes.click"]), keys, views,
-                 t("web.view.stale", count=stale) if stale and not live_only else "")
+                          extra=["hint.nodes.live", "hint.nodes.click"]), keys, views, note,
+                 disagreeing)
 
 
 def text_of(value) -> str:

@@ -1300,7 +1300,9 @@ def cmd_dns(args: argparse.Namespace) -> int:
     with Locked(loaded, "dns flush", loaded.cfg.general.lock_wait.default):
         conn = open_db(loaded.paths.state_file)
         try:
-            dropped = Repo(conn).forget_dns(only_misses=args.misses_only)
+            repo = Repo(conn)
+            dropped = repo.forget_dns(only_misses=args.misses_only)
+            dropped += repo.forget_probes(only_misses=args.misses_only)
         finally:
             conn.close()
     kind = "unresolved address(es)" if args.misses_only else "cached answer(s)"

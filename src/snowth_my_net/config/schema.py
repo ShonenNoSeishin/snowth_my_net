@@ -334,6 +334,30 @@ class DnsCfg:
 
 
 @dataclass
+class NamesCfg:
+    """Asking a host its own name, when no DNS zone holds it.
+
+    Off by default: it sends a packet to every node rather than to the devices being polled, a
+    NetBIOS sweep looks like reconnaissance to an IPS, and a name a host declares about itself is
+    weaker evidence than one a zone holds. ``networks`` keeps the questions where they are
+    allowed and where they can be answered.
+    """
+
+    probe: list[Literal["netbios", "llmnr", "mdns"]] = field(default_factory=list)
+    networks: list[Network] = field(default_factory=list)   # empty: every node address
+    timeout: float = 1.0
+    budget: Duration = 60                   # total time per export, like dns.budget
+    cache_ttl: Duration = 86400
+    negative_ttl: Duration = 3600
+
+    def check(self) -> list[str]:
+        errs = _positive("names.timeout", self.timeout) + _positive("names.budget", self.budget)
+        duplicates = sorted({p for p in self.probe if self.probe.count(p) > 1})
+        errs += [f"names.probe: {p} listed twice" for p in duplicates]
+        return errs
+
+
+@dataclass
 class OuiCfg:
     file: str | None = None
     clean_names: bool = True
@@ -363,6 +387,7 @@ class DevicesExportCfg:
 class NodesExportCfg:
     include_name: bool = False       # a "Name" column: off, so that nodes.csv keeps its shape
     include_description: bool = False
+    merge_hostnames: bool = True     # "DNS Name" carries the best of the three, in that order
 
 
 @dataclass
@@ -671,6 +696,7 @@ class Config:
     devices: list[DeviceOverride] = field(default_factory=list)
     nodes: NodesCfg = field(default_factory=NodesCfg)
     dns: DnsCfg = field(default_factory=DnsCfg)
+    names: NamesCfg = field(default_factory=NamesCfg)
     oui: OuiCfg = field(default_factory=OuiCfg)
     export: ExportCfg = field(default_factory=ExportCfg)
     push: PushCfg = field(default_factory=PushCfg)

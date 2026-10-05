@@ -50,7 +50,7 @@ historique d'itinérance.
 | MAC Address | En minuscules avec deux-points. Les MAC de broadcast, multicast, nulles, virtuelles VRRP/HSRP, celles des équipements interrogés, et celles connues par rien d'autre qu'une adresse lien-local (`nodes.include_link_local_only`) sont exclues. |
 | Vendor | Registre IEEE (MA-L/MA-M/MA-S), nettoyé ; vide pour les MAC administrées localement (aléatoires). |
 | IP Address | IP courante de la MAC : parmi les adresses qu'aucune autre MAC n'a revendiquées depuis, celles vues dans les `nodes.current_ip_window` (24 h) suivant la plus récente, l'IPv4 d'abord. Les adresses lien-local (`fe80::`) ne sont jamais élues (`nodes.elect_link_local`). Une IPv6 globale seule signifie qu'aucune IPv4 récente n'est connue : augmentez `current_ip_window` (par exemple `30d`) pour qu'une IPv4 gagne dès qu'il en existe une dans la rétention. Toutes les adresses d'une MAC restent dans `snapshot.json`. |
-| DNS Name | Nom PTR de cette IP (mis en cache). |
+| DNS Name | Avec `export.nodes.merge_hostnames` (par défaut) : le meilleur nom d'hôte connu — écrit à la main, sinon le PTR de l'IP, sinon ce que l'hôte a annoncé sur lui-même (`names.probe`). `snapshot.json` enregistre lequel des trois. Clé désactivée : le PTR seul. |
 | Switch | Exactement un `Device Name` de `devices.csv` ; vide quand aucun port d'accès n'est connu. |
 | Port | Nom court de l'interface (`Gi1/0/5`, `1/1/12`, `ge-0/0/3`). |
 | VLAN | D'après la table MAC (FDB Q-BRIDGE ou instance Cisco par VLAN), sinon le VLAN du port (PVID). |

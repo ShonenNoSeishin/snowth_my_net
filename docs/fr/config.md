@@ -174,6 +174,26 @@ Comment les observations MAC et ARP deviennent des positions de nœuds (voir `ex
 | `dns.budget` | `120` | Temps total des résolutions par export ; le reste attend l'export suivant. |
 | `dns.strip_domain` | `false` | Ne garder que la partie hôte dans `DNS Name`. |
 
+## `names`
+
+Demander son nom à un hôte, quand aucune zone DNS ne le contient — ce que font `nbtstat -A` et
+un scanner. Désactivé par défaut : cela envoie un paquet à chaque nœud plutôt qu'aux
+équipements interrogés, un balayage NetBIOS ressemble à de la reconnaissance pour un IPS, et un
+nom qu'un hôte annonce sur lui-même est une preuve plus faible qu'un nom détenu par une zone.
+`dns probe IP` dit quel protocole répond sur un réseau avant d'activer quoi que ce soit.
+
+| Clé | Défaut | Description |
+|---|---|---|
+| `names.probe` | `[]` | Protocoles à interroger : `netbios` (UDP/137), `llmnr` (UDP/5355), `mdns` (UDP/5353). Vide : rien n'est demandé. |
+| `names.networks` | `[]` | N'interroger que dans ces réseaux. Vide : toutes les adresses des nœuds — y compris derrière un pare-feu qui jettera la question et coûtera le délai complet. |
+| `names.timeout` | `1` | Par question. |
+| `names.budget` | `60` | Temps total par export et par protocole ; le reste attend l'export suivant. |
+| `names.cache_ttl` | `86400` | Durée de vie d'un nom trouvé. |
+| `names.negative_ttl` | `3600` | Durée de vie d'un silence. |
+
+Une réponse NetBIOS annonce aussi l'adresse de l'adaptateur : quand elle contredit la MAC de la
+ligne à nommer, la réponse vient d'autre chose et le nom est écarté.
+
 ## `oui`
 
 | Clé | Défaut | Description |
@@ -192,6 +212,7 @@ Comment les observations MAC et ARP deviennent des positions de nœuds (voir `ex
 | `export.devices.include_type` | `true` | Colonne finale `"Device Type"`. |
 | `export.nodes.include_name` | `false` | Ajouter une première colonne `Name` à `nodes.csv` avec les noms donnés à la main (`node name`). Désactivé par défaut pour qu'un importateur continue de lire les mêmes colonnes. |
 | `export.nodes.include_description` | `false` | Idem, pour les descriptions (`node describe`). |
+| `export.nodes.merge_hostnames` | `true` | `DNS Name` porte le meilleur des trois : écrit à la main, sinon la résolution inverse, sinon ce que l'hôte annonce sur lui-même. `false` ne garde que la résolution inverse. `snapshot.json` enregistre toujours la source retenue. |
 | `export.links.include_endpoints` | `false` | Inclure téléphones et stations dans `links.csv` et sur la carte. |
 | `export.map.formats` | `[dot, mmd, html]` | Fichiers de carte. |
 | `export.map.endpoints` | `none` | Hôtes finaux sur la carte : `none`, `grouped` (une bulle par port), `all` (groupés au-delà de 2000 hôtes). |

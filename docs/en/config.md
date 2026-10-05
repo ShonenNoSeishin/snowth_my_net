@@ -170,6 +170,26 @@ How MAC and ARP observations become node positions (see `explain`).
 | `dns.budget` | `120` | Total time for lookups per export; the rest waits for the next export. |
 | `dns.strip_domain` | `false` | Keep only the host part in `DNS Name`. |
 
+## `names`
+
+Asking a host its own name, when no DNS zone holds it — what `nbtstat -A` and a scanner do.
+Off by default: it sends a packet to every node rather than to the devices being polled, a
+NetBIOS sweep looks like reconnaissance to an IPS, and a name a host states about itself is
+weaker evidence than one a zone holds. `dns probe IP` says which protocol answers on a network
+before any of this is turned on.
+
+| Key | Default | Description |
+|---|---|---|
+| `names.probe` | `[]` | Protocols to ask with: `netbios` (UDP/137), `llmnr` (UDP/5355), `mdns` (UDP/5353). Empty: nothing is asked. |
+| `names.networks` | `[]` | Only ask inside these networks. Empty: every node address — including ones behind a firewall that will drop the question and cost the whole timeout. |
+| `names.timeout` | `1` | Per question. |
+| `names.budget` | `60` | Total time per export and per protocol; the rest waits for the next export. |
+| `names.cache_ttl` | `86400` | Lifetime of a name that was found. |
+| `names.negative_ttl` | `3600` | Lifetime of a silence. |
+
+A NetBIOS answer also states the adapter's own address: when it contradicts the MAC of the row
+being named, the answer came from something else and the name is dropped.
+
 ## `oui`
 
 | Key | Default | Description |
@@ -188,6 +208,7 @@ How MAC and ARP observations become node positions (see `explain`).
 | `export.devices.include_type` | `true` | Trailing `"Device Type"` column. |
 | `export.nodes.include_name` | `false` | Add a first `Name` column to `nodes.csv` with the names given by hand (`node name`). Off by default so that an importer keeps reading the same columns. |
 | `export.nodes.include_description` | `false` | The same, for the descriptions (`node describe`). |
+| `export.nodes.merge_hostnames` | `true` | `DNS Name` carries the best of the three: written by hand, else the reverse lookup, else what the host states about itself. `false` keeps the reverse lookup alone. `snapshot.json` always records which source was used. |
 | `export.links.include_endpoints` | `false` | Include phones and stations in `links.csv` and the map. |
 | `export.map.formats` | `[dot, mmd, html]` | Map files. |
 | `export.map.endpoints` | `none` | End hosts on the map: `none`, `grouped` (one bubble per port), `all` (grouped above 2000 hosts). |

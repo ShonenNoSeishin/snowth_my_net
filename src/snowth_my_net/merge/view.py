@@ -164,6 +164,8 @@ class NodeView:
     oui: OuiDatabase
     dns: dict[str, str] = field(default_factory=dict)       # ip -> name (cache)
     given: dict[str, dict[str, str]] = field(default_factory=dict)   # mac -> what was typed
+    probed: dict[str, tuple[str, str]] = field(default_factory=dict)   # ip -> (name, source)
+    claimed: dict[str, str] = field(default_factory=dict)   # ip -> MAC the host stated
     neighbors: list[ResolvedNeighbor] = field(default_factory=list)
     links: list[Link] = field(default_factory=list)
     _nodes: list[Node] | None = None
@@ -203,9 +205,55 @@ class NodeView:
         rows.sort(key=lambda row: (row["reason"], row["mac"]))
         return rows
 
+    def load_probes(self, repo: Repo, now: int) -> None:
+        self.probed = repo.probe_names(now)
+        self.claimed = repo.probe_claims(now)
+
     def given_name(self, mac: str) -> str:
         """The name someone gave this MAC, or nothing. It outlives every collect."""
         return self.given.get(mac, {}).get("name", "")
+
+    def probed_name(self, node: Node) -> str:
+        """The name the host stated about itself, when it is that host that stated it.
+
+        NetBIOS answers with the adapter's own address: when it contradicts the MAC of the node
+        being named, the answer came from something else — a relay, an address that changed
+        hands — and attributing the name here would be exactly the false positive to refuse.
+        """
+        if not node.current_ip:
+            return ""
+        found = self.probed.get(node.current_ip.ip)
+        if not found:
+            return ""
+        claimed = self.claimed.get(node.current_ip.ip, "")
+        if claimed and claimed != node.mac:
+            return ""
+        return found[0]
+
+    def hostname(self, node: Node) -> tuple[str, str]:
+        """``(name, source)``: by hand, else DNS, else what the host says about itself.
+
+        The order is the order of trust: a name someone wrote down beats a zone, which beats
+        what a machine says about itself.
+        """
+        manual = self.given_name(node.mac)
+        if manual:
+            return manual, "manual"
+        resolved = self.dns_name(node.current_ip.ip) if node.current_ip else ""
+        if resolved:
+            return resolved, "dns"
+        probed = self.probed_name(node)
+        return (probed, self.probed[node.current_ip.ip][1]) if probed else ("", "")
+
+    def hostnames_disagree(self, node: Node) -> bool:
+        """A name written by hand and a zone that says another thing: one of them is wrong, and
+        which one is not for this tool to decide. The domain and the case are ignored, so
+        ``poste-julie`` and ``poste-julie.example.net`` agree."""
+        manual = self.given_name(node.mac)
+        resolved = self.dns_name(node.current_ip.ip) if node.current_ip else ""
+        if not manual or not resolved:
+            return False
+        return manual.split(".")[0].casefold() != resolved.split(".")[0].casefold()
 
     def given_description(self, mac: str) -> str:
         return self.given.get(mac, {}).get("description", "")
@@ -244,11 +292,12 @@ class NodeView:
     def rows(self) -> list[list[str]]:
         """nodes.csv rows, most recent first."""
         cfg = self.loaded.cfg.nodes
+        merge = self.loaded.cfg.export.nodes.merge_hostnames
         rows = []
         for node in self.nodes:
             vendor = self.vendor(node)
             ip = node.current_ip.ip if node.current_ip else ""
-            dns = self.dns_name(ip) if ip else ""
+            dns = self.hostname(node)[0] if merge else (self.dns_name(ip) if ip else "")
             positions = node.positions if cfg.positions == "all" else node.positions[:1]
             for p in positions:
                 rows.append([node.mac, vendor, ip, dns, self.device_name(p.device_id),
@@ -331,7 +380,8 @@ def build_view(loaded: LoadedConfig, repo: Repo, now: int) -> NodeView:
 
     inputs, names = load_inputs(loaded, repo, now)
     view = NodeView(loaded, None, names, oui_database(loaded), repo.dns_names(now),
-                    given=store_for(loaded.paths).read())
+                    given=store_for(loaded.paths).read(),
+                    probed=repo.probe_names(now), claimed=repo.probe_claims(now))
     view.neighbors, view.links = load_topology(loaded, repo, inputs, names, view.port_name_of(
         inputs))
     view.ctx = MergeContext(inputs, loaded.cfg.nodes, now)

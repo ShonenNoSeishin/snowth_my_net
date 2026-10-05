@@ -364,7 +364,7 @@ def test_the_table_promises_nothing_it_cannot_show(tmp_path):
     finally:
         repo.conn.close()
     row = next(r for r in table.rows if any(AP in str(cell) for cell in r))
-    address = row[4]
+    address = row[6]                                     # three hostnames and a description first
     assert address.text == "" and address.more == ()        # nothing, honestly
     loaded.cfg.nodes.elect_link_local = True
     repo = Repo(open_db(loaded.paths.state_file, readonly=True))
@@ -372,7 +372,7 @@ def test_the_table_promises_nothing_it_cannot_show(tmp_path):
         again = pages.nodes(loaded, repo, NOW, Translator("en"), 2000)
     finally:
         repo.conn.close()
-    shown = next(r for r in again.rows if any(AP in str(cell) for cell in r))[4]
+    shown = next(r for r in again.rows if any(AP in str(cell) for cell in r))[6]
     assert shown.text == "fe80::1e0b:8bff:fec0:eb62"        # for whoever wants it anyway
 
 

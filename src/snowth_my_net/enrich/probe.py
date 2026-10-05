@@ -136,6 +136,47 @@ async def ask_llmnr(ip: str, timeout: float = 2.0) -> Answer:
     return await _reverse_on(ip, LLMNR_PORT, "llmnr", timeout)
 
 
+ASKERS = {"netbios": ask_netbios, "llmnr": ask_llmnr, "mdns": ask_mdns}
+
+
+def in_networks(ip: str, networks) -> bool:
+    """Empty list: anywhere. Otherwise only there — a question asked where it cannot be
+    answered costs the whole timeout and teaches nothing."""
+    if not networks:
+        return True
+    try:
+        address = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return any(address in network for network in networks
+               if address.version == network.version)
+
+
+async def probe_many(source: str, ips: list[str], timeout: float, budget: float,
+                     concurrency: int = 20) -> dict[str, tuple[str, str, str]]:
+    """``{ip: (name, mac, status)}``, bounded by ``concurrency`` and a total ``budget``.
+
+    Addresses left when the budget is spent are simply absent: they are asked at the next
+    export, exactly as an unresolved PTR is.
+    """
+    ask = ASKERS[source]
+    results: dict[str, tuple[str, str, str]] = {}
+    gate = asyncio.Semaphore(concurrency)
+
+    async def one(ip: str) -> None:
+        async with gate:
+            answer = await ask(ip, timeout)
+            results[ip] = (answer.name, answer.mac, "ok" if answer.found else "none")
+
+    tasks = [asyncio.create_task(one(ip)) for ip in ips]
+    if not tasks:
+        return results
+    _done, pending = await asyncio.wait(tasks, timeout=budget)
+    for task in pending:
+        task.cancel()
+    return results
+
+
 async def ask_all(ip: str, timeout: float = 2.0) -> list[Answer]:
     """Every way of asking, at once; the caller decides what to trust."""
     ipaddress.ip_address(ip)                 # raises for anything that is not an address

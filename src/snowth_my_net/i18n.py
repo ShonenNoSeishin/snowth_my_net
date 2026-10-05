@@ -206,6 +206,9 @@ STRINGS: dict[str, tuple[str, str]] = {
     "key.save": ("Save", "Enregistrer"),
     # devices table
     "col.name": ("NAME", "NOM"),
+    "col.hostname.manual": ("MANUAL HOSTNAME", "NOM D'HÔTE MANUEL"),
+    "col.hostname.dns": ("DNS HOSTNAME", "NOM D'HÔTE DNS"),
+    "col.hostname.probe": ("NETBIOS HOSTNAME", "NOM D'HÔTE NETBIOS"),
     "col.ip": ("IP", "IP"),
     "col.type": ("TYPE", "TYPE"),
     "col.vendor": ("VENDOR", "CONSTRUCTEUR"),
@@ -432,6 +435,14 @@ WEB = {
     "web.how": ("How to read this table", "Comment lire ce tableau"),
     "web.columns": ("Columns", "Colonnes"),
     "web.columns.reset": ("Reset the widths", "Réinitialiser les largeurs"),
+    "web.disagree": ("{count} row(s): the hostname written by hand and the one DNS gives "
+                     "disagree. One of them is wrong, and which one is not for this tool to "
+                     "decide.",
+                     "{count} ligne(s) : le nom d'hôte écrit à la main et celui que rend le DNS "
+                     "diffèrent. L'un des deux est faux, et ce n'est pas à cet outil de dire "
+                     "lequel."),
+    "web.disagree.show": ("Show only those", "N'afficher que celles-là"),
+    "web.disagree.all": ("Show every row", "Afficher toutes les lignes"),
     "web.view.live": ("Seen at the last collect ({count})",
                       "Vues à la dernière collecte ({count})"),
     "web.view.all": ("Everything, history included ({count})",
@@ -488,6 +499,23 @@ WEB = {
                           "Dernière fois que l'équipement a répondu. Vide pour une adresse qui "
                           "n'a jamais répondu."),
     # nodes
+    "hint.nodes.hostname_manual": (
+        "Written here by hand and kept with the MAC address: it wins over the other two, and a "
+        "collect never changes it. Empty it to forget it.",
+        "Écrit ici à la main et conservé avec l'adresse MAC : il l'emporte sur les deux autres, "
+        "et une collecte ne le change jamais. Videz-le pour l'oublier."),
+    "hint.nodes.hostname_dns": (
+        "The reverse lookup (PTR) of the address in the IP column: what the network says about "
+        "this host. Empty when no zone holds that address — 'dns check IP' says which.",
+        "La résolution inverse (PTR) de l'adresse de la colonne IP : ce que le réseau dit de cet "
+        "hôte. Vide quand aucune zone ne contient cette adresse — « dns check IP » dit laquelle."),
+    "hint.nodes.hostname_probe": (
+        "What the host answered when asked its own name (names.probe). Weaker evidence than "
+        "DNS: a host states what it likes, and the answer is dropped when the MAC it states "
+        "contradicts this row's.",
+        "Ce que l'hôte a répondu quand on lui a demandé son propre nom (names.probe). Preuve "
+        "plus faible que le DNS : un hôte annonce ce qu'il veut, et la réponse est écartée si "
+        "la MAC qu'il annonce contredit celle de cette ligne."),
     "hint.nodes.name": (
         "Given by hand (a MAC opens its page), kept with the MAC address: positions and "
         "addresses change, the name stays.",
@@ -682,6 +710,18 @@ EXPLAIN = {
     "xp.title": ("MAC {mac} — {vendor} ({kind})", "MAC {mac} — {vendor} ({kind})"),
     "xp.given_name": ("Named by hand: {name}", "Nommée à la main : {name}"),
     "xp.given_description": ("Description: {text}", "Description : {text}"),
+    "xp.probed": ("Name the host states about itself: {name} ({source})",
+                  "Nom que l'hôte annonce sur lui-même : {name} ({source})"),
+    "xp.hostname": ("Hostname used: {name} ({source})",
+                    "Nom d'hôte retenu : {name} ({source})"),
+    "xp.hostname_clash": (
+        "The hand-written hostname and the DNS one disagree: one of them is wrong",
+        "Le nom d'hôte écrit à la main et celui du DNS diffèrent : l'un des deux est faux"),
+    "xp.src.manual": ("written by hand", "écrit à la main"),
+    "xp.src.dns": ("reverse DNS", "DNS inverse"),
+    "xp.src.netbios": ("NetBIOS, stated by the host", "NetBIOS, annoncé par l'hôte"),
+    "xp.src.llmnr": ("LLMNR, stated by the host", "LLMNR, annoncé par l'hôte"),
+    "xp.src.mdns": ("mDNS, stated by the host", "mDNS, annoncé par l'hôte"),
     "xp.is_the_mac": ("(this MAC rewritten: it reaches nothing)",
                       "(cette MAC réécrite : elle ne joint rien)"),
     "xp.link_local": ("(link-local: valid on that segment only)",

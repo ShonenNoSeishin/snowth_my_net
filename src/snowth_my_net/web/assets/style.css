@@ -102,6 +102,9 @@ td .note { color: var(--muted); font-size: 12px; }
    (the addresses) or cut with an ellipsis, never pushed off the right edge. */
 td, th { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 td.col-name, th.col-name { max-width: 16ch; }
+td.col-hostname_manual, th.col-hostname_manual { max-width: 18ch; }
+td.col-hostname_dns, th.col-hostname_dns { max-width: 18ch; }
+td.col-hostname_probe, th.col-hostname_probe { max-width: 18ch; }
 td.col-description, th.col-description { max-width: 26ch; }
 td.col-vendor, th.col-vendor { max-width: 18ch; }
 td.col-dns, th.col-dns { max-width: 16ch; }
@@ -193,6 +196,12 @@ th .grab:hover { background: var(--accent); opacity: .5; }
 .views a:hover { color: var(--text); border-color: var(--accent); }
 .views a.on { color: var(--bg); background: var(--accent); border-color: var(--accent); }
 main > .note { color: var(--muted); font-size: 12.5px; margin: 6px 0 0; }
+/* Two sources naming the same thing differently: said above the table, not buried in it. */
+.disagree {
+  margin: 0 0 14px; padding: 9px 13px; font-size: 13px; color: var(--warn);
+  background: var(--panel); border: 1px solid var(--warn); border-radius: 8px;
+}
+.disagree a { color: inherit; }
 
 .intro { color: var(--muted); max-width: 80ch; }
 /* Something that cannot be undone: folded away, explained, then confirmed. */
