@@ -72,7 +72,8 @@ def parse_nbstat(payload: bytes) -> Answer:
         names.append((entry[:15].decode("latin-1").strip(), entry[15],
                       int.from_bytes(entry[16:18])))
     mac = rdata[count * 18:count * 18 + 6]
-    address = ":".join(f"{byte:02x}" for byte in mac) if len(mac) == 6 else ""
+    # Samba, NAS and printers state 00:00:00:00:00:00: that is no adapter address, it says nothing.
+    address = ":".join(f"{byte:02x}" for byte in mac) if len(mac) == 6 and any(mac) else ""
     for name, kind, flags in names:
         if kind in (WORKSTATION, SERVER) and not flags & GROUP_FLAG and name:
             return Answer("netbios", name=name, mac=address)

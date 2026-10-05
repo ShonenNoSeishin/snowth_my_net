@@ -238,3 +238,10 @@ def test_an_empty_record_set_is_skipped(monkeypatch):
 
     monkeypatch.setattr(dns.asyncquery, "udp", answer)
     assert asyncio.run(probe.ask_mdns("127.0.0.1", timeout=0.2)).name == "poste.local"
+
+
+def test_an_all_zero_adapter_address_is_no_claim_at_all():
+    """Samba and NAS boxes answer NetBIOS with 00:00:00:00:00:00; taking that for a MAC would
+    contradict every node and throw away a name the host really stated."""
+    answer = probe.parse_nbstat(reply([("ACMEBE-NAS", 0x00, 0x0400)], mac=bytes(6)))
+    assert answer.name == "ACMEBE-NAS" and answer.mac == ""
