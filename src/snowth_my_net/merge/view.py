@@ -166,6 +166,7 @@ class NodeView:
     given: dict[str, dict[str, str]] = field(default_factory=dict)   # mac -> what was typed
     probed: dict[str, tuple[str, str]] = field(default_factory=dict)   # ip -> (name, source)
     claimed: dict[str, str] = field(default_factory=dict)   # ip -> MAC the host stated
+    polled: dict[str, tuple[int, str]] = field(default_factory=dict)   # ip -> (device id, sysName)
     neighbors: list[ResolvedNeighbor] = field(default_factory=list)
     links: list[Link] = field(default_factory=list)
     _nodes: list[Node] | None = None
@@ -230,11 +231,25 @@ class NodeView:
             return ""
         return found[0]
 
+    def snmp_name(self, node: Node) -> str:
+        """The sysName of the polled device this node is, when it is that device.
+
+        The address is the link, and the MACs already known for that device must include the
+        node's: an address that changed hands would otherwise lend one box's name to another.
+        A device nobody knows a MAC for yet is taken on its address alone.
+        """
+        found = self.polled.get(node.current_ip.ip) if node.current_ip else None
+        if not found or not found[1]:
+            return ""
+        device_id, name = found
+        owned = {mac for mac, owner in self.ctx.inputs.device_macs.items() if owner == device_id}
+        return name if not owned or node.mac in owned else ""
+
     def hostname(self, node: Node) -> tuple[str, str]:
-        """``(name, source)``: by hand, else DNS, else what the host says about itself.
+        """``(name, source)``: by hand, else DNS, else SNMP, else what the host says about itself.
 
         The order is the order of trust: a name someone wrote down beats a zone, which beats
-        what a machine says about itself.
+        what a device reports to a credentialed query, which beats what a machine volunteers.
         """
         manual = self.given_name(node.mac)
         if manual:
@@ -242,6 +257,9 @@ class NodeView:
         resolved = self.dns_name(node.current_ip.ip) if node.current_ip else ""
         if resolved:
             return resolved, "dns"
+        reported = self.snmp_name(node)
+        if reported:
+            return reported, "snmp"
         probed = self.probed_name(node)
         return (probed, self.probed[node.current_ip.ip][1]) if probed else ("", "")
 
@@ -381,7 +399,9 @@ def build_view(loaded: LoadedConfig, repo: Repo, now: int) -> NodeView:
     inputs, names = load_inputs(loaded, repo, now)
     view = NodeView(loaded, None, names, oui_database(loaded), repo.dns_names(now),
                     given=store_for(loaded.paths).read(),
-                    probed=repo.probe_names(now), claimed=repo.probe_claims(now))
+                    probed=repo.probe_names(now), claimed=repo.probe_claims(now),
+                    polled={split_host_port(d["mgmt_address"])[0]: (d["id"], d["sys_name"] or "")
+                            for d in repo.devices()})
     view.neighbors, view.links = load_topology(loaded, repo, inputs, names, view.port_name_of(
         inputs))
     view.ctx = MergeContext(inputs, loaded.cfg.nodes, now)

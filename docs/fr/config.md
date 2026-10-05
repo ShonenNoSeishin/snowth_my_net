@@ -213,7 +213,7 @@ ligne à nommer, la réponse vient d'autre chose et le nom est écarté.
 | `export.devices.include_type` | `true` | Colonne finale `"Device Type"`. |
 | `export.nodes.include_name` | `false` | Ajouter une première colonne `Name` à `nodes.csv` avec les noms donnés à la main (`node name`). Désactivé par défaut pour qu'un importateur continue de lire les mêmes colonnes. |
 | `export.nodes.include_description` | `false` | Idem, pour les descriptions (`node describe`). |
-| `export.nodes.merge_hostnames` | `true` | `DNS Name` porte le meilleur des trois : écrit à la main, sinon la résolution inverse, sinon ce que l'hôte annonce sur lui-même. `false` ne garde que la résolution inverse. `snapshot.json` enregistre toujours la source retenue. |
+| `export.nodes.merge_hostnames` | `true` | `DNS Name` porte le meilleur des trois : écrit à la main, sinon la résolution inverse, sinon le `sysName` d'un équipement interrogé, sinon ce que l'hôte annonce sur lui-même. `false` ne garde que la résolution inverse. `snapshot.json` enregistre toujours la source retenue. |
 | `export.links.include_endpoints` | `false` | Inclure téléphones et stations dans `links.csv` et sur la carte. |
 | `export.map.formats` | `[dot, mmd, html]` | Fichiers de carte. |
 | `export.map.endpoints` | `none` | Hôtes finaux sur la carte : `none`, `grouped` (une bulle par port), `all` (groupés au-delà de 2000 hôtes). |

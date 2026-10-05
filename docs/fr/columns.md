@@ -68,7 +68,11 @@ confiance :
 
 1. **Manuel** — quelqu'un l'a écrit, donc il l'emporte.
 2. **DNS** — le réseau le dit.
-3. **Ce que l'hôte dit de lui-même** — la preuve la plus faible, et une réponse NetBIOS est
+3. **SNMP** — le `sysName` d'un équipement interrogé, quand la ligne est cet équipement : son
+   adresse est celle qu'on interroge, et les MAC connues pour lui contiennent celle de la ligne.
+   Un équipement qui répond à une requête authentifiée est une meilleure preuve qu'un nom qu'il
+   annonce de lui-même.
+4. **Ce que l'hôte dit de lui-même** — la preuve la plus faible, et une réponse NetBIOS est
    écartée quand l'adresse d'adaptateur qu'elle annonce n'est pas la MAC de la ligne.
 
 Quand le nom écrit à la main et celui du DNS diffèrent, un bandeau au-dessus du tableau compte les

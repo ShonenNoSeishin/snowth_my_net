@@ -65,7 +65,10 @@ the table and are merged only where a single value is needed, in the order of tr
 
 1. **Manual** — someone wrote it down, so it wins.
 2. **DNS** — the network says it.
-3. **The host's own claim** — what a machine says about itself is the weakest evidence, and a
+3. **SNMP** — the `sysName` of a polled device, when the row is that device: its address is the
+   one polled, and the MACs known for it include the row's. A device answering a credentialed
+   query is better evidence than a name it volunteers.
+4. **The host's own claim** — what a machine says about itself is the weakest evidence, and a
    NetBIOS answer is dropped when the adapter address it states is not the MAC of the row.
 
 When the hand-written name and the DNS one disagree, a banner above the table counts the rows and

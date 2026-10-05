@@ -256,3 +256,31 @@ def test_an_export_asks_once_and_remembers(tmp_path, monkeypatch):
         assert repo.forget_probes() == 1
     finally:
         repo.conn.close()
+
+
+# --------------------------------------------------------------------------- SNMP sysName
+
+
+def test_a_polled_device_is_named_by_its_sysname_before_what_it_volunteers(tmp_path):
+    """A printer answers SNMP with 'IM C3000' and NetBIOS with noise: SNMP wins."""
+    loaded = lab(tmp_path)
+    remember(loaded, "RNP0026736A5C2B")
+    view = view_of(loaded)
+    node = node_of(view)
+    view.polled = {ADDRESS: (7, "IM C3000")}
+    assert view.hostname(node) == ("IM C3000", "snmp")
+    view.dns = {ADDRESS: "printer.example.net"}         # a zone still comes first
+    assert view.hostname(node)[1] == "dns"
+
+
+def test_a_sysname_is_not_lent_to_a_node_that_is_not_the_device(tmp_path):
+    loaded = lab(tmp_path)
+    view = view_of(loaded)
+    node = node_of(view)
+    view.polled = {ADDRESS: (7, "IM C3000")}
+    view.ctx.inputs.device_macs["aa:bb:cc:00:00:01"] = 7   # another MAC owns it
+    assert view.snmp_name(node) == ""
+    view.ctx.inputs.device_macs[node.mac] = 7
+    assert view.snmp_name(node) == "IM C3000"
+    view.polled = {ADDRESS: (7, "")}
+    assert view.snmp_name(node) == ""                      # nothing reported, nothing claimed

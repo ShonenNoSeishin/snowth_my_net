@@ -209,7 +209,7 @@ being named, the answer came from something else and the name is dropped.
 | `export.devices.include_type` | `true` | Trailing `"Device Type"` column. |
 | `export.nodes.include_name` | `false` | Add a first `Name` column to `nodes.csv` with the names given by hand (`node name`). Off by default so that an importer keeps reading the same columns. |
 | `export.nodes.include_description` | `false` | The same, for the descriptions (`node describe`). |
-| `export.nodes.merge_hostnames` | `true` | `DNS Name` carries the best of the three: written by hand, else the reverse lookup, else what the host states about itself. `false` keeps the reverse lookup alone. `snapshot.json` always records which source was used. |
+| `export.nodes.merge_hostnames` | `true` | `DNS Name` carries the best of the three: written by hand, else the reverse lookup, else the `sysName` of a polled device, else what the host states about itself. `false` keeps the reverse lookup alone. `snapshot.json` always records which source was used. |
 | `export.links.include_endpoints` | `false` | Include phones and stations in `links.csv` and the map. |
 | `export.map.formats` | `[dot, mmd, html]` | Map files. |
 | `export.map.endpoints` | `none` | End hosts on the map: `none`, `grouped` (one bubble per port), `all` (grouped above 2000 hosts). |

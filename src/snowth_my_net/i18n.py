@@ -767,6 +767,8 @@ EXPLAIN = {
         "Le nom d'hôte écrit à la main et celui du DNS diffèrent : l'un des deux est faux"),
     "xp.src.manual": ("written by hand", "écrit à la main"),
     "xp.src.dns": ("reverse DNS", "DNS inverse"),
+    "xp.src.snmp": ("sysName, reported by the polled device",
+                    "sysName, rapporté par l'équipement interrogé"),
     "xp.src.netbios": ("NetBIOS, stated by the host", "NetBIOS, annoncé par l'hôte"),
     "xp.src.llmnr": ("LLMNR, stated by the host", "LLMNR, annoncé par l'hôte"),
     "xp.src.mdns": ("mDNS, stated by the host", "mDNS, annoncé par l'hôte"),
