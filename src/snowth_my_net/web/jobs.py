@@ -22,7 +22,7 @@ from snowth_my_net.logs import get_logger
 
 log = get_logger("web")
 
-ACTIONS = ("collect", "discover", "export", "push")
+ACTIONS = ("collect", "discover", "export", "push", "names")
 GRACE = 30                                       # seconds added to the run timeout, to kill it
 
 
@@ -79,8 +79,9 @@ class Runner:
 
     def argv(self, what: str, extra: tuple[str, ...] = ()) -> list[str]:
         """The command line a reader would have typed, run without a shell."""
+        words = ["names", "ask"] if what == "names" else [what]     # the command has an action
         return [sys.executable, "-m", "snowth_my_net", "--config", self.config_file,
-                "--json", what, *extra]
+                "--json", *words, *extra]
 
     def _run(self, job: Job, clock) -> None:
         argv = self.argv(job.what, job.extra)
@@ -110,6 +111,9 @@ def summarize(what: str, done: subprocess.CompletedProcess) -> str:
         stats = payload.get("stats") or {}
         return (f"{stats.get('reachable', '?')}/{stats.get('devices', '?')} devices, "
                 f"{len(payload.get('errors') or [])} error(s)")
+    if what == "names":
+        return (f"{payload.get('answered', '?')}/{payload.get('nodes', '?')} node(s) named by "
+                "the host")
     if what == "export":
         written = payload.get("written") or []
         return f"{len(written)} file(s) written"

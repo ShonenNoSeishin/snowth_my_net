@@ -57,7 +57,9 @@ credentials:
 
 discovery:
   seeds: [192.0.2.1]               # IPs or host names; "host:port" for a non-standard port
-  allowed: [192.0.2.0/24]          # nothing outside these ranges is ever queried
+  allowed: [192.0.2.0/24]          # nothing outside these ranges is ever queried; or the word
+                                   # `all` (neighbours are then polled wherever they point and
+                                   # receive your credentials: keep `exclude` for what must not)
   exclude: []                      # addresses or ranges never queried
   follow_neighbors: true           # explore LLDP/CDP neighbours inside `allowed`
   max_depth: 3
@@ -109,6 +111,14 @@ dns:
 oui:
   clean_names: true                # "Cisco Systems, Inc" -> "Cisco Systems"
 
+# Ask a host its own name when no DNS zone holds it (what `nbtstat -A` does). Off by default:
+# a NetBIOS sweep reads as reconnaissance to an IPS, and a name a host states about itself is
+# weaker evidence than one a zone holds. `snowth_my_net dns probe IP` shows what answers.
+# names:
+#   probe: [netbios]               # netbios | llmnr | mdns
+#   networks: [192.0.2.0/24]       # or the word `all`; only ask where the firewall allows it
+#   at_export: true                # false: only `names ask` (schedule.names, or a button) asks
+
 export:
   files: [devices, nodes, links, snapshot, map]
   allow_empty: []                  # CSV files allowed to have no data row
@@ -142,10 +152,11 @@ push:
 schedule:
   collect: "*/10 * * * *"          # often: firewalls expire ARP entries within minutes
   export_push: "0 11,18 * * *"
+  # names: "30 6 * * *"            # `names ask`: needs `names.probe`; answers are cached
   # timezone: Europe/Brussels      # only used to interpret this schedule; outputs are UTC
   health_max_age: auto             # auto = twice the longest gap between two collects
 
-# Read-only web interface: snowth_my_net web (in Docker: the "web" service of compose.yml).
+# Web interface: snowth_my_net web (in Docker: the "web" service of compose.yml).
 # web:
 #   bind: 127.0.0.1                # 0.0.0.0 only behind a reverse proxy: it has no login
 #   port: 8080

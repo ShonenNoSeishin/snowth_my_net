@@ -1,1 +1,1 @@
-"""Read-only web interface: the state seen from a browser."""
+"""Web interface: the state seen from a browser, and the few things it may change."""

@@ -1,13 +1,16 @@
-"""Read-only web interface: a small HTTP server over the state, no dependency beyond Python.
+"""Web interface: a small HTTP server over the state, no dependency beyond Python.
 
 Design, on purpose:
 
-* **Nothing can change the state.** Only GET is answered, the database is opened read-only,
-  and no page offers an action: collecting and exporting stay in the CLI and in the terminal
-  interface, where the state lock lives.
+* **Nothing here can write to a device.** SNMP stays read-only everywhere; this server only
+  reads the state, through a read-only connection opened for each request.
+* **What it may change is small and named**: the names and descriptions given to a MAC (a file
+  of their own, beside the state), the addresses polled and the credential chosen for each (behind
+  the password asked again), the account passwords, and the commands its buttons start — which
+  run as separate processes, the same ones a shell would run, so the state lock stays theirs.
 * **No secret is ever rendered** — the state only holds credential names, never their values.
-* **It binds to the loopback by default** (``web.bind``). There is no login: put a reverse
-  proxy in front of it if you expose it beyond the machine.
+* **It binds to the loopback by default** (``web.bind``). With accounts it asks for a login;
+  put a TLS reverse proxy in front of it if you expose it beyond the machine.
 """
 
 from __future__ import annotations
@@ -73,7 +76,8 @@ class Page:
 
 
 NAV = (Page("/", "tab.devices"), Page("/nodes", "tab.nodes"), Page("/links", "tab.links"),
-       Page("/runs", "tab.runs"), Page("/files", "web.tab.files"))
+       Page("/unreachable", "web.tab.unreachable"), Page("/runs", "tab.runs"),
+       Page("/files", "web.tab.files"))
 SNMP_PAGE = Page("/snmp", "web.snmp.tab")
 
 
@@ -405,7 +409,7 @@ class Site:
         buttons = "".join(
             f'<button type="submit" name="what" value="{what}"{busy}>'
             f'{esc(t(f"web.do.{what}"))}</button>'
-            for what in ACTIONS if what != "push" or self.loaded.cfg.push.targets)
+            for what in self.offered())
         state = ""
         if current is not None:
             said = t("web.do.running", what=t(f"web.do.{current.what}"),
@@ -422,12 +426,19 @@ class Site:
                 f'<span class="what">{esc(t("web.do.title"))}</span>{buttons}'
                 f'<span class="note">{esc(t("web.do.hint"))}</span>{state}{error}</form>')
 
+    def offered(self) -> list[str]:
+        """The buttons this configuration can use: push needs a target, names a protocol."""
+        cfg = self.loaded.cfg
+        return [what for what in ACTIONS
+                if (what != "push" or cfg.push.targets) and (what != "names" or cfg.names.probe)]
+
     def start_job(self, what: str, user: str, t=None) -> tuple[int, str, bytes]:
         """``(status, target, body)`` for POST /action: start it, then show the runs."""
         t = t or self.t
-        if not self.loaded.cfg.web.actions or what not in ACTIONS:
+        if not self.loaded.cfg.web.actions or what not in self.offered():
             return HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", b"not found\n"
-        if self.jobs.start(what, user) is None:
+        extra = ("--force",) if what == "names" else ()      # a button that does nothing because
+        if self.jobs.start(what, user, extra=extra) is None:     # answers are fresh is a mystery
             return (HTTPStatus.CONFLICT, "text/html; charset=utf-8",
                     self.runs_page(t, t("web.do.busy")))
         return HTTPStatus.SEE_OTHER, "/runs", b""
@@ -696,6 +707,11 @@ class Site:
             elif path == "/links":
                 table = pages.links(self.loaded, repo, now, t)
                 title = t("tab.links")
+            elif path == "/unreachable":
+                table = pages.unreachable(self.loaded, repo, now, t,
+                                          self.loaded.cfg.web.node_limit,
+                                          (query.get("kind") or [""])[0])
+                title = t("web.tab.unreachable")
             else:
                 table = pages.files(self.loaded.paths.output_dir, t)
                 title = t("web.tab.files")

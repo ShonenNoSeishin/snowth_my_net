@@ -52,6 +52,9 @@ def cron_lines(loaded: LoadedConfig, binary: str | None = None,
         if not loaded.cfg.push.targets:
             command.append("--no-push")
         lines.append(CronLine(cfg.export_push, command, "export the files and push them"))
+    if cfg.names and loaded.cfg.names.probe:
+        lines.append(CronLine(cfg.names, [*base, "names", "ask"],
+                              "ask the hosts their own names (answers are cached)"))
     for report in loaded.reports if reports is None else reports:
         if report.cfg.schedule:
             lines.append(CronLine(report.cfg.schedule, [*base, "report", "run", report.cfg.name],

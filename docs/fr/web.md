@@ -25,6 +25,7 @@ SNOWTH_HTTPS_PORT=9443 docker compose up -d
 | Nœuds | les adresses MAC et où elles se trouvent, comme `nodes.csv` ; le nom et la description s'écrivent directement dans le tableau |
 | SNMP | quelles adresses sont interrogées, avec quel identifiant, et pourquoi l'une ne répond pas (un compte et son mot de passe redemandé) |
 | Liens | les liens physiques trouvés par LLDP/CDP, comme `links.csv` |
+| Inaccessibles | ce qui ne peut pas être interrogé en SNMP, quels voisins ne le sont pas, quels nœuds n'annoncent aucun nom — chacun avec ce qui a été essayé et pourquoi pas |
 | Collectes | les 50 dernières exécutions, leur état et le nombre d'équipements qui ont répondu |
 | Fichiers | les fichiers exportés présents dans le répertoire de sortie, à télécharger |
 
@@ -125,8 +126,9 @@ cette page peut en choisir un pour une adresse, jamais en créer un.
 
 ## Lancer quelque chose
 
-La page Collectes porte les boutons : **Collecter**, **Découvrir**, **Exporter**, et **Envoyer**
-quand une cible de push est configurée. L'interface ne fait pas le travail elle-même — elle
+La page Collectes porte les boutons : **Collecter**, **Découvrir**, **Exporter**, **Envoyer**
+quand une cible de push est configurée, et **Demander les noms** quand `names.probe` liste un
+protocole — il demande son nom à chaque nœud d'un coup, quoi que contienne le cache. L'interface ne fait pas le travail elle-même — elle
 lance exactement la commande que vous auriez tapée, dans un processus séparé, et montre ce
 qu'elle a rapporté :
 

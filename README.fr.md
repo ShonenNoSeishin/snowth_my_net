@@ -109,6 +109,7 @@ Détails, unités systemd, durcissement et réseau : [docs/fr/deployment.md](doc
 | `health [--max-age]` | Code 1 si la dernière collecte réussie est trop ancienne |
 | `tui` | Interface en terminal |
 | `dns probe IP…` | Demander son nom à un hôte (NetBIOS, LLMNR, mDNS), comme `nbtstat -A` et un scanner, et montrer ce que chacun répond |
+| `names ask [--force]` | Demander son nom à chaque nœud (`names.probe`) : planifié avec `schedule.names`, ou depuis un bouton |
 | `dns check IP…` | Demander une résolution inverse aux résolveurs configurés, et dire ce qui revient et ce que ça signifie |
 | `dns flush [--misses-only]` | Oublier les réponses PTR en cache, pour que le prochain export réinterroge le résolveur |
 | `show tables` | Ce que chaque table SNMP a rendu sur chaque équipement à la dernière collecte : une table MAC vide explique qu'un nœud n'ait pas de port |
@@ -116,7 +117,7 @@ Détails, unités systemd, durcissement et réseau : [docs/fr/deployment.md](doc
 | `show uplinks` | Ports tenus pour des uplinks, par preuve (LLDP/CDP) ou par le seul compte de MAC, et combien de MAC chacun laisse sans position |
 | `node reset --yes` | Oublier toutes les observations MAC et ARP ; équipements, liens et noms restent |
 | `node [name\|describe MAC [TEXT]]` | Nommer ou décrire une adresse MAC à la main, ou lister ce qui a été donné (conservé d'une collecte à l'autre) |
-| `web [--bind] [--port]`, `web passwd [USER]` | Interface web en lecture seule (équipements, nœuds, liens, collectes, fichiers), avec comptes optionnels |
+| `web [--bind] [--port]`, `web passwd [USER]` | Interface web (équipements, nœuds, liens, collectes, fichiers, connexions SNMP) ; elle n'écrit jamais sur un équipement. Comptes, noms écrits à la main, boutons qui lancent une collecte |
 
 Toutes les commandes acceptent `--json` (scripts), `--config`, `--log-level`, `--log-file`, `-q`.
 Les journaux vont sur stderr. Codes de sortie : **0** OK, **1** échec partiel, **2** erreur de
@@ -160,7 +161,13 @@ propres programmes après une collecte, un export, un push ou un rapport. Voir
 
 La documentation détaillée existe en français (`docs/fr/`) et en anglais (`docs/en/`) :
 
+* [Guide utilisateur](docs/fr/user-guide.md) : par où commencer, et le vocabulaire
 * [Prise en main](docs/fr/getting-started.md) : déclarer vos équipements et lancer un scan, pas à pas
+* [Le faire tourner](docs/fr/operations.md) : la pile Docker, appliquer un changement, mettre à jour, sauvegarder
+* [Colonnes](docs/fr/columns.md) : ce que montre chaque tableau de l'interface web
+* [Exports](docs/fr/exports.md) : quel fichier pour quoi, et comment alimenter un importateur
+* [Commandes](docs/fr/commands.md) : chaque commande et ses options
+* [Diagnostics](docs/fr/diagnostics.md) : pourquoi quelque chose manque, et la commande qui le dit
 * [Référence de configuration](docs/fr/config.md), avec chaque clé et sa valeur par défaut
 * [Formats de sortie et push HTTP](docs/fr/formats.md)
 * [Déploiement : pipx + cron/systemd, Docker Compose](docs/fr/deployment.md)

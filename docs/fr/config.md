@@ -90,7 +90,7 @@ SNMPv3 authPriv est recommandé : v2c envoie sa communauté en clair (`check` le
 | Clé | Défaut | Description |
 |---|---|---|
 | `discovery.seeds` | `[]` | Points de départ : IP, noms d'hôte (résolus à chaque exécution), `host:port`. Un point de départ peut être hors `allowed`, jamais dans `exclude`. |
-| `discovery.allowed` | `[]` | Plages où les équipements peuvent être interrogés (voisins, balayages, équipements connus). |
+| `discovery.allowed` | `[]` | Plages où les équipements peuvent être interrogés (voisins, balayages, équipements connus) : une liste de réseaux, ou le mot `all` pour toute adresse IPv4 et IPv6. Vide : seulement les amorces. Avec `all`, une adresse qu'un voisin annonce est interrogée où qu'elle pointe et reçoit les identifiants essayés contre elle — gardez `discovery.exclude` pour ce qui ne doit jamais être atteint. |
 | `discovery.exclude` | `[]` | Adresses/plages jamais interrogées. |
 | `discovery.follow_neighbors` | `true` | Explore les voisins LLDP/CDP (en largeur) pendant `collect` et `discover`. |
 | `discovery.max_depth` | `3` | Nombre de sauts depuis un point de départ. |
@@ -185,7 +185,8 @@ nom qu'un hôte annonce sur lui-même est une preuve plus faible qu'un nom déte
 | Clé | Défaut | Description |
 |---|---|---|
 | `names.probe` | `[]` | Protocoles à interroger : `netbios` (UDP/137), `llmnr` (UDP/5355), `mdns` (UDP/5353). Vide : rien n'est demandé. |
-| `names.networks` | `[]` | N'interroger que dans ces réseaux. Vide : toutes les adresses des nœuds — y compris derrière un pare-feu qui jettera la question et coûtera le délai complet. |
+| `names.networks` | `[]` | N'interroger que dans ces réseaux : une liste, ou le mot `all` pour toute adresse. Vide revient à `all`, mais `check` demande d'écrire le choix — une question envoyée là où un pare-feu la jette coûte le délai complet. |
+| `names.at_export` | `true` | Interroger aussi pendant l'export. `false` laisse ce travail à `names ask` — planifié avec `schedule.names`, ou depuis le bouton *Demander les noms* — pour qu'un export reste rapide. |
 | `names.timeout` | `1` | Par question. |
 | `names.budget` | `60` | Temps total par export et par protocole ; le reste attend l'export suivant. |
 | `names.cache_ttl` | `86400` | Durée de vie d'un nom trouvé. |
@@ -257,6 +258,7 @@ l'hôte, le planificateur du conteneur au démarrage.
 |---|---|---|
 | `schedule.collect` | `*/10 * * * *` | Fréquent : les pare-feu font expirer les entrées ARP en quelques minutes, et l'état accumule les observations entre deux exports. `null` le désactive. |
 | `schedule.export_push` | `0 11,18 * * *` | `run --no-collect` (export, puis push s'il existe des cibles). |
+| `schedule.names` | aucune | `names ask` : demander son nom à chaque nœud, réponses mises en cache. Demande `names.probe` ; sans lui rien n'est planifié et `check` le dit. |
 | `schedule.timezone` | fuseau du processus | Sert uniquement à interpréter la planification (`CRON_TZ`) ; toutes les sorties sont en UTC. |
 | `schedule.health_max_age` | `auto` | Âge admis de la dernière collecte réussie pour `health` ; `auto` = deux fois le plus long intervalle de `schedule.collect`. |
 

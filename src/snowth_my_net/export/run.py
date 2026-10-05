@@ -87,7 +87,8 @@ def refresh_dns(loaded: LoadedConfig, repo: Repo, ips: list[str], now: int,
     return len(results)
 
 
-def refresh_probes(loaded: LoadedConfig, repo: Repo, ips: list[str], now: int) -> int:
+def refresh_probes(loaded: LoadedConfig, repo: Repo, ips: list[str], now: int,
+                   force: bool = False) -> int:
     """Ask the hosts their own names, for the protocols ``names.probe`` lists.
 
     One packet per address and per protocol, only inside ``names.networks``, cached like a PTR
@@ -101,7 +102,7 @@ def refresh_probes(loaded: LoadedConfig, repo: Repo, ips: list[str], now: int) -
         return 0
     asked = 0
     for source in cfg.probe:
-        fresh = repo.probe_fresh(now, source)
+        fresh = set() if force else repo.probe_fresh(now, source)   # force: ask again anyway
         wanted = sorted({ip for ip in ips
                          if ip and ip not in fresh and in_networks(ip, cfg.networks)})
         if not wanted:
@@ -130,7 +131,8 @@ class ViewCache:
             ips = [n.current_ip.ip for n in view.nodes if n.current_ip]
             if refresh_dns(self.loaded, self.repo, ips, self.now, self.ptr_lookup):
                 view.dns = self.repo.dns_names(self.now)
-            if refresh_probes(self.loaded, self.repo, ips, self.now):
+            if self.loaded.cfg.names.at_export and refresh_probes(
+                    self.loaded, self.repo, ips, self.now):
                 view.load_probes(self.repo, self.now)
             self._view = view
         return self._view

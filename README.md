@@ -98,6 +98,7 @@ Details, systemd units, hardening and networking: [docs/en/deployment.md](docs/e
 | `health [--max-age]` | Exit 1 when the last successful collect is too old |
 | `tui` | Terminal interface |
 | `dns probe IP…` | Ask a host its own name (NetBIOS, LLMNR, mDNS), as `nbtstat -A` and a scanner do, and show what each answers |
+| `names ask [--force]` | Ask every node its own name (`names.probe`): scheduled with `schedule.names`, or from a button |
 | `dns check IP…` | Ask the configured resolvers for a reverse lookup and say what came back, and what it means |
 | `dns flush [--misses-only]` | Forget the cached PTR answers, so the next export asks the resolver again |
 | `show tables` | What every SNMP table returned on every device at the last collect: a MAC table that answered empty is why a node has no port |
@@ -105,7 +106,7 @@ Details, systemd units, hardening and networking: [docs/en/deployment.md](docs/e
 | `show uplinks` | Ports treated as uplinks, whether by proof (LLDP/CDP) or by the MAC count alone, and how many MACs each one leaves without a position |
 | `node reset --yes` | Forget every MAC and ARP observation; the devices, links and names stay |
 | `node [name\|describe MAC [TEXT]]` | Name or describe a MAC address by hand, or list what was given (kept across collects) |
-| `web [--bind] [--port]`, `web passwd [USER]` | Read-only web interface (devices, nodes, links, runs, files), with optional accounts |
+| `web [--bind] [--port]`, `web passwd [USER]` | Web interface (devices, nodes, links, runs, files, SNMP connections); it never writes to a device. Accounts, names written by hand, buttons that start a collect |
 
 Every command accepts `--json` (scripts), `--config`, `--log-level`, `--log-file`, `-q`. Logs go
 to stderr. Exit codes: **0** OK, **1** partial failure, **2** configuration error, **3** state
@@ -146,7 +147,13 @@ See [docs/en/extensions.md](docs/en/extensions.md) and [examples/extensions](exa
 
 Detailed documentation exists in English (`docs/en/`) and French (`docs/fr/`):
 
+* [User guide](docs/en/user-guide.md): where to start, and the vocabulary
 * [Getting started](docs/en/getting-started.md): declare your devices and run a scan, step by step
+* [Running it](docs/en/operations.md): the Docker stack, applying a change, updating, backing up
+* [Columns](docs/en/columns.md): what every table of the web interface shows
+* [Exports](docs/en/exports.md): which file for what, and how to feed an importer
+* [Commands](docs/en/commands.md): every command and its options
+* [Diagnostics](docs/en/diagnostics.md): why something is missing, and the command that says so
 * [Configuration reference](docs/en/config.md), with every key and its default
 * [Output formats and HTTP push](docs/en/formats.md)
 * [Deployment: pipx + cron/systemd, Docker Compose](docs/en/deployment.md)

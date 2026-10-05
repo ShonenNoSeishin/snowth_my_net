@@ -194,3 +194,34 @@ def neighbor_targets(cfg: Config, neighbors: list, depth: int, known_hosts: set[
         result.append(PlannedTarget(Target(address, cfg.general.snmp.port), "neighbor",
                                     depth + 1))
     return result, notes
+
+
+def unpolled_reason(cfg: Config, neighbor, manual: dict | None = None) -> str:
+    """Why a neighbour announced by LLDP/CDP is not polled, as a sentence; ``""`` when nothing
+    stops it and the next collect will try it.
+
+    The rules of ``neighbor_targets``, in the same order and with the same words in the
+    exception notes, so that what the Unreachable page says is what a collect decides. A test
+    holds the two together.
+    """
+    d = cfg.discovery
+    if not d.follow_neighbors:
+        return "discovery.follow_neighbors is off"
+    addresses = []
+    for text in neighbor.mgmt_addresses:
+        try:
+            addresses.append(ipaddress.ip_address(text))
+        except ValueError:
+            continue
+    if not addresses:
+        return "it announces no management address"
+    if not (set(neighbor.caps) & set(d.follow_capabilities)) or "telephone" in neighbor.caps:
+        caps = ",".join(sorted(neighbor.caps)) or "none"
+        return f"capabilities {caps}: a phone, a station or an endpoint is never polled"
+    scope = Scope(d.allowed, d.exclude, set())
+    if not any(scope.check(ip) is None for ip in addresses):
+        reasons = sorted({str(scope.check(ip)) for ip in addresses})
+        return "; ".join(reasons)
+    if any(settings_for(cfg, str(ip), manual).disabled for ip in addresses):
+        return "disabled by the configuration"
+    return ""

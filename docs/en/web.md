@@ -24,6 +24,7 @@ SNOWTH_HTTPS_PORT=9443 docker compose up -d
 | Nodes | MAC addresses and where they are, as `nodes.csv`; the name and the description are written straight in the table |
 | SNMP | which addresses are polled, with which credential, and why one does not answer (an account and its password again) |
 | Links | the physical links found through LLDP/CDP, as `links.csv` |
+| Unreachable | what cannot be polled over SNMP, which neighbours are not polled, which nodes state no name — each with what was tried and why not |
 | Runs | the last 50 runs, their status and how many devices answered |
 | Files | the exported files present in the output directory, to download |
 
@@ -126,8 +127,9 @@ for an address, never create one.
 
 ## Running something
 
-The Runs page carries the buttons: **Collect**, **Discover**, **Export**, and **Push** when a
-push target is configured. The interface does not do the work itself — it starts the very
+The Runs page carries the buttons: **Collect**, **Discover**, **Export**, **Push** when a push
+target is configured, and **Ask names** when `names.probe` lists a protocol — it asks every node
+its own name at once, whatever the cache holds. The interface does not do the work itself — it starts the very
 command you would have typed, as a separate process, and shows what it reported:
 
 ```

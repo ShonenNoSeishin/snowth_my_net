@@ -224,6 +224,20 @@ def config_warnings(loaded: LoadedConfig) -> list[str]:
                             "in clear text")
     if cfg.discovery.follow_neighbors and not cfg.discovery.allowed:
         warnings.append("discovery.allowed is empty: only the seeds will ever be polled")
+    if cfg.discovery.follow_neighbors and any(n.prefixlen == 0 for n in cfg.discovery.allowed):
+        warnings.append(
+            "discovery.allowed is 'all': an address announced by a neighbour over LLDP or CDP "
+            "is polled wherever it points, and receives the SNMP credentials tried against it "
+            "(a v2c community travels in clear). Anyone who can announce an address on a polled "
+            "port can choose where they are sent; list your networks, or keep discovery.exclude "
+            "for what must never be reached")
+    if cfg.names.probe and not cfg.names.networks:
+        warnings.append("names.networks is empty: every node address is asked its name, "
+                        "whichever network it is on; write 'all' to say so on purpose, or list "
+                        "the networks the firewall allows")
+    if cfg.schedule.names and not cfg.names.probe:
+        warnings.append("schedule.names is set but names.probe is empty: nothing will be "
+                        "scheduled; list netbios, llmnr or mdns")
     warnings += hook_warnings(loaded)
     web = cfg.web
     if not web.auth.users and web.bind not in LOOPBACK:

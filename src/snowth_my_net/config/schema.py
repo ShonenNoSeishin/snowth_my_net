@@ -11,7 +11,7 @@ import zoneinfo
 from dataclasses import dataclass, field
 from typing import Literal
 
-from snowth_my_net.config.validate import Duration, Network
+from snowth_my_net.config.validate import Duration, Network, Networks
 
 DeviceType = Literal[
     "switch", "router", "firewall", "wireless", "server", "printer", "facility", "other"
@@ -198,7 +198,7 @@ class CredentialCfg:
 @dataclass
 class DiscoveryCfg:
     seeds: list[str] = field(default_factory=list)
-    allowed: list[Network] = field(default_factory=list)
+    allowed: Networks = field(default_factory=list)      # a list, or the word "all"
     exclude: list[Network] = field(default_factory=list)
     follow_neighbors: bool = True
     max_depth: int = 3
@@ -344,7 +344,8 @@ class NamesCfg:
     """
 
     probe: list[Literal["netbios", "llmnr", "mdns"]] = field(default_factory=list)
-    networks: list[Network] = field(default_factory=list)   # empty: every node address
+    at_export: bool = True              # also ask while exporting; off: only 'names ask' does
+    networks: Networks = field(default_factory=list)   # a list, or "all"; empty: every node
     timeout: float = 1.0
     budget: Duration = 60                   # total time per export, like dns.budget
     cache_ttl: Duration = 86400
@@ -528,6 +529,7 @@ class PushCfg:
 class ScheduleCfg:
     collect: str | None = "*/10 * * * *"
     export_push: str | None = "0 11,18 * * *"
+    names: str | None = None         # ask every node its own name (needs names.probe)
     timezone: str | None = None
     health_max_age: Duration | Literal["auto"] = "auto"
 
@@ -540,7 +542,7 @@ class ScheduleCfg:
                 zoneinfo.ZoneInfo(self.timezone)
             except (zoneinfo.ZoneInfoNotFoundError, ValueError):
                 errs.append(f"schedule.timezone: unknown time zone {self.timezone!r}")
-        for name in ("collect", "export_push"):
+        for name in ("collect", "export_push", "names"):
             expression = getattr(self, name)
             if expression:
                 try:
@@ -594,7 +596,7 @@ LOOPBACK = ("127.0.0.1", "::1", "localhost")   # addresses only this machine can
 
 @dataclass
 class WebCfg:
-    """Read-only web interface (``snowth_my_net web``)."""
+    """Web interface (``snowth_my_net web``): it never writes to a device."""
 
     bind: str = "127.0.0.1"          # loopback unless there are accounts (see auth)
     port: int = 8080

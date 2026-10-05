@@ -425,10 +425,8 @@ WEB = {
                      "Aucun fichier exporté. Lancez un export."),
     "web.node_title": ("Node {mac}", "Nœud {mac}"),
     "web.back": ("Back", "Retour"),
-    "web.read_only": ("Read-only view. Collect and export from the command line or the terminal "
-                      "interface.",
-                      "Vue en lecture seule. Collecte et export depuis la ligne de commande ou "
-                      "l'interface en terminal."),
+    "web.read_only": ("Reads the state; never writes to a device.",
+                      "Lit l'état ; n'écrit jamais sur un équipement."),
     "web.times": ("Times in {zone}; hover one for the stored UTC value",
                   "Heures en {zone} ; survolez-en une pour la valeur UTC stockée"),
     "web.not_found": ("Nothing here.", "Rien ici."),
@@ -516,11 +514,6 @@ WEB = {
         "Ce que l'hôte a répondu quand on lui a demandé son propre nom (names.probe). Preuve "
         "plus faible que le DNS : un hôte annonce ce qu'il veut, et la réponse est écartée si "
         "la MAC qu'il annonce contredit celle de cette ligne."),
-    "hint.nodes.name": (
-        "Given by hand (a MAC opens its page), kept with the MAC address: positions and "
-        "addresses change, the name stays.",
-        "Donné à la main (une MAC ouvre sa page), conservé avec l'adresse MAC : les positions "
-        "et les adresses changent, le nom reste."),
     "hint.nodes.description": (
         "Written by hand, like the name, and kept with the MAC address: what it is for, where "
         "it hangs, whom to call.",
@@ -539,17 +532,14 @@ WEB = {
         "Registre IEEE, d'après la première moitié de la MAC. Vide pour une adresse aléatoire "
         "(administrée localement), ce que font aujourd'hui téléphones et portables par défaut."),
     "hint.nodes.ip": (
-        "The elected address, in bold, then the other addresses known for that MAC in grey. The "
+        "The elected address, then the other addresses known for that MAC behind a '+n'. The "
         "elected one is the most recent seen in an ARP/NDP cache, IPv4 preferred, dropped when "
-        "another MAC claimed it later; only it is exported to devices.csv consumers.",
-        "L'adresse élue, puis en gris les autres adresses connues pour cette MAC. L'élue est la "
-        "plus récente vue dans un cache ARP/NDP, IPv4 de préférence, écartée si une autre MAC "
-        "l'a revendiquée depuis ; c'est la seule exportée vers les consommateurs de nodes.csv."),
-    "hint.nodes.dns": (
-        "Reverse lookup (PTR) of that address, from the cache; empty when DNS is disabled or the "
-        "name does not exist.",
-        "Résolution inverse (PTR) de cette adresse, depuis le cache ; vide quand le DNS est "
-        "désactivé ou que le nom n'existe pas."),
+        "another MAC claimed it later. A link-local address (fe80::) is never elected: nothing "
+        "routes to it. Only the elected one is exported in nodes.csv.",
+        "L'adresse élue, puis les autres adresses connues pour cette MAC derrière un « +n ». "
+        "L'élue est la plus récente vue dans un cache ARP/NDP, IPv4 de préférence, écartée si "
+        "une autre MAC l'a revendiquée depuis. Une adresse lien-local (fe80::) n'est jamais "
+        "élue : rien ne route vers elle. Seule l'élue est exportée dans nodes.csv."),
     "hint.nodes.switch": (
         "The device whose MAC table holds that address, on an access port. Empty when the MAC is "
         "only known from an ARP cache, when every port that saw it is an uplink, or when the "
@@ -657,10 +647,68 @@ WEB = {
     "col.origin": ("ORIGIN", "ORIGINE"),
     "col.credential": ("CREDENTIAL", "IDENTIFIANT"),
     "col.failures": ("FAILURES", "ÉCHECS"),
+    "web.tab.unreachable": ("Unreachable", "Inaccessibles"),
+    "web.no_unreachable": ("Nothing is out of reach: every polled address answers and every "
+                           "neighbour is accounted for.",
+                           "Rien n'est hors de portée : chaque adresse interrogée répond et "
+                           "chaque voisin est expliqué."),
+    "web.kind.all": ("Everything ({count})", "Tout ({count})"),
+    "web.kind.snmp": ("SNMP ({count})", "SNMP ({count})"),
+    "web.kind.neighbor": ("Neighbours ({count})", "Voisins ({count})"),
+    "web.kind.names": ("Names ({count})", "Noms ({count})"),
+    "kind.snmp": ("SNMP", "SNMP"),
+    "kind.neighbor": ("Neighbour", "Voisin"),
+    "kind.names": ("Name probe", "Sondage de nom"),
+    "col.kind": ("KIND", "NATURE"),
+    "col.tried": ("TRIED", "ESSAYÉ"),
+    "col.why": ("WHY NOT", "POURQUOI PAS"),
+    "col.attempt": ("LAST ATTEMPT", "DERNIÈRE TENTATIVE"),
+    "unreach.snmp.never": ("never answered", "n'a jamais répondu"),
+    "unreach.snmp.failures": ("{count} attempt(s) failed in a row",
+                              "{count} tentative(s) échouée(s) d'affilée"),
+    "unreach.snmp.tried": ("SNMP, {credential}", "SNMP, {credential}"),
+    "unreach.snmp.every": ("every credential", "chaque identifiant"),
+    "unreach.neighbor.tried": ("not attempted", "non tentée"),
+    "unreach.neighbor.pending": ("nothing stops it: the next collect will try it",
+                                 "rien ne l'en empêche : la prochaine collecte l'essaiera"),
+    "unreach.names.outside": ("outside names.networks, so never asked",
+                              "hors de names.networks, donc jamais interrogé"),
+    "unreach.names.silent": ("no answer", "aucune réponse"),
+    "unreach.names.dropped": ("answered, but states the MAC {mac}, which is not this row's: "
+                              "the name was dropped",
+                              "a répondu, mais annonce la MAC {mac}, qui n'est pas celle de "
+                              "cette ligne : le nom a été écarté"),
+    "unreach.names.pending": ("not asked yet: run 'names ask'",
+                              "pas encore interrogé : lancez « names ask »"),
+    "unreach.names.off": ("names.probe is empty: no node is asked its name",
+                          "names.probe est vide : aucun nœud n'est interrogé sur son nom"),
+    "unreach.count": ("{snmp} address(es) that do not answer SNMP · {neighbor} neighbour(s) "
+                      "not polled · {names} node(s) that state no name",
+                      "{snmp} adresse(s) qui ne répondent pas en SNMP · {neighbor} voisin(s) "
+                      "non interrogé(s) · {names} nœud(s) qui n'annoncent aucun nom"),
+    "hint.unreachable.kind": (
+        "SNMP: a polled address that does not answer. Neighbour: announced by LLDP or CDP and "
+        "not polled. Name probe: a node that stated no name when asked (names.probe).",
+        "SNMP : une adresse interrogée qui ne répond pas. Voisin : annoncé par LLDP ou CDP et "
+        "non interrogé. Sondage de nom : un nœud qui n'a annoncé aucun nom quand on le lui a "
+        "demandé (names.probe)."),
+    "hint.unreachable.tried": (
+        "What was attempted: SNMP with the credential chosen for it, or every one of them; "
+        "nothing for a neighbour that was never tried; the protocols asked for a node.",
+        "Ce qui a été tenté : le SNMP avec l'identifiant choisi pour elle, ou avec chacun d'eux ; "
+        "rien pour un voisin jamais essayé ; les protocoles demandés pour un nœud."),
+    "hint.unreachable.why": (
+        "The reason, in the words of the rule that decided it. An address outside "
+        "discovery.allowed, a phone, a silent host: each is a different thing to fix, or to "
+        "leave as it is.",
+        "La raison, avec les mots de la règle qui l'a décidée. Une adresse hors de "
+        "discovery.allowed, un téléphone, un hôte muet : chacun est une chose différente à "
+        "corriger, ou à laisser telle quelle."),
     "web.do.collect": ("Collect", "Collecter"),
     "web.do.discover": ("Discover", "Découvrir"),
     "web.do.export": ("Export", "Exporter"),
     "web.do.push": ("Push", "Envoyer"),
+    "web.do.names": ("Ask names", "Demander les noms"),
     "web.do.title": ("Run now", "Lancer maintenant"),
     "web.do.running": ("{what} running for {seconds} s…", "{what} en cours depuis {seconds} s…"),
     "web.do.busy": ("Something is already running.", "Quelque chose tourne déjà."),

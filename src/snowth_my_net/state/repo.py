@@ -542,19 +542,21 @@ class Repo:
             "SELECT * FROM collect_status WHERE run_id = ? ORDER BY device_id, function",
             (run_id,)).fetchall()
 
-    def probe_names(self, now: int, source: str | None = None) -> dict[str, tuple[str, str]]:
-        """``{address: (name, source)}`` for names a host stated about itself, still valid.
+    def probe_names(self, now: int) -> dict[str, tuple[str, str]]:
+        """``{address: (name, source)}`` for names a host stated about itself, still valid."""
+        return {r[0]: (r[1], r[2]) for r in self.conn.execute(
+            "SELECT address, name, source FROM name_probe "
+            "WHERE status = 'ok' AND expires_at >= ?", (now,)) if r[1]}
 
-        When several sources answered for one address, the order of ``names.probe`` decides;
-        the caller passes them one at a time, most trusted first.
-        """
-        sql = ("SELECT address, name, source, mac FROM name_probe "
-               "WHERE status = 'ok' AND expires_at >= ?")
-        args: list = [now]
-        if source:
-            sql += " AND source = ?"
-            args.append(source)
-        return {r[0]: (r[1], r[2]) for r in self.conn.execute(sql, args) if r[1]}
+    def probe_outcomes(self, now: int) -> dict[str, dict[str, tuple[str, str, int]]]:
+        """``{address: {source: (status, mac, asked_at)}}`` for answers still valid — the
+        silences included, which ``probe_names`` leaves out and the Unreachable page needs."""
+        found: dict[str, dict[str, tuple[str, str, int]]] = {}
+        for row in self.conn.execute(
+                "SELECT address, source, status, mac, resolved_at FROM name_probe "
+                "WHERE expires_at >= ?", (now,)):
+            found.setdefault(row[0], {})[row[1]] = (row[2], row[3] or "", row[4])
+        return found
 
     def probe_claims(self, now: int) -> dict[str, str]:
         """``{address: mac}`` as the host stated it: a name whose MAC contradicts the node's

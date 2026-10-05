@@ -199,6 +199,106 @@ def links(loaded: LoadedConfig, repo: Repo, now: int, t) -> Table:
                  help_for(t, "links", columns, keys), keys)
 
 
+KINDS = ("snmp", "neighbor", "names")
+
+
+def _mac_of(text: str) -> str:
+    from snowth_my_net.snmp.values import normalize_mac
+
+    return normalize_mac(text) or ""
+
+
+def unreachable(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int,
+                kind: str | None = None) -> Table:
+    """What cannot be polled, and what cannot be joined: three kinds of silence, one table.
+
+    Each row says what was tried and, in the words of the rule that decided it, why it does not
+    work — an address outside the allowed range, a phone, a host that answered with another
+    adapter's MAC. Some of these are things to fix and some are on purpose; the page does not
+    pretend to know which, it makes every one visible.
+    """
+    from snowth_my_net.collect.discovery import unpolled_reason
+    from snowth_my_net.web import snmp
+
+    view = build_view(loaded, repo, now)
+    manual = repo.manual_settings()
+    found: dict[str, list[list]] = {name: [] for name in KINDS}
+    label = {name: t(f"kind.{name}") for name in KINDS}
+
+    # --- polled addresses that do not answer
+    targets = snmp.connections(loaded, repo)
+    for row in targets:
+        if row.status == "ok":
+            continue
+        why = row.error or t("unreach.snmp.never")
+        if row.failures:
+            why += f" · {t('unreach.snmp.failures', count=row.failures)}"
+        tried = t("unreach.snmp.tried", credential=row.credential or t("unreach.snmp.every"))
+        found["snmp"].append([label["snmp"], row.host, row.device_name, "", tried,
+                              Cell(why, tone="bad"), When(row.last_attempt)])
+
+    # --- neighbours announced and not polled (a neighbour that is a target is a row above)
+    polled = {row.host for row in targets}
+    device_macs = view.ctx.inputs.device_macs
+    seen: set[tuple[str, tuple[str, ...]]] = set()
+    for rn in view.neighbors:
+        if rn.remote_device_id is not None:
+            continue
+        addresses = tuple(rn.obs.mgmt_addresses)
+        # A device that is polled is never "unreachable": one that hears itself, or is heard
+        # through a chassis address, is recognised by its MAC even when the link did not resolve.
+        if _mac_of(rn.obs.chassis_id) in device_macs:
+            continue
+        if (rn.remote_name, addresses) in seen or any(a in polled for a in addresses):
+            continue
+        seen.add((rn.remote_name, addresses))
+        why = unpolled_reason(loaded.cfg, rn.obs, manual) or t("unreach.neighbor.pending")
+        found["neighbor"].append([label["neighbor"], addresses[0] if addresses else "",
+                                  rn.remote_name, _mac_of(rn.obs.chassis_id),
+                                  t("unreach.neighbor.tried"), why, When(rn.obs.last_seen)])
+
+    # --- nodes that stated no name when asked
+    cfg = loaded.cfg.names
+    if cfg.probe:
+        from snowth_my_net.enrich.probe import in_networks
+
+        outcomes = repo.probe_outcomes(now)
+        for node in view.nodes:
+            if not node.live or not node.current_ip or view.probed_name(node):
+                continue
+            ip = node.current_ip.ip
+            asked = outcomes.get(ip, {})
+            if not in_networks(ip, cfg.networks):
+                tried, why, when = "", t("unreach.names.outside"), None
+            elif not asked:
+                tried, why, when = "", t("unreach.names.pending"), None
+            else:
+                tried = ", ".join(sorted(asked))
+                when = max(at for _status, _mac, at in asked.values())
+                claimed = next((mac for status, mac, _at in asked.values()
+                                if status == "ok" and mac and mac != node.mac), "")
+                why = (t("unreach.names.dropped", mac=claimed) if claimed
+                       else t("unreach.names.silent"))
+            found["names"].append([label["names"], ip, view.hostname(node)[0], node.mac,
+                                   tried, why, When(when)])
+
+    counts = {name: len(found[name]) for name in KINDS}
+    chosen = [name for name in KINDS if kind in (None, "", name)]
+    rows = [row for name in chosen for row in found[name]]
+    columns = [(t("col.kind"), "text"), (t("col.address"), "text"), (t("col.name"), "text"),
+               (t("col.mac"), "text"), (t("col.tried"), "text"), (t("col.why"), "text"),
+               (t("col.attempt"), "text")]
+    keys = ["kind", None, None, None, "tried", "why", None]
+    views = [(t("web.kind.all", count=sum(counts.values())), "/unreachable", not kind)]
+    views += [(t(f"web.kind.{name}", count=counts[name]), f"/unreachable?kind={name}",
+               kind == name) for name in KINDS]
+    note = t("unreach.count", **counts)
+    if not cfg.probe:
+        note += " · " + t("unreach.names.off")
+    return Table(columns, rows[:limit], len(rows), t("web.no_unreachable"),
+                 help_for(t, "unreachable", columns, keys), keys, views, note)
+
+
 def runs(repo: Repo, t, limit: int = 50) -> Table:
     import json
 

@@ -63,9 +63,51 @@ def parse_network(value: Any) -> ipaddress.IPv4Network | ipaddress.IPv6Network:
         raise ValueError(f"expected an IP address or CIDR, got {value!r}") from None
 
 
+EVERYWHERE = ("0.0.0.0/0", "::/0")
+
+
+class ItemErrors(ValueError):
+    """Entries of a list that are wrong, by index: reported as ``path[index]: message``, so that
+    a list of twenty networks says which one it is, exactly as an item-by-item conversion did."""
+
+    def __init__(self, problems: list[tuple[int, str]]) -> None:
+        super().__init__("; ".join(f"[{i}]: {message}" for i, message in problems))
+        self.problems = problems
+
+
+def parse_networks(value: Any) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+    """A list of networks, or the word ``all``: every IPv4 and every IPv6 address.
+
+    ``all`` is written ``0.0.0.0/0`` and ``::/0``, so that everything downstream — the scope
+    check, the exclusions, the rule that a sweep lies inside the allowed range — keeps working
+    on networks and needs no special case for "everything".
+    """
+    if value is None:
+        return []
+    items = [value] if isinstance(value, str) and value.strip().casefold() == "all" else value
+    if not isinstance(items, list):
+        raise ValueError(f"expected a list of networks, or 'all', got {_describe(value)}")
+    networks: list = []
+    problems: list[tuple[int, str]] = []
+    for index, item in enumerate(items):
+        if isinstance(item, str) and item.strip().casefold() == "all":
+            networks += [ipaddress.ip_network(net) for net in EVERYWHERE]
+            continue
+        try:
+            networks.append(parse_network(item))
+        except ValueError as exc:
+            problems.append((index, str(exc)))
+    if problems:
+        raise ItemErrors(problems)
+    return networks
+
+
 Duration = Annotated[int, Converter("duration", parse_duration)]
 Network = Annotated[
     ipaddress.IPv4Network | ipaddress.IPv6Network, Converter("network", parse_network)
+]
+Networks = Annotated[
+    list[ipaddress.IPv4Network | ipaddress.IPv6Network], Converter("networks", parse_networks)
 ]
 
 
@@ -101,6 +143,9 @@ def _convert(tp: Any, value: Any, path: str, errors: list[str]) -> Any:
             if isinstance(marker, Converter):
                 try:
                     return marker.func(value)
+                except ItemErrors as exc:
+                    errors.extend(f"{_where(path)}[{i}]: {message}" for i, message in exc.problems)
+                    return None
                 except (ValueError, TypeError) as exc:
                     errors.append(f"{_where(path)}: {exc}")
                     return None

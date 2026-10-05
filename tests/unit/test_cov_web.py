@@ -1,4 +1,4 @@
-"""The read-only web interface: routing, rendering, escaping, and what it refuses."""
+"""The web interface: routing, rendering, escaping, and what it refuses."""
 
 from __future__ import annotations
 

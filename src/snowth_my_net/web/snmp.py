@@ -41,6 +41,8 @@ class Connection:
     error: str
     failures: int
     device_name: str
+    last_attempt: int | None = None     # when it was last tried
+    last_ok: int | None = None          # when it last answered
 
 
 def connections(loaded: LoadedConfig, repo: Repo) -> list[Connection]:
@@ -64,6 +66,7 @@ def connections(loaded: LoadedConfig, repo: Repo) -> list[Connection]:
             status=status, error=target["last_error"] or "",
             failures=target["consecutive_failures"],
             device_name=names.get(target["device_id"], "") or "",
+            last_attempt=target["last_attempt_at"], last_ok=target["last_ok_at"],
         ))
     rows.sort(key=lambda row: row.host)
     return rows

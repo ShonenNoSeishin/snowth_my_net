@@ -86,7 +86,7 @@ v2c sends its community in clear text (`check` warns about it).
 | Key | Default | Description |
 |---|---|---|
 | `discovery.seeds` | `[]` | Starting points: IPs, host names (resolved at every run), `host:port`. Seeds may be outside `allowed`, never inside `exclude`. |
-| `discovery.allowed` | `[]` | Ranges where devices may be queried (neighbours, sweeps, known devices). |
+| `discovery.allowed` | `[]` | Ranges where devices may be queried (neighbours, sweeps, known devices): a list of networks, or the word `all` for every IPv4 and IPv6 address. Empty: only the seeds. With `all`, an address a neighbour announces is polled wherever it points and receives the credentials tried against it — keep `discovery.exclude` for what must never be reached. |
 | `discovery.exclude` | `[]` | Addresses/ranges never queried. |
 | `discovery.follow_neighbors` | `true` | Explore LLDP/CDP neighbours (breadth-first) during `collect` and `discover`. |
 | `discovery.max_depth` | `3` | Hops from a seed. |
@@ -181,7 +181,8 @@ before any of this is turned on.
 | Key | Default | Description |
 |---|---|---|
 | `names.probe` | `[]` | Protocols to ask with: `netbios` (UDP/137), `llmnr` (UDP/5355), `mdns` (UDP/5353). Empty: nothing is asked. |
-| `names.networks` | `[]` | Only ask inside these networks. Empty: every node address — including ones behind a firewall that will drop the question and cost the whole timeout. |
+| `names.networks` | `[]` | Only ask inside these networks: a list, or the word `all` for every address. Empty means the same as `all`, but `check` asks you to write the choice down — a question sent where a firewall drops it costs the whole timeout. |
+| `names.at_export` | `true` | Ask while exporting too. `false` leaves the asking to `names ask` — scheduled with `schedule.names`, or from the *Ask names* button — so that an export stays fast. |
 | `names.timeout` | `1` | Per question. |
 | `names.budget` | `60` | Total time per export and per protocol; the rest waits for the next export. |
 | `names.cache_ttl` | `86400` | Lifetime of a name that was found. |
@@ -253,6 +254,7 @@ container's scheduler at start-up.
 |---|---|---|
 | `schedule.collect` | `*/10 * * * *` | Frequent: firewalls expire ARP entries within minutes, and the state accumulates observations between exports. `null` disables it. |
 | `schedule.export_push` | `0 11,18 * * *` | `run --no-collect` (export, then push when targets exist). |
+| `schedule.names` | none | `names ask`: ask every node its own name, answers cached. Needs `names.probe`; without it nothing is scheduled and `check` says so. |
 | `schedule.timezone` | process time zone | Only used to interpret the schedule (`CRON_TZ`); every output is UTC. |
 | `schedule.health_max_age` | `auto` | Allowed age of the last successful collect for `health`; `auto` = twice the longest gap of `schedule.collect`. |
 

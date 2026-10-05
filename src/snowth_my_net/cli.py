@@ -1369,6 +1369,47 @@ def _dns_check(loaded: LoadedConfig, args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_names(args: argparse.Namespace) -> int:
+    """Ask every node its own name now, for the protocols ``names.probe`` lists.
+
+    The same questions an export asks, on their own: scheduled, or from a button, they keep the
+    export fast. Answers are cached for ``names.cache_ttl``; ``--force`` asks again regardless.
+    """
+    from snowth_my_net.export.run import refresh_probes
+    from snowth_my_net.merge.view import build_view
+
+    loaded = load(args)
+    cfg = loaded.cfg.names
+    if not cfg.probe:
+        raise ManualError("names.probe is empty: nothing to ask (list netbios, llmnr or mdns)")
+    now = Clock().now()
+    with Locked(loaded, "names ask", loaded.cfg.general.lock_wait.default):
+        conn = open_db(loaded.paths.state_file)
+        try:
+            repo = Repo(conn)
+            view = build_view(loaded, repo, now)
+            ips = sorted({n.current_ip.ip for n in view.nodes if n.current_ip})
+            asked = refresh_probes(loaded, repo, ips, now, force=args.force)
+            outcomes = repo.probe_outcomes(now)
+        finally:
+            conn.close()
+    answered = {ip for ip in ips if any(status == "ok"
+                                        for status, _mac, _at in outcomes.get(ip, {}).values())}
+    result = {"nodes": len(ips), "asked": asked, "answered": len(answered),
+              "silent": len(ips) - len(answered), "protocols": list(cfg.probe)}
+    log.info("names ask: %s question(s), %s of %s node(s) have a name stated by the host",
+             asked, len(answered), len(ips))
+    if args.json:
+        out_json(result)
+    else:
+        out(f"{asked} question(s) sent; {len(answered)} of {len(ips)} node(s) have a name stated "
+            f"by the host ({', '.join(cfg.probe)}).")
+        if len(answered) < len(ips):
+            out("The others are listed, with the reason, on the Unreachable page of the web "
+                "interface.")
+    return EXIT_OK
+
+
 def _dns_probe(loaded: LoadedConfig, args: argparse.Namespace) -> int:
     """Ask a host its own name, the three ways, and show what each one answers.
 
@@ -1661,7 +1702,8 @@ def build_parser() -> argparse.ArgumentParser:
     h.set_defaults(func=cmd_hooks_test)
 
     p = sub.add_parser("web", parents=[common],
-                       help="serve the read-only web interface (web: in the configuration)")
+                       help="serve the web interface (web: in the configuration); "
+                            "'web passwd' sets a password")
     p.add_argument("--bind", help="address to listen on (default web.bind: 127.0.0.1)")
     p.add_argument("--port", type=int, help="port to listen on (default web.port: 8080)")
     p.add_argument("--trusted-proxy", action="append", metavar="CIDR", dest="trusted_proxy",
@@ -1682,6 +1724,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--misses-only", action="store_true",
                    help="flush: keep the names already found, ask again only for the rest")
     p.set_defaults(func=cmd_dns)
+
+    p = sub.add_parser("names", parents=[common],
+                       help="ask every node its own name (NetBIOS, LLMNR, mDNS: names.probe)")
+    p.add_argument("action", choices=["ask"])
+    p.add_argument("--force", action="store_true",
+                   help="ask again even where an answer is still cached")
+    p.set_defaults(func=cmd_names)
 
     p = sub.add_parser("node", parents=[common],
                        help="name a MAC address by hand (kept across collects), or list names")
