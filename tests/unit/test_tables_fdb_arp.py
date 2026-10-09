@@ -63,3 +63,13 @@ def test_invalid_and_unknown_neighbour_states_are_not_bindings():
     for state in (5, 6, 7):
         assert arp.parse_net_to_physical(phys, {}, {suffix: state}) == []
     assert arp.parse_net_to_physical(phys, {}, {suffix: 1})
+
+
+def test_a_bridge_port_missing_from_a_partial_table_is_not_taken_for_an_ifindex():
+    from snowth_my_net.collect.tables import bridge
+    unmapped = set()
+    entries = bridge.parse_dot1d({A0: 3, A1: 25}, {}, {3: 30}, {}, unmapped=unmapped)
+    assert [(e.mac, e.ifindex) for e in entries] == [(bridge.decode_mac_index(A0), 30)]
+    assert unmapped == {25}
+    whole = bridge.parse_dot1d({A0: 3, A1: 25}, {}, {}, {})          # no table at all: identity
+    assert sorted(e.ifindex for e in whole) == [3, 25]

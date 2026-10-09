@@ -97,6 +97,8 @@ vers elle, et celle qu'un hôte construit à partir de sa propre MAC ne dit rien
 ne dise déjà. Une case vide signifie donc qu'aucune adresse utilisable n'a été vue, et elle le dit
 honnêtement.
 
+Une adresse est aussi écartée de l'élection quand elle est plus vieille que `nodes.current_ip_max_age` (7 jours) par rapport à la dernière observation du nœud lui-même. Et la case reste vide quand la MAC a plus de `nodes.max_ips_per_mac` adresses (une passerelle qui répond en proxy-ARP, un hyperviseur), ou deux adresses vues au même instant : on ne peut pas distinguer la bonne, et un mauvais nom rattaché à elle serait pire que pas de nom. Les adresses restent dans `snapshot.json`.
+
 ### Inventaire ou mémoire
 
 Une table MAC garde ce qu'elle a appris pendant `nodes.retention_days` (30 jours), donc la liste

@@ -149,6 +149,7 @@ async def fdb(client: SnmpClient, r: DeviceResult, rows: Rows) -> None:
     """
     rows.key = "entries"
     found: dict[tuple[str, int, int], bridge.FdbEntry] = {}
+    unmapped: set[int] = set()
 
     def publish(entries: list[bridge.FdbEntry]) -> None:
         for entry in entries:
@@ -160,7 +161,8 @@ async def fdb(client: SnmpClient, r: DeviceResult, rows: Rows) -> None:
         r.bridge_ports = ports
         await walk_into(client, rows, "pvid", oids.DOT1Q_PVID)
         port_pvid = bridge.pvids(rows.column("pvid"))
-        r.pvid.update({ports.get(bp, bp): vlan for bp, vlan in port_pvid.items()})
+        r.pvid.update({(ports[bp] if ports else bp): vlan for bp, vlan in port_pvid.items()
+                       if not ports or bp in ports})
         await walk_into(client, rows, "qport", oids.DOT1Q_TP_FDB_PORT)
         qbridge = bool(rows.column("qport"))
         if qbridge:
@@ -170,13 +172,13 @@ async def fdb(client: SnmpClient, r: DeviceResult, rows: Rows) -> None:
             r.vlans.update(bridge.vlan_names(rows.column("vlanname")))
             publish(bridge.parse_qbridge(rows.column("qport"), rows.column("qstatus"),
                                          bridge.fdb_id_to_vlan(rows.column("vlanfdb")), ports,
-                                         port_pvid))
+                                         port_pvid, unmapped))
         else:
             await walk_into(client, rows, "dport", oids.DOT1D_TP_FDB_PORT)
             if rows.column("dport"):
                 await walk_into(client, rows, "dstatus", oids.DOT1D_TP_FDB_STATUS)
                 publish(bridge.parse_dot1d(rows.column("dport"), rows.column("dstatus"), ports,
-                                           port_pvid))
+                                           port_pvid, unmapped=unmapped))
 
         indexing = r.settings.vlan_indexing
         if indexing == "off":
@@ -210,11 +212,17 @@ async def fdb(client: SnmpClient, r: DeviceResult, rows: Rows) -> None:
                 failed.append(f"VLAN {vlan}: {exc.kind if exc.kind == 'timeout' else exc}")
             vlan_ports = bridge.base_ports(vbase) or ports
             publish(bridge.parse_dot1d(vport, vstatus, vlan_ports, {}, vlan=vlan,
-                                       method="cisco_vlan"))
+                                       method="cisco_vlan", unmapped=unmapped))
         if failed:
             raise SnmpError("per-VLAN bridge instances failed: " + "; ".join(failed[:5])
                             + (f" (+{len(failed) - 5} more)" if len(failed) > 5 else ""))
     finally:
+        if unmapped:
+            shown = ", ".join(str(p) for p in sorted(unmapped)[:8])
+            r.warnings.append(
+                f"{len(unmapped)} bridge port(s) absent from dot1dBasePortIfIndex ({shown}"
+                f"{'…' if len(unmapped) > 8 else ''}): the MACs learned there are not placed, "
+                "since nothing says which interface they are")
         r.fdb = list(found.values())
         rows.columns["entries"] = {(i,): e for i, e in enumerate(r.fdb)}
 

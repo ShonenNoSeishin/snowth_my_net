@@ -307,19 +307,34 @@ class NodeView:
             name = name.split(".", 1)[0]
         return name
 
+    def exported_nodes(self) -> list[Node]:
+        """The nodes nodes.csv and the map carry: those seen at the last full collect, so that
+        a host gone for three weeks is not listed as if it were there (``export.nodes.live_only``).
+        The web page keeps showing the memory, with its own filter."""
+        if not self.loaded.cfg.export.nodes.live_only:
+            return self.nodes
+        return [n for n in self.nodes if n.live]
+
+    @staticmethod
+    def observed_vlan(position) -> str:
+        """The VLAN, only when the MAC table or a VLAN context stated it: one deduced from the
+        port's PVID or from a filtering-database id is a guess, and a guess is not exported."""
+        return str(position.vlan) if position.vlan and position.vlan_source in (
+            "fdb", "context") else ""
+
     def rows(self) -> list[list[str]]:
         """nodes.csv rows, most recent first."""
         cfg = self.loaded.cfg.nodes
         merge = self.loaded.cfg.export.nodes.merge_hostnames
         rows = []
-        for node in self.nodes:
+        for node in self.exported_nodes():
             vendor = self.vendor(node)
             ip = node.current_ip.ip if node.current_ip else ""
             dns = self.hostname(node)[0] if merge else (self.dns_name(ip) if ip else "")
             positions = node.positions if cfg.positions == "all" else node.positions[:1]
             for p in positions:
                 rows.append([node.mac, vendor, ip, dns, self.device_name(p.device_id),
-                             self.port_name(p.device_id, p.ifindex), str(p.vlan or ""),
+                             self.port_name(p.device_id, p.ifindex), self.observed_vlan(p),
                              iso_z(p.last_seen)])
             if not positions and cfg.include_unlocated:
                 rows.append([node.mac, vendor, ip, dns, "", "", "", iso_z(node.last_seen)])

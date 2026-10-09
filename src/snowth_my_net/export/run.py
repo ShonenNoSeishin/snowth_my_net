@@ -146,7 +146,7 @@ def nodes_csv(loaded: LoadedConfig, repo: Repo, now: int, ptr_lookup=None,
     if not rows and "nodes" not in cfg.export.allow_empty:
         raise EmptyExport("nodes.csv would have no data row")
     header = nodes_header(cfg.export.nodes.include_name, cfg.export.nodes.include_description)
-    return render_csv(header, rows, cfg.export.csv.line_terminator)
+    return render_csv(header, rows, cfg.export.csv.line_terminator, cfg.export.csv.formula_safe)
 
 
 def links_csv(loaded: LoadedConfig, views: ViewCache) -> bytes:
@@ -154,7 +154,8 @@ def links_csv(loaded: LoadedConfig, views: ViewCache) -> bytes:
     rows = views.get().link_rows()
     if not rows and "links" not in cfg.export.allow_empty:
         raise EmptyExport("links.csv would have no data row")
-    return render_csv(LINKS_HEADER, rows, cfg.export.csv.line_terminator)
+    return render_csv(LINKS_HEADER, rows, cfg.export.csv.line_terminator,
+                      cfg.export.csv.formula_safe)
 
 
 def export(loaded: LoadedConfig, repo: Repo, clock: Clock,
@@ -178,7 +179,8 @@ def export(loaded: LoadedConfig, repo: Repo, clock: Clock,
                 outputs.append((out_dir / "devices.csv", devices_csv(
                     devices, names, cfg.export.devices.include_type,
                     cfg.export.csv.line_terminator,
-                    allow_empty="devices" in cfg.export.allow_empty)))
+                    allow_empty="devices" in cfg.export.allow_empty,
+                    safe=cfg.export.csv.formula_safe)))
             elif name == "nodes":
                 outputs.append((out_dir / "nodes.csv",
                                 nodes_csv(loaded, repo, now, ptr_lookup, views)))

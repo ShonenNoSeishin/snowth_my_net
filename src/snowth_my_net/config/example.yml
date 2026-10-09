@@ -96,6 +96,8 @@ nodes:
   retention_days: 30
   prefer_ipv4: true
   current_ip_window: 24h
+  current_ip_max_age: 7d           # an address older than this, next to the node itself, is not elected
+  max_ips_per_mac: 3               # more distinct addresses: none elected (proxy-ARP, gateway)
   transit_window: 30m             # a MAC seen on two access ports within this window stays
                                    # on the one with the fewest MACs (the other is a transit)
   ignore_macs: []
@@ -124,6 +126,9 @@ export:
   allow_empty: []                  # CSV files allowed to have no data row
   csv:
     line_terminator: crlf          # crlf (RFC 4180) | lf
+    formula_safe: true             # a cell starting with = + - @ gets a leading apostrophe
+  nodes:
+    live_only: true                # nodes.csv and the map: only nodes seen at the last full collect
   devices:
     include_type: true             # trailing "Device Type" column (empty = no sure evidence)
   map:

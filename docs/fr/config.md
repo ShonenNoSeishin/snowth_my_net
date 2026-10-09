@@ -157,6 +157,8 @@ Comment les observations MAC et ARP deviennent des positions de nœuds (voir `ex
 | `nodes.include_link_local_only` | `false` | Lister une MAC connue par rien d'autre qu'une adresse lien-local, dans un cache de voisinage : aucun port, et rien pour la joindre. Désactivé, car tout hôte IPv6 laisse une telle entrée, donc un routeur qui tient un cache de voisinage produit des centaines de ces lignes, chacune une MAC et six colonnes vides. `explain` répond toujours pour elles, et la moindre autre information fait revenir la ligne. |
 | `nodes.elect_link_local` | `false` | Une adresse lien-local (`fe80::`) peut-elle être l'IP courante ? Désactivé : elle reste dans la liste des adresses, dans `explain` et dans `snapshot.json`, mais n'est jamais élue — rien ne route vers elle, aucun nom ne la résout, aucun importateur ne peut s'en servir. Qu'elle reprenne la MAC (`fe80::1e0b:8bff:fec0:eb62` pour `1c:0b:8b:c0:eb:62`) ou qu'elle porte un identifiant aléatoire, comme Windows les fabrique, une IP vide signifie alors honnêtement qu'aucune adresse utilisable n'a été vue. |
 | `nodes.current_ip_window` | `86400` | Candidates à l'IP courante : vues dans cette fenêtre par rapport à la plus récente. |
+| `nodes.current_ip_max_age` | `604800` | Une adresse vue plus longtemps avant la dernière observation du nœud lui-même n'est pas élue (un cache ARP qui en a gardé une des semaines). |
+| `nodes.max_ips_per_mac` | `3` | Une MAC qui a plus d'adresses distinctes que cela (proxy-ARP, passerelle, hyperviseur), ou deux adresses vues au même instant, n'en reçoit aucune : la case reste vide plutôt que de nommer la mauvaise. |
 | `nodes.transit_window` | `1800` | Une MAC vue sur deux ports d'accès dans cette fenêtre reste sur le port qui porte le moins de MAC ; l'autre est du transit. |
 | `nodes.ignore_macs` | `[]` | MAC jamais rapportées. |
 | `nodes.ignore_mac_prefixes` | VRRP, HSRP | Préfixes jamais rapportés (précision au quartet) : `00:00:5e:00:01`, `00:00:5e:00:02`, `00:00:0c:07:ac`, `00:00:0c:9f:f`. |
@@ -210,6 +212,8 @@ ligne à nommer, la réponse vient d'autre chose et le nom est écarté.
 | `export.files` | tous | `devices`, `nodes`, `links`, `snapshot`, `map`. |
 | `export.allow_empty` | `[]` | Fichiers CSV autorisés à n'avoir aucune ligne de données. Sinon un CSV vide n'écrase pas le précédent, n'est pas poussé, et la commande sort avec le code 1. |
 | `export.csv.line_terminator` | `crlf` | `crlf` (RFC 4180) ou `lf`. |
+| `export.csv.formula_safe` | `true` | Une cellule de texte qui commence par `=`, `+`, `-` ou `@` (un nom annoncé par un hôte) reçoit une apostrophe devant, pour qu'un tableur ne l'exécute jamais. `false` pour un importeur qui ne la supporte pas. |
+| `export.nodes.live_only` | `true` | `nodes.csv` et la carte portent les nœuds vus à la dernière collecte complète, pas la mémoire gardée `nodes.retention_days`. `false` ramène la mémoire. |
 | `export.devices.include_type` | `true` | Colonne finale `"Device Type"`. |
 | `export.nodes.include_name` | `false` | Ajouter une première colonne `Name` à `nodes.csv` avec les noms donnés à la main (`node name`). Désactivé par défaut pour qu'un importateur continue de lire les mêmes colonnes. |
 | `export.nodes.include_description` | `false` | Idem, pour les descriptions (`node describe`). |

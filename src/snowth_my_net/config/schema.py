@@ -294,6 +294,10 @@ class NodesCfg:
     elect_link_local: bool = False        # an fe80:: is not an answer to "which address is it?"
     include_link_local_only: bool = False    # a MAC known by nothing else at all: no row
     current_ip_window: Duration = 86400
+    # An address this far behind the node's own freshest sighting is not elected, and a MAC with
+    # more distinct addresses than max_ips_per_mac (proxy-ARP, gateway) is given none.
+    current_ip_max_age: Duration = 604800
+    max_ips_per_mac: int = 3
     transit_window: Duration = 1800
     ignore_macs: list[str] = field(default_factory=list)
     ignore_mac_prefixes: list[str] = field(default_factory=lambda: list(DEFAULT_IGNORED_PREFIXES))
@@ -377,6 +381,7 @@ class OuiCfg:
 @dataclass
 class CsvCfg:
     line_terminator: Literal["crlf", "lf"] = "crlf"
+    formula_safe: bool = True        # a cell starting with = + - @ gets a leading apostrophe
 
 
 @dataclass
@@ -389,6 +394,7 @@ class NodesExportCfg:
     include_name: bool = False       # a "Name" column: off, so that nodes.csv keeps its shape
     include_description: bool = False
     merge_hostnames: bool = True     # "DNS Name" carries the best of the three, in that order
+    live_only: bool = True           # nodes.csv and the map: nodes seen at the last full collect
 
 
 @dataclass

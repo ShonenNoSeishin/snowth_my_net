@@ -50,8 +50,10 @@ the most recent line as the current position; the other lines are its roaming hi
 | DNS Name | With `export.nodes.merge_hostnames` (the default): the best hostname known — written by hand, else the PTR of the IP, else what the host stated about itself (`names.probe`). `snapshot.json` records which of the three it was. With the key off: the PTR alone. |
 | Switch | Exactly a `Device Name` of `devices.csv`; empty when no access port is known. |
 | Port | Short interface name (`Gi1/0/5`, `1/1/12`, `ge-0/0/3`). |
-| VLAN | From the MAC table (Q-BRIDGE FDB or Cisco per-VLAN instance), else the port VLAN (PVID). |
+| VLAN | Only what the MAC table stated (Q-BRIDGE FDB or Cisco per-VLAN instance). Empty when the VLAN could only be deduced from the port VLAN (PVID) or a filtering-database id: a guess is not exported. |
 | Last Seen | Last observation of this position (not the export time). For a line without position: last observation of the MAC. |
+
+Only the nodes seen at the last full collect are listed (`export.nodes.live_only`): a host gone for three weeks is memory, not inventory. `false` brings the whole retention back.
 
 Why a MAC is (or is not) on a port: `snowth_my_net explain <mac|ip>`.
 

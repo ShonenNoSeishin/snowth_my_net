@@ -166,6 +166,7 @@ class Node:
     first_seen: int = 0
     last_seen: int = 0
     live: bool = False                   # seen during the last walk of a device that saw it
+    ip_ambiguous: str = ""               # why no address was elected though some are known
 
     @property
     def current(self) -> Sighting | None:
@@ -365,9 +366,21 @@ def resolve_mac(ctx: MergeContext, mac: str) -> Node:
         # node.ips, in explain and in snapshot.json.
         candidates = [i for i in candidates if not is_link_local(i.ip)]
     if candidates:
+        # An address is only the node's own while it is about as fresh as the node: one an
+        # ARP cache kept for weeks, for a host the MAC tables still see today, proves nothing.
+        node_seen = max([s.last_seen for s in node.sightings] + [i.last_seen for i in candidates])
+        candidates = [i for i in candidates if i.last_seen >= node_seen - cfg.current_ip_max_age]
+    if candidates:
         newest_ip = max(i.last_seen for i in candidates)
         recent = [i for i in candidates if i.last_seen >= newest_ip - cfg.current_ip_window]
-        node.current_ip = min(recent, key=lambda i: _ip_rank(i, cfg.prefer_ipv4))
+        best = min(recent, key=lambda i: _ip_rank(i, cfg.prefer_ipv4))
+        same_family = [i for i in recent if i.family == best.family]
+        if len(same_family) > cfg.max_ips_per_mac:
+            node.ip_ambiguous = f"{len(same_family)} addresses (more than {cfg.max_ips_per_mac})"
+        elif any(i is not best and i.last_seen == best.last_seen for i in same_family):
+            node.ip_ambiguous = "several addresses seen at the same time"
+        else:
+            node.current_ip = best
 
     seen = [s.last_seen for s in node.sightings] + [i.last_seen for i in node.ips]
     firsts = [s.first_seen for s in node.sightings] + [i.first_seen for i in node.ips]

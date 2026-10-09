@@ -94,12 +94,22 @@ def _learned(status: object) -> bool:
     return status is None or _int(status) == STATUS_LEARNED
 
 
-def _ifindex(port: int, ports: dict[int, int]) -> int:
-    return ports.get(port, port) if ports else port
+def _ifindex(port: int, ports: dict[int, int], unmapped: set[int] | None = None) -> int | None:
+    """The ifIndex of a bridge port. With no base-port table at all the port number is taken as
+    the ifIndex (the agents that do not publish one number them alike). With a table that lacks
+    the port, nothing says which interface it is: ``None``, and the port is reported."""
+    if not ports:
+        return port
+    if port in ports:
+        return ports[port]
+    if unmapped is not None:
+        unmapped.add(port)
+    return None
 
 
 def parse_qbridge(port_col: Column, status_col: Column, fdb_vlans: dict[int, int],
-                  ports: dict[int, int], port_pvid: dict[int, int]) -> list[FdbEntry]:
+                  ports: dict[int, int], port_pvid: dict[int, int],
+                  unmapped: set[int] | None = None) -> list[FdbEntry]:
     entries = []
     for suffix, value in port_col.items():
         port = _int(value)
@@ -117,13 +127,15 @@ def parse_qbridge(port_col: Column, status_col: Column, fdb_vlans: dict[int, int
             vlan, source = port_pvid[port], "pvid"
         else:
             vlan, source = 0, "none"
-        entries.append(FdbEntry(mac, _ifindex(port, ports), vlan, source, "qbridge"))
+        ifindex = _ifindex(port, ports, unmapped)
+        if ifindex is not None:
+            entries.append(FdbEntry(mac, ifindex, vlan, source, "qbridge"))
     return entries
 
 
 def parse_dot1d(port_col: Column, status_col: Column, ports: dict[int, int],
                 port_pvid: dict[int, int], vlan: int | None = None,
-                method: str = "bridge") -> list[FdbEntry]:
+                method: str = "bridge", unmapped: set[int] | None = None) -> list[FdbEntry]:
     """``dot1dTpFdbTable``; ``vlan`` is known when walked in a Cisco per-VLAN context."""
     entries = []
     for suffix, value in port_col.items():
@@ -139,5 +151,7 @@ def parse_dot1d(port_col: Column, status_col: Column, ports: dict[int, int],
             entry_vlan, source = port_pvid[port], "pvid"
         else:
             entry_vlan, source = 0, "none"
-        entries.append(FdbEntry(mac, _ifindex(port, ports), entry_vlan, source, method))
+        ifindex = _ifindex(port, ports, unmapped)
+        if ifindex is not None:
+            entries.append(FdbEntry(mac, ifindex, entry_vlan, source, method))
     return entries

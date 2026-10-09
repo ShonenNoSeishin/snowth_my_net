@@ -53,8 +53,10 @@ historique d'itinérance.
 | DNS Name | Avec `export.nodes.merge_hostnames` (par défaut) : le meilleur nom d'hôte connu — écrit à la main, sinon le PTR de l'IP, sinon ce que l'hôte a annoncé sur lui-même (`names.probe`). `snapshot.json` enregistre lequel des trois. Clé désactivée : le PTR seul. |
 | Switch | Exactement un `Device Name` de `devices.csv` ; vide quand aucun port d'accès n'est connu. |
 | Port | Nom court de l'interface (`Gi1/0/5`, `1/1/12`, `ge-0/0/3`). |
-| VLAN | D'après la table MAC (FDB Q-BRIDGE ou instance Cisco par VLAN), sinon le VLAN du port (PVID). |
+| VLAN | Seulement ce que la table MAC a indiqué (FDB Q-BRIDGE ou instance Cisco par VLAN). Vide quand le VLAN n'a pu être que déduit du VLAN du port (PVID) ou d'un identifiant de base de filtrage : une supposition n'est pas exportée. |
 | Last Seen | Dernière observation de cette position (pas l'heure de l'export). Pour une ligne sans position : dernière observation de la MAC. |
+
+Seuls les nœuds vus à la dernière collecte complète sont listés (`export.nodes.live_only`) : un hôte parti depuis trois semaines est de la mémoire, pas de l'inventaire. `false` ramène toute la rétention.
 
 Pourquoi une MAC est (ou n'est pas) sur un port : `snowth_my_net explain <mac|ip>`.
 

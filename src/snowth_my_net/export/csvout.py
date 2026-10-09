@@ -30,12 +30,22 @@ class EmptyExport(Exception):
     """A CSV would have no data row: it is neither written nor pushed."""
 
 
-def render_csv(header: str, rows: Iterable[Sequence[str]], line_terminator: str = "crlf") -> bytes:
+FORMULA_STARTS = ("=", "+", "-", "@")
+
+
+def formula_safe(cell: object) -> object:
+    """A text cell a spreadsheet would run as a formula (a name a host announced, a sysDescr)
+    gets a leading apostrophe; numbers and empty cells are left as they are."""
+    return "'" + cell if isinstance(cell, str) and cell.startswith(FORMULA_STARTS) else cell
+
+
+def render_csv(header: str, rows: Iterable[Sequence[str]], line_terminator: str = "crlf",
+               safe: bool = False) -> bytes:
     eol = EOL[line_terminator]
     buf = io.StringIO(newline="")
     buf.write(header + eol)
     writer = csv.writer(buf, lineterminator=eol, quoting=csv.QUOTE_MINIMAL)
-    writer.writerows(rows)
+    writer.writerows([[formula_safe(c) for c in row] for row in rows] if safe else rows)
     return buf.getvalue().encode("utf-8")
 
 
@@ -68,9 +78,9 @@ def device_rows(devices: Sequence, names: dict[int, str], include_type: bool) ->
 
 
 def devices_csv(devices: Sequence, names: dict[int, str], include_type: bool,
-                line_terminator: str, allow_empty: bool = False) -> bytes:
+                line_terminator: str, allow_empty: bool = False, safe: bool = False) -> bytes:
     rows = device_rows(devices, names, include_type)
     if not rows and not allow_empty:
         raise EmptyExport("devices.csv would have no data row")
     header = DEVICES_HEADER + (DEVICES_TYPE_COLUMN if include_type else "")
-    return render_csv(header, rows, line_terminator)
+    return render_csv(header, rows, line_terminator, safe)

@@ -91,6 +91,8 @@ A link-local address (`fe80::`) is never elected (`nodes.elect_link_local`): not
 and the one a host builds from its own MAC says nothing the MAC column does not. An empty cell
 therefore means no usable address was seen, and it says so honestly.
 
+An address is also left out of the election when it is older than `nodes.current_ip_max_age` (7 days) next to the node's own freshest sighting. And the cell stays empty when the MAC has more than `nodes.max_ips_per_mac` addresses (a gateway answering proxy-ARP, a hypervisor), or two addresses seen at the same instant: the address cannot be told from the right one, and a wrong name attached to it would be worse than none. The addresses stay in `snapshot.json`.
+
 ### Inventory or memory
 
 A MAC table keeps what it learned for `nodes.retention_days` (30 days), so the list is part

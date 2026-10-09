@@ -153,6 +153,8 @@ How MAC and ARP observations become node positions (see `explain`).
 | `nodes.include_link_local_only` | `false` | List a MAC known by nothing but a link-local address, in a neighbour cache: no port, and nothing to reach it by. Off, because every IPv6 host leaves such an entry, so a router that keeps a neighbour cache produces hundreds of these rows, each one a MAC and six empty columns. `explain` still answers for them, and any other evidence brings the row back. |
 | `nodes.elect_link_local` | `false` | May a link-local (`fe80::`) address be the current IP? Off: it stays in the list of addresses, in `explain` and in `snapshot.json`, but is never elected — nothing routes to it, no name resolves it, and no importer can use it. Whether it repeats the MAC (`fe80::1e0b:8bff:fec0:eb62` for `1c:0b:8b:c0:eb:62`) or carries a random identifier, as Windows makes them, an empty IP then honestly means no usable address was seen. |
 | `nodes.current_ip_window` | `86400` | Candidates for the current IP: seen within this window of the newest one. |
+| `nodes.current_ip_max_age` | `604800` | An address seen longer ago than this before the node's own freshest sighting is not elected (an ARP cache that kept one for weeks). |
+| `nodes.max_ips_per_mac` | `3` | A MAC with more distinct addresses than this (proxy-ARP, gateway, hypervisor), or two addresses seen at the same instant, is given none: the cell stays empty rather than naming the wrong one. |
 | `nodes.transit_window` | `1800` | A MAC seen on two access ports within this window stays on the port with the fewest MACs; the other is transit. |
 | `nodes.ignore_macs` | `[]` | MACs never reported. |
 | `nodes.ignore_mac_prefixes` | VRRP, HSRP | Prefixes never reported (nibble precision): `00:00:5e:00:01`, `00:00:5e:00:02`, `00:00:0c:07:ac`, `00:00:0c:9f:f`. |
@@ -206,6 +208,8 @@ being named, the answer came from something else and the name is dropped.
 | `export.files` | all | `devices`, `nodes`, `links`, `snapshot`, `map`. |
 | `export.allow_empty` | `[]` | CSV files allowed to have no data row. Otherwise an empty CSV is neither written over the previous one nor pushed, and the command exits 1. |
 | `export.csv.line_terminator` | `crlf` | `crlf` (RFC 4180) or `lf`. |
+| `export.csv.formula_safe` | `true` | A text cell starting with `=`, `+`, `-` or `@` (a name a host announced) gets a leading apostrophe, so a spreadsheet never runs it. `false` for an importer that cannot take it. |
+| `export.nodes.live_only` | `true` | `nodes.csv` and the map carry the nodes seen at the last full collect, not the memory kept for `nodes.retention_days`. `false` brings the memory back. |
 | `export.devices.include_type` | `true` | Trailing `"Device Type"` column. |
 | `export.nodes.include_name` | `false` | Add a first `Name` column to `nodes.csv` with the names given by hand (`node name`). Off by default so that an importer keeps reading the same columns. |
 | `export.nodes.include_description` | `false` | The same, for the descriptions (`node describe`). |

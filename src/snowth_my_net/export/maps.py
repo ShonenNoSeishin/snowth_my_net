@@ -81,7 +81,7 @@ def build_graph(view, devices: list[dict], endpoints: str) -> Graph:
             "Protocol": link.protocol, "Last seen": iso_z(link.last_seen)}))
 
     if endpoints != "none":
-        hosts = [(n, n.current) for n in view.nodes if n.current is not None]
+        hosts = [(n, n.current) for n in view.exported_nodes() if n.current is not None]
         mode = endpoints
         if mode == "all" and len(hosts) > MAX_ENDPOINT_NODES:
             log.warning("map: %d hosts, more than %d: grouping them by port", len(hosts),

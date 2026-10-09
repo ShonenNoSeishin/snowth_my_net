@@ -2,7 +2,7 @@
 00:00:5e:00:53:a0,"ICANN, IANA Department",192.0.2.50,pc-a0.example.net,sw-access-01,1/1/3,10,<TS>
 00:00:5e:00:53:a1,"ICANN, IANA Department",192.0.2.51,,sw-access-01,1/1/4,20,<TS>
 00:00:5e:00:53:b0,"ICANN, IANA Department",198.51.100.20,,,,,<TS>
-00:00:5e:00:53:c0,"ICANN, IANA Department",192.0.2.40,,sw-generic-02,1,30,<TS>
+00:00:5e:00:53:c0,"ICANN, IANA Department",192.0.2.40,,sw-generic-02,1,,<TS>
 00:00:5e:00:53:c1,"ICANN, IANA Department",192.0.2.60,,,,,<TS>
 00:00:5e:00:53:d0,"ICANN, IANA Department",,,sw-cisco-03,Gi1/0/1,10,<TS>
 00:00:5e:00:53:d1,"ICANN, IANA Department",,,sw-cisco-03,Gi1/0/2,1,<TS>

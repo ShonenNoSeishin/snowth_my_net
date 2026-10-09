@@ -174,3 +174,36 @@ def test_when_no_candidate_is_current_the_old_rule_still_decides():
     data = inputs([fdb(HOST, 1, 3, seen=NOW - 60, run=9), fdb(HOST, 2, 7, seen=NOW - 60, run=9),
                    *filler(1, 9, 1, run=11), *filler(2, 9, 1, run=11)])
     assert len(where(node(data))) == 1
+
+
+# ---- the current IP is only the node's own while it is fresh and unambiguous
+
+
+def test_an_address_kept_by_an_arp_cache_for_weeks_is_not_the_nodes_ip():
+    data = inputs([fdb(HOST, 1, 3)], [arp(HOST, "10.0.0.5", seen=NOW - 25 * 86400)])
+    n = node(data)
+    assert n.current_ip is None and [i.ip for i in n.ips] == ["10.0.0.5"]
+    fresh = inputs([fdb(HOST, 1, 3)], [arp(HOST, "10.0.0.5", seen=NOW - 3 * 86400)])
+    assert node(fresh).current_ip.ip == "10.0.0.5"          # a quiet host keeps its address
+
+
+def test_two_addresses_seen_at_the_same_instant_elect_none():
+    data = inputs([fdb(HOST, 1, 3)], [arp(HOST, "10.0.0.9"), arp(HOST, "10.0.0.5")])
+    n = node(data)
+    assert n.current_ip is None and "same time" in n.ip_ambiguous
+    older = inputs([fdb(HOST, 1, 3)], [arp(HOST, "10.0.0.9"), arp(HOST, "10.0.0.5", seen=NOW - 60)])
+    assert node(older).current_ip.ip == "10.0.0.9"          # a clear newest still wins
+
+
+def test_a_mac_answering_for_many_addresses_gets_none_of_them():
+    many = [arp(HOST, f"10.0.0.{i}", seen=NOW - i) for i in range(1, 6)]
+    n = node(inputs([fdb(HOST, 1, 3)], many))
+    assert n.current_ip is None and "more than 3" in n.ip_ambiguous and len(n.ips) == 5
+    three = node(inputs([fdb(HOST, 1, 3)], many[:3]))
+    assert three.current_ip.ip == "10.0.0.1"
+
+
+def test_an_ipv4_and_an_ipv6_seen_together_still_elect_the_ipv4():
+    data = inputs([fdb(HOST, 1, 3)], [arp(HOST, "10.0.0.5"),
+                                      arp(HOST, "2001:db8::5", family=6)])
+    assert node(data).current_ip.ip == "10.0.0.5"
