@@ -344,7 +344,8 @@ class Site:
 
     def table_page(self, active: str, title: str, table: pages.Table, subtitle: str,
                    link_first: str = "", t=None, link_column: int = 0, before: str = "",
-                   refresh: int = 0, disagreeing_only: bool = False) -> bytes:
+                   refresh: int = 0, disagreeing_only: bool = False,
+                   extra: str = "") -> bytes:
         t = t or self.t
         if not table.rows:
             return self.shell(active, title, before + f'<p class="empty">{esc(table.empty)}</p>',
@@ -359,10 +360,10 @@ class Site:
         for row in table.rows:
             cells = []
             for index, (value, kind) in enumerate(zip(row, classes, strict=True)):
-                title = ""
+                hint = ""
                 if isinstance(value, Cell | Editable):
                     main, note = value.text, getattr(value, "note", "")
-                    title = getattr(value, "title", "")
+                    hint = getattr(value, "title", "")
                 else:
                     main, note = str(value), ""
                 if isinstance(value, Editable):
@@ -379,7 +380,7 @@ class Site:
                     items = "".join(f"<li>{esc(one)}</li>" for one in more)
                     text += (f'<details class="more"><summary>+{len(more)}</summary>'
                              f"<ul>{items}</ul></details>")
-                hover = f' title="{esc(title)}"' if title else ""
+                hover = f' title="{esc(hint)}"' if hint else ""
                 tone = f" {value.tone}" if getattr(value, "tone", "") else ""
                 cells.append(f'<td class="{kind}{tone}"{hover}>{text}</td>')
             body.append("<tr>" + "".join(cells) + "</tr>")
@@ -412,7 +413,7 @@ class Site:
         controls = (f'<div class="bar"><input type="search" id="q" '
                     f'placeholder="{esc(t("web.search"))}" aria-label="{esc(t("web.search"))}">'
                     f'<span class="count" id="count">{esc(count)}</span>'
-                    f'{columns}<span class="views">{views}</span></div>'
+                    f'{columns}<span class="views">{views}</span>{extra}</div>'
                     + (f'<p class="note">{esc(table.note)}</p>' if table.note else ""))
         table_html = (f'<div class="wrap"><table id="rows"><thead><tr>{head}</tr></thead>'
                       f'<tbody>{"".join(body)}</tbody></table></div>')
@@ -524,7 +525,11 @@ class Site:
         body = nodeimport.choose(t, TEMPLATE_PATH, len(self.known_nodes()), message,
                                  MAX_IMPORT_BYTES)
         return status, "text/html; charset=utf-8", self.shell(
-            "/nodes", t("web.import.title"), body, t=t)
+            "/nodes", t("web.import.title"), self.crumb(t) + body, t=t)
+
+    @staticmethod
+    def crumb(t) -> str:
+        return f'<p><a class="back" href="/nodes">← {esc(t("web.back"))}</a></p>'
 
     def known_nodes(self) -> list[tuple[str, str, str, str]]:
         """``(mac, name given, address, vendor)`` of the nodes the network has shown; none when
@@ -553,7 +558,8 @@ class Site:
         except NameError_ as exc:
             return self.import_page(t, str(exc), HTTPStatus.BAD_REQUEST)
         return (HTTPStatus.OK, "text/html; charset=utf-8",
-                self.shell("/nodes", t("web.import.title"), nodeimport.check(t, lines, text), t=t))
+                self.shell("/nodes", t("web.import.title"),
+                           self.crumb(t) + nodeimport.check(t, lines, text), t=t))
 
     def import_apply(self, form: dict, t=None) -> tuple[int, str, bytes]:
         """POST /import with the checked text: write it, and show what happened."""
@@ -571,7 +577,7 @@ class Site:
                  sum(1 for x in lines if x.result == "error"))
         return (HTTPStatus.OK, "text/html; charset=utf-8",
                 self.shell("/nodes", t("web.import.title"),
-                           nodeimport.done(t, lines, import_log(lines)), t=t))
+                           self.crumb(t) + nodeimport.done(t, lines, import_log(lines)), t=t))
 
     # ----------------------------------------------------------------- SNMP connections
 
@@ -730,7 +736,7 @@ class Site:
         return (f'<form class="cell" method="post" action="/name">'
                 f'<input type="hidden" name="mac" value="{esc(cell.key)}">'
                 f'<input type="hidden" name="field" value="{esc(cell.field)}">'
-                f'<input name="name" value="{esc(cell.text)}" '
+                f'<input name="name" value="{esc(cell.text)}" placeholder="＋" '
                 f'maxlength="{MAX_LENGTH[cell.field]}" '
                 f'aria-label="{label}" title="{label}" autocomplete="off"></form>')
 
@@ -853,10 +859,10 @@ class Site:
         column = 4 if path == "/nodes" else 0    # the MAC: three hostnames and a description first
         if path == "/" and self.scannable:
             link, column = "/scan?address=", 1   # the address of a device opens its scan page
-        before = (f'<p class="note"><a href="{IMPORT_PATH}">{esc(t("web.import.link"))}</a></p>'
-                  if path == "/nodes" else "")
+        extra = (f'<a class="btn right" href="{IMPORT_PATH}">{esc(t("web.import.link"))}</a>'
+                 if path == "/nodes" else "")
         return (HTTPStatus.OK, html_type,
-                self.table_page(path, title, table, subtitle, link, t, column, before=before,
+                self.table_page(path, title, table, subtitle, link, t, column, extra=extra,
                                 disagreeing_only=bool(query.get("disagree"))))
 
     def asset(self, name: str) -> tuple[int, str, bytes]:

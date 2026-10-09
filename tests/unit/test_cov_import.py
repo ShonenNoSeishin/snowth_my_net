@@ -185,3 +185,21 @@ def test_the_pages_and_the_real_routes(tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_the_reasons_shown_follow_the_language_the_log_keeps_in_english(tmp_path):
+    from snowth_my_net.web.nodeimport import _detail
+    fr = Translator("fr")
+    assert _detail(fr, "not a MAC address") == "pas une adresse MAC"
+    assert "ligne 3" in _detail(fr, "MAC already on line 3, this line is ignored")
+    assert "au plus 60" in _detail(fr, "a name is at most 60 characters")
+    assert _detail(fr, "something else") == "something else"
+    assert _detail(Translator("en"), "already named so") == "already named so"
+
+
+def test_the_page_title_is_the_page_not_the_last_cell(tmp_path):
+    site = Site(named(tmp_path, ""), FixedClock())
+    for path in ("/nodes", "/", "/links", "/runs"):
+        page = site.respond(path, {}, None, "en")[2].decode()
+        h1 = page.split("<h1>")[1].split("</h1>")[0]
+        assert h1 and not h1[:4].isdigit(), (path, h1)
