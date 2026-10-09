@@ -2,16 +2,18 @@
 :root {
   --bg: #f7f7f5; --panel: #fff; --text: #1d2126; --muted: #69707a; --line: #e2e3e0;
   --accent: #2f6f5e; --stripe: #fafaf8; --hover: #eef4f1; --bad: #b3261e; --warn: #8a6100;
-  color-scheme: light dark;
+  color-scheme: light;
 }
 /* Dark: the system preference, unless the reader chose otherwise with the header button. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --bg: #15181c; --panel: #1c2026; --text: #e3e6ea; --muted: #97a0aa; --line: #2c323a;
     --accent: #7cc7ae; --stripe: #1f242a; --hover: #243029; --bad: #f2b8b5; --warn: #e0c08b;
   }
 }
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --bg: #15181c; --panel: #1c2026; --text: #e3e6ea; --muted: #97a0aa; --line: #2c323a;
   --accent: #7cc7ae; --stripe: #1f242a; --hover: #243029; --bad: #f2b8b5; --warn: #e0c08b;
 }
@@ -284,3 +286,6 @@ form.cell.bad input { border-color: var(--bad); }
 .rename .error { color: var(--bad); font-size: 13px; flex-basis: 100%; margin: 0; }
 footer { max-width: 1400px; margin: 0 auto; padding: 0 20px 26px; }
 @media (max-width: 600px) { header { position: static; } }
+
+/* The drop-down list is drawn by the browser: give it the page colours, in both themes. */
+select, option { color: var(--text); background: var(--panel); }
