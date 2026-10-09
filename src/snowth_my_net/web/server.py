@@ -37,6 +37,7 @@ from snowth_my_net.names import MAX_LENGTH, NameError_, clean_mac, store_for
 from snowth_my_net.state.db import StateError, open_db
 from snowth_my_net.state.repo import Repo
 from snowth_my_net.web import pages, snmp
+from snowth_my_net.web import scan as scanpage
 from snowth_my_net.web.accounts import (
     MIN_LENGTH,
     STORE_NAME,
@@ -130,6 +131,11 @@ class Site:
     def manageable(self) -> bool:
         """The SNMP page exists only with an account: it asks for that password again."""
         return self.guarded and self.loaded.cfg.web.actions
+
+    @property
+    def scannable(self) -> bool:
+        """A port scan is a deliberate choice: an account, buttons on, and ``web.nmap``."""
+        return self.manageable and self.loaded.cfg.web.nmap
 
     def bootstrap(self) -> None:
         """Give every declared account without a password a first one, and log it.
@@ -453,6 +459,49 @@ class Site:
         return self.table_page("/runs", t("tab.runs"), table, subtitle, "", t, 0,
                                before=self.actions_panel(t, message), refresh=refresh)
 
+    # ----------------------------------------------------------------- port scans
+
+    def scan_page(self, address_text: str, t=None, message: str = "",
+                  status: int = HTTPStatus.OK) -> tuple[int, str, bytes]:
+        t = t or self.t
+        address = scanpage.parse_address(address_text)
+        if address is None:
+            message, status = t("web.scan.bad", text=address_text[:60]), HTTPStatus.BAD_REQUEST
+            address = ""
+        reason = scanpage.refusal(self.loaded.cfg, address) if address else ""
+        if reason:
+            message = t("web.scan.refused", reason=reason)
+        job = self.jobs.current or self.jobs.last
+        if job is None or job.what != "scan" or job.extra[:1] != (address,):
+            job = None
+        if address:
+            with closing(self.state()) as repo:
+                stored = repo.scans(address).get(address)
+            body = scanpage.body(t, address, stored, job, message, not reason,
+                                 self.clock.now(), self.jobs.current is not None)
+        else:
+            body = f'<p class="error">{esc(message)}</p>'
+        refresh = 5 if job is not None and job.running else 0
+        return (status, "text/html; charset=utf-8",
+                self.shell("/", t("web.scan.title", address=address or "?"), body, t=t,
+                           refresh=refresh))
+
+    def start_scan(self, form: dict, user: str, t=None) -> tuple[int, str, bytes]:
+        """POST /scan: start the scan of one address, then show the page that follows it."""
+        t = t or self.t
+        if not self.scannable:
+            return HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", b"not found\n"
+        text = (form.get("address") or [""])[0]
+        profile = (form.get("profile") or [""])[0]
+        address = scanpage.parse_address(text)
+        if address is None or profile not in scanpage.PROFILES:
+            return self.scan_page(text, t, "", HTTPStatus.BAD_REQUEST)
+        if scanpage.refusal(self.loaded.cfg, address):
+            return self.scan_page(address, t)
+        if self.jobs.start("scan", user, extra=(address, "--profile", profile)) is None:
+            return self.scan_page(address, t, t("web.do.busy"), HTTPStatus.CONFLICT)
+        return HTTPStatus.SEE_OTHER, "/scan?address=" + quote(address, safe=":"), b""
+
     # ----------------------------------------------------------------- SNMP connections
 
     def confirm_page(self, t, message: str = "") -> bytes:
@@ -587,12 +636,17 @@ class Site:
 
     def node_page(self, mac: str, t=None, message: str = "") -> bytes:
         t = t or self.t
+        addresses: list[str] = []
         with closing(self.state()) as repo:
-            lines = pages.explain_lines(self.loaded, repo, self.clock.now(), mac, t)
+            lines = pages.explain_lines(self.loaded, repo, self.clock.now(), mac, t, addresses)
+        scan = ""
+        if self.scannable and addresses and not scanpage.refusal(self.loaded.cfg, addresses[0]):
+            scan = (f'<p><a href="/scan?address={quote(addresses[0], safe=":")}">'
+                    f'{esc(t("web.scan.title", address=addresses[0]))}</a></p>')
         rendered = "\n".join(
             f'<span class="{kind}">{esc(text)}</span>' if text else "" for text, kind in lines)
         body = (f'<p><a class="back" href="/nodes">← {esc(t("web.back"))}</a></p>'
-                f'{self.name_form(mac, t, message)}'
+                f'{self.name_form(mac, t, message)}{scan}'
                 f'<pre class="explain">{rendered}</pre>')
         return self.shell("/nodes", t("web.node_title", mac=mac), body, t=t)
 
@@ -686,6 +740,11 @@ class Site:
             return HTTPStatus.SEE_OTHER, "/password", b""
         if path.startswith("/download/"):
             return self.download(path.removeprefix("/download/"))
+        if path == "/scan":
+            if not self.scannable:
+                return (HTTPStatus.NOT_FOUND, html_type,
+                        self.shell("/", t("web.not_found"), "", t=t))
+            return self.scan_page((query.get("address") or [""])[0], t)
         if path == "/node":
             mac = (query.get("mac") or [""])[0]
             return HTTPStatus.OK, html_type, self.node_page(mac, t)
@@ -717,6 +776,8 @@ class Site:
                 title = t("web.tab.files")
         link = "/node?mac=" if path == "/nodes" else ("/download/" if path == "/files" else "")
         column = 4 if path == "/nodes" else 0    # the MAC: three hostnames and a description first
+        if path == "/" and self.scannable:
+            link, column = "/scan?address=", 1   # the address of a device opens its scan page
         return (HTTPStatus.OK, html_type,
                 self.table_page(path, title, table, subtitle, link, t, column,
                                 disagreeing_only=bool(query.get("disagree"))))
@@ -830,16 +891,16 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         token = parse_cookie(self.headers.get("Cookie"))
         if parsed.path not in ("/login", "/logout", "/password", "/name", "/action",
-                               "/snmp", "/confirm"):
+                               "/snmp", "/confirm", "/scan"):
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         if parsed.path in ("/snmp", "/confirm"):
             self.manage(parsed.path, token)
             return
-        if parsed.path not in ("/name", "/action") and not site.guarded:
+        if parsed.path not in ("/name", "/action", "/scan") and not site.guarded:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
-        if parsed.path in ("/name", "/action") and site.guarded and (
+        if parsed.path in ("/name", "/action", "/scan") and site.guarded and (
                 site.sessions.user_of(token) is None):
             if "application/json" in (self.headers.get("Accept") or ""):
                 self.finish_response(HTTPStatus.UNAUTHORIZED, JSON,
@@ -856,6 +917,10 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/action":
             status, where, body = site.start_job((form.get("what") or [""])[0],
                                                  site.sessions.user_of(token) or "", lang)
+            self.finish_response(status, where, body)
+            return
+        if parsed.path == "/scan":
+            status, where, body = site.start_scan(form, site.sessions.user_of(token) or "", lang)
             self.finish_response(status, where, body)
             return
         if parsed.path == "/name":

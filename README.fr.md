@@ -109,6 +109,7 @@ Détails, unités systemd, durcissement et réseau : [docs/fr/deployment.md](doc
 | `health [--max-age]` | Code 1 si la dernière collecte réussie est trop ancienne |
 | `tui` | Interface en terminal |
 | `dns probe IP…` | Demander son nom à un hôte (NetBIOS, LLMNR, mDNS), comme `nbtstat -A` et un scanner, et montrer ce que chacun répond |
+| `scan CIBLE… [--profile quick\|common\|all]` | Scanner des adresses avec `nmap`, sans privilège, et garder les ports ouverts (une adresse depuis l'interface web avec `web.nmap`) |
 | `names ask [--force]` | Demander son nom à chaque nœud (`names.probe`) : planifié avec `schedule.names`, ou depuis un bouton |
 | `dns check IP…` | Demander une résolution inverse aux résolveurs configurés, et dire ce qui revient et ce que ça signifie |
 | `dns flush [--misses-only]` | Oublier les réponses PTR en cache, pour que le prochain export réinterroge le résolveur |

@@ -709,6 +709,46 @@ WEB = {
     "web.do.export": ("Export", "Exporter"),
     "web.do.push": ("Push", "Envoyer"),
     "web.do.names": ("Ask names", "Demander les noms"),
+    "web.do.scan": ("Port scan", "Scan de ports"),
+    "web.scan.title": ("Scan {address}", "Scan de {address}"),
+    "web.scan.profile": ("Profile", "Profil"),
+    "web.scan.profile.quick": ("Quick: 100 ports, a few seconds",
+                               "Rapide : 100 ports, quelques secondes"),
+    "web.scan.profile.common": ("Common: 1000 ports and versions, about a minute",
+                                "Courant : 1000 ports et versions, environ une minute"),
+    "web.scan.profile.all": ("All: 65535 ports and versions, many minutes",
+                             "Tous : 65535 ports et versions, de nombreuses minutes"),
+    "web.scan.start": ("Scan this address", "Scanner cette adresse"),
+    "web.scan.hint": (
+        "A TCP scan from this machine, by nmap without privilege: it connects to ports and "
+        "changes nothing on the device. An IPS may flag it, so ask first.",
+        "Un scan TCP depuis cette machine, par nmap sans privilège : il se connecte à des ports "
+        "et ne change rien sur l'équipement. Un IPS peut le signaler, prévenez d'abord."),
+    "web.scan.no_nmap": (
+        "nmap is not installed in this container: rebuild the image "
+        "(docker compose up -d --build).",
+        "nmap n'est pas installé dans ce conteneur : reconstruisez l'image "
+        "(docker compose up -d --build)."),
+    "web.scan.last": ("Last scan: {when}, profile {profile}",
+                      "Dernier scan : {when}, profil {profile}"),
+    "web.scan.none": ("This address has not been scanned.", "Cette adresse n'a pas été scannée."),
+    "web.scan.down": ("The host did not answer.", "L'hôte n'a pas répondu."),
+    "web.scan.nothing_open": ("Nothing open was found", "Aucun port ouvert n'a été trouvé"),
+    "web.scan.bad": ("{text} is not an IP address.", "{text} n'est pas une adresse IP."),
+    "web.scan.refused": ("This address is {reason}: it is never scanned.",
+                         "Cette adresse est {reason} : elle n'est jamais scannée."),
+    "web.scan.mass.title": ("Many addresses at once", "Beaucoup d'adresses à la fois"),
+    "web.scan.mass.hint": (
+        "A network is scanned from a shell, not from this page: the same command and the same "
+        "rules (discovery.allowed), and the results appear here afterwards. Replace the network "
+        "and the profile (quick, common, all).",
+        "Un réseau se scanne depuis un shell, pas depuis cette page : la même commande et les "
+        "mêmes règles (discovery.allowed), et les résultats apparaissent ici ensuite. Remplacez "
+        "le réseau et le profil (quick, common, all)."),
+    "col.proto": ("PROTOCOL", "PROTOCOLE"),
+    "col.service": ("SERVICE", "SERVICE"),
+    "col.product": ("PRODUCT", "PRODUIT"),
+    "col.version": ("VERSION", "VERSION"),
     "web.do.title": ("Run now", "Lancer maintenant"),
     "web.do.running": ("{what} running for {seconds} s…", "{what} en cours depuis {seconds} s…"),
     "web.do.busy": ("Something is already running.", "Quelque chose tourne déjà."),

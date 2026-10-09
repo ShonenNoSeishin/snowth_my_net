@@ -161,6 +161,7 @@ schedule:
 #   bind: 127.0.0.1                # 0.0.0.0 only behind a reverse proxy: it has no login
 #   port: 8080
 #   node_limit: 2000               # rows sent to the browser on the Nodes page
+#   nmap: false                    # true: scan one address's ports from its page (needs an account)
 #   auth:                          # without users: no login (loopback only)
 #     session_hours: 12
 #     users:

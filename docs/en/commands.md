@@ -61,6 +61,7 @@ writes waits for the state lock, up to `general.lock_wait`.
 | `show links` | the physical links found by LLDP and CDP | `--filter` |
 | `show runs` | the last runs and their status | `--limit` |
 | `show uplinks` | the ports held as uplinks, by proof or by guess, and the MACs each one leaves without a position | `--filter` |
+| `show scans` | the open ports found by the last scan of each address | `--filter` |
 | `show excluded` | the MACs the node list leaves out, and why | `--filter` |
 | `show tables` | what every SNMP table returned on every device at the last collect | `--filter` |
 | `explain` | why a MAC, or the MACs of an IP, are where they are: every sighting, the ports discarded, the three hostnames | a MAC or an IP |
@@ -71,6 +72,7 @@ writes waits for the state lock, up to `general.lock_wait`.
 | Command | What it does | Options |
 |---|---|---|
 | `probe` | test OIDs by hand on one device: presets, or numeric OIDs | `--get`, `--walk`, `--limit`, `--all` |
+| `scan` | scan addresses with `nmap` and keep the open ports of each; a network of at most 1024 hosts is accepted | `--profile` (`quick`, `common`, `all`), addresses or networks |
 | `dns check` | ask the configured resolvers for a reverse lookup and say which one answered | addresses |
 | `dns probe` | ask a host its own name, over NetBIOS, LLMNR and mDNS, and show each answer | addresses |
 

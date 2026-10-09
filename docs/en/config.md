@@ -273,6 +273,7 @@ Read-only web interface (`snowth_my_net web`, or the `web` service of Compose), 
 | `web.auth.users[].password_file` | | Optional: a file holding the hash printed by `snowth_my_net web --hash-password` (relative to `general.secrets_dir`), for a password managed outside the tool. |
 | `web.auth.users[].password_env` | | The same hash, from an environment variable. Never both forms at once. |
 | `web.actions` | `true` | The buttons of the Runs page that start a collect, a discovery, an export or a push. `false` removes them and refuses the requests. Without an account, anyone who reaches the page can press them. |
+| `web.nmap` | `false` | A port scan of one address from the interface: the IP of a device opens its scan page, with a profile to choose and the result kept. Needs an account and `web.actions`. Only what `discovery.allowed` permits and `discovery.exclude` spares is scanned. |
 | `web.trusted_proxies` | `[]` | Networks of the reverse proxies allowed to state the reader's address in `X-Forwarded-For` (and `X-Forwarded-Proto`). Anyone else is ignored. `--trusted-proxy CIDR` overrides it for one run. |
 | `web.auth.session_hours` | `12` | Lifetime of a session; sessions live in the process and are lost on restart. |
 

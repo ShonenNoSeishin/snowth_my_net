@@ -23,6 +23,7 @@ from snowth_my_net.logs import get_logger
 log = get_logger("web")
 
 ACTIONS = ("collect", "discover", "export", "push", "names")
+JOBS = (*ACTIONS, "scan")                        # a scan is asked on a page, not by a button
 GRACE = 30                                       # seconds added to the run timeout, to kill it
 
 
@@ -65,7 +66,7 @@ class Runner:
     def start(self, what: str, by: str = "", clock=time.time,
               extra: tuple[str, ...] = ()) -> Job | None:
         """The job that was started, or ``None`` when one is already running."""
-        if what not in ACTIONS:
+        if what not in JOBS:
             return None
         with self._lock:
             if self.current is not None:
@@ -114,6 +115,10 @@ def summarize(what: str, done: subprocess.CompletedProcess) -> str:
     if what == "names":
         return (f"{payload.get('answered', '?')}/{payload.get('nodes', '?')} node(s) named by "
                 "the host")
+    if what == "scan":
+        hosts = payload.get("hosts") or []
+        return (f"{payload.get('open_ports', '?')} open port(s) on "
+                f"{hosts[0]['address'] if len(hosts) == 1 else str(len(hosts)) + ' addresses'}")
     if what == "export":
         written = payload.get("written") or []
         return f"{len(written)} file(s) written"

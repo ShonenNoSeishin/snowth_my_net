@@ -144,6 +144,38 @@ le premier qui prend le verrou de l'état fait attendre l'autre, exactement comm
 l'interface strictement en lecture seule. **Sans compte configuré, quiconque atteint la page
 peut appuyer dessus** — une raison de déclarer un compte sous `web.auth.users`.
 
+## Scanner une adresse
+
+Avec `web.nmap: true`, un compte et les boutons actifs, l'IP d'un équipement de l'onglet
+Équipements ouvre sa page de scan, tout comme le lien en haut de la page d'un nœud. Choisissez un
+profil et appuyez sur le bouton :
+
+| Profil | Ce qu'il demande | Durée |
+|---|---|---|
+| quick | les 100 ports TCP les plus courants | quelques secondes |
+| common | les 1000 ports TCP les plus courants, et la version de chaque service | environ une minute |
+| all | les 65535 ports TCP et les versions | de nombreuses minutes |
+
+Avec `quick`, le nom du service n'est que le nom habituel de ce port ; `common` et `all`
+interrogent le service lui-même, ce qui rend un nom ou une version crédibles.
+
+C'est `nmap` lancé sans privilège, une simple connexion TCP à chaque port : il ne change rien sur
+l'équipement et ne peut pas deviner le système d'exploitation. Ce qu'il a trouvé est conservé, un
+scan par adresse, et affiché sur la même page avec sa date. Un scan compte comme l'unique tâche
+qui peut tourner, comme une collecte.
+
+Seul ce que `discovery.allowed` permet et que `discovery.exclude` épargne est scanné, et un nom
+n'est jamais accepté, seulement une adresse. Pour beaucoup d'adresses à la fois, la page affiche
+la commande à coller dans un shell, qui applique les mêmes règles et garde ses résultats là où
+cette page les montre :
+
+```bash
+docker compose exec web snowth_my_net scan 198.51.100.0/24 --profile common
+```
+
+Un scan de ports peut ressembler à de la reconnaissance pour un IPS : prévenez celui qui
+l'exploite avant de commencer.
+
 ## Ce qu'elle ne fait pas
 
 **Elle ne change jamais ce qui a été collecté.** Seuls les noms donnés à la main sont écrits, et

@@ -480,6 +480,19 @@ def cmd_show(args: argparse.Namespace) -> int:
                     "A MAC table that answered 'empty', or with far fewer rows than the switch "
                     "shows, is why a node has no port: see devices[].vlan_indexing for a Cisco "
                     "that keeps one bridge instance per VLAN.")
+        elif args.what == "scans":
+            scans = repo.scans()
+            rows = [{"address": a, **scan} for a, scan in scans.items()
+                    if not args.filter or args.filter.casefold() in (
+                        a + " " + " ".join(f"{p['port']} {p['service']} {p['product']}"
+                                           for p in scan["ports"])).casefold()]
+            if args.json:
+                out_json(rows)
+            else:
+                out(table(["ADDRESS", "PROFILE", "STATUS", "OPEN", "WHEN", "PORTS"],
+                          [[r["address"], r["profile"], r["status"], str(len(r["ports"])),
+                            iso_z(r["scanned_at"]), _port_line(r["ports"]) or r["detail"] or ""]
+                           for r in rows]))
         elif args.what == "excluded":
             import collections
 
@@ -1410,6 +1423,57 @@ def cmd_names(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _port_line(ports: list[dict]) -> str:
+    """``22/ssh, 80/http (nginx 1.24)`` — the open ports of a scan on one line."""
+    return ", ".join(
+        f"{p['port']}/{p['service'] or p['proto']}" + (
+            f" ({' '.join(x for x in (p['product'], p['version']) if x)})"
+            if p["product"] or p["version"] else "") for p in ports)
+
+
+def cmd_scan(args: argparse.Namespace) -> int:
+    """Scan addresses with nmap, without privilege, and keep what was found for each.
+
+    One address from the web interface, a whole network from here. Only what ``discovery``
+    would query is scanned: the rest is named and left alone. The state lock is taken after
+    the scan, to write: a scan that takes minutes must not hold every other command.
+    """
+    from snowth_my_net.enrich import scan
+
+    loaded = load(args)
+    try:
+        wanted = scan.addresses_of(args.targets)
+        allowed, skipped = scan.in_scope(loaded.cfg, wanted)
+        if not allowed:
+            raise ManualError(
+                f"nothing to scan: {skipped[0].address} is {skipped[0].reason}"
+                + (f" (and {len(skipped) - 1} more)" if len(skipped) > 1 else ""))
+        log.info("scan: %d address(es), profile %s%s", len(allowed), args.profile,
+                 f", {len(skipped)} left alone" if skipped else "")
+        results = scan.run(allowed, args.profile)
+    except scan.ScanError as exc:
+        raise ManualError(str(exc)) from None
+    with Locked(loaded, "scan", loaded.cfg.general.lock_wait.default):
+        conn = open_db(loaded.paths.state_file)
+        try:
+            Repo(conn).save_scans(results, Clock().now())
+        finally:
+            conn.close()
+    open_ports = sum(len(r["ports"]) for r in results)
+    payload = {"scanned": len(results), "up": sum(r["status"] == "ok" for r in results),
+               "open_ports": open_ports, "profile": args.profile,
+               "skipped": [{"address": s.address, "reason": s.reason} for s in skipped],
+               "hosts": results}
+    if args.json:
+        out_json(payload)
+        return EXIT_OK
+    for r in results:
+        out(f"{r['address']}  {r['status']}  {_port_line(r['ports']) or r['detail'] or '-'}")
+    out(f"{len(results)} address(es) scanned, {open_ports} open port(s) found"
+        + (f"; {len(skipped)} left alone ({skipped[0].reason})" if skipped else "") + ".")
+    return EXIT_OK
+
+
 def _dns_probe(loaded: LoadedConfig, args: argparse.Namespace) -> int:
     """Ask a host its own name, the three ways, and show what each one answers.
 
@@ -1608,7 +1672,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("show", parents=[common], help="print what the state knows")
     p.add_argument("what", choices=["devices", "nodes", "links", "runs", "uplinks",
-                                    "excluded", "tables"])
+                                    "excluded", "tables", "scans"])
     p.add_argument("--limit", type=int, default=0,
                    help="maximum rows (default: 20 runs, every device and node)")
     p.add_argument("--filter", help="only rows containing this text (any column)")
@@ -1731,6 +1795,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--force", action="store_true",
                    help="ask again even where an answer is still cached")
     p.set_defaults(func=cmd_names)
+
+    p = sub.add_parser("scan", parents=[common],
+                       help="scan addresses with nmap (no privilege) and keep what is open")
+    p.add_argument("targets", nargs="+", metavar="TARGET",
+                   help="an IP address or a network, at most 1024 hosts; only what "
+                        "discovery.allowed permits is scanned")
+    p.add_argument("--profile", choices=["quick", "common", "all"], default="common",
+                   help="quick: 100 ports; common: 1000 ports and versions; all: 65535 ports")
+    p.set_defaults(func=cmd_scan)
 
     p = sub.add_parser("node", parents=[common],
                        help="name a MAC address by hand (kept across collects), or list names")

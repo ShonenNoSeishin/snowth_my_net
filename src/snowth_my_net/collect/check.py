@@ -243,6 +243,9 @@ def config_warnings(loaded: LoadedConfig) -> list[str]:
     if not web.auth.users and web.bind not in LOOPBACK:
         warnings.append(f"web.bind is {web.bind} with no account in web.auth.users: anyone who "
                         "reaches that address sees the whole inventory")
+    if web.nmap and not (web.auth.users and web.actions):
+        warnings.append("web.nmap is on but the scan page needs an account in web.auth.users "
+                        "and web.actions: it will not exist")
     warnings += web.auth.check()
     targets = {t.name for t in cfg.push.targets}
     collectors = {c.cfg.name for c in loaded.collectors}

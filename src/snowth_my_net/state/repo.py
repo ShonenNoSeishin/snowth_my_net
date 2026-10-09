@@ -584,6 +584,28 @@ class Repo:
                   now + (positive_ttl if status == "ok" else negative_ttl))
                  for ip, (name, mac, status) in results.items()])
 
+    def save_scans(self, results: list[dict], now: int) -> None:
+        """Replace the stored scan of each address: ``address, profile, status, detail, ports,
+        seconds`` per result. A scan describes the host now, so the last one is the only one."""
+        with self.conn:
+            self.conn.executemany(
+                "INSERT INTO host_scan(address, profile, status, detail, ports, scanned_at, "
+                "seconds) VALUES (?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(address) DO UPDATE SET profile = excluded.profile, "
+                "status = excluded.status, detail = excluded.detail, ports = excluded.ports, "
+                "scanned_at = excluded.scanned_at, seconds = excluded.seconds",
+                [(r["address"], r["profile"], r["status"], r.get("detail", ""),
+                  json.dumps(r.get("ports", [])), now, r.get("seconds", 0.0))
+                 for r in results])
+
+    def scans(self, address: str | None = None) -> dict[str, dict]:
+        """``{address: scan}`` with ``ports`` decoded, newest scan of each address."""
+        sql, args = "SELECT * FROM host_scan", ()
+        if address is not None:
+            sql, args = sql + " WHERE address = ?", (address,)
+        return {row["address"]: {**dict(row), "ports": json.loads(row["ports"])}
+                for row in self.conn.execute(sql + " ORDER BY address", args)}
+
     def forget_probes(self, only_misses: bool = False) -> int:
         with self.conn:
             if only_misses:

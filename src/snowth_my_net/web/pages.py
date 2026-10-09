@@ -344,7 +344,13 @@ def summary(loaded: LoadedConfig, repo: Repo, now: int, t) -> str:
              total=stats.get("devices", "—"))
 
 
-def explain_lines(loaded: LoadedConfig, repo: Repo, now: int, query: str, t):
+def explain_lines(loaded: LoadedConfig, repo: Repo, now: int, query: str, t,
+                  addresses: list[str] | None = None):
+    """The lines of ``explain``; ``addresses``, when given, is filled with the elected address
+    of each node found, for the page to link to what can be done with it."""
     from snowth_my_net.merge.explain import explain
 
-    return explain(build_view(loaded, repo, now), query, t)
+    view = build_view(loaded, repo, now)
+    if addresses is not None:
+        addresses += [n.current_ip.ip for n in view.find(query) if n.current_ip]
+    return explain(view, query, t)

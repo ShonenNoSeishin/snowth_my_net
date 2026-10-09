@@ -62,6 +62,7 @@ quand la commande a été interrompue. Une commande qui écrit attend le verrou 
 | `show links` | les liens physiques trouvés en LLDP et CDP | `--filter` |
 | `show runs` | les dernières collectes et leur état | `--limit` |
 | `show uplinks` | les ports tenus pour des uplinks, par preuve ou par supposition, et les MAC que chacun laisse sans position | `--filter` |
+| `show scans` | les ports ouverts trouvés par le dernier scan de chaque adresse | `--filter` |
 | `show excluded` | les MAC que la liste des nœuds écarte, et pourquoi | `--filter` |
 | `show tables` | ce que chaque table SNMP a rendu sur chaque équipement à la dernière collecte | `--filter` |
 | `explain` | pourquoi une MAC, ou les MAC d'une IP, sont où elles sont : chaque observation, les ports écartés, les trois noms d'hôte | une MAC ou une IP |
@@ -72,6 +73,7 @@ quand la commande a été interrompue. Une commande qui écrit attend le verrou 
 | Commande | Ce qu'elle fait | Options |
 |---|---|---|
 | `probe` | teste des OID à la main sur un équipement : des préréglages, ou des OID numériques | `--get`, `--walk`, `--limit`, `--all` |
+| `scan` | scanne des adresses avec `nmap` et garde les ports ouverts de chacune ; un réseau d'au plus 1024 hôtes est accepté | `--profile` (`quick`, `common`, `all`), des adresses ou des réseaux |
 | `dns check` | demande une résolution inverse aux résolveurs configurés et dit lequel a répondu | des adresses |
 | `dns probe` | demande son nom à un hôte, en NetBIOS, LLMNR et mDNS, et montre chaque réponse | des adresses |
 

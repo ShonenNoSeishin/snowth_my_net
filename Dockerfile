@@ -40,6 +40,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     SNOWTH_OUTPUT_DIR=/output \
     SNOWTH_SECRETS_DIR=/run/secrets \
     SNOWTH_EXTENSIONS_DIR=/etc/snowth_my_net/extensions
+# nmap: the port scan of an address (web.nmap, 'scan'); run without privilege, never as root.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends nmap \
+ && rm -rf /var/lib/apt/lists/*
 COPY --from=build /opt/venv /opt/venv
 COPY --from=supercronic /supercronic /usr/local/bin/supercronic
 COPY docker/entrypoint.sh /usr/local/bin/snowth-entrypoint

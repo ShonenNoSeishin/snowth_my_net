@@ -277,6 +277,7 @@ Interface web en lecture seule (`snowth_my_net web`, ou le service `web` de Comp
 | `web.auth.users[].password_file` | | Facultatif : un fichier contenant l'empreinte affichée par `snowth_my_net web --hash-password` (relatif à `general.secrets_dir`), pour un mot de passe géré hors de l'outil. |
 | `web.auth.users[].password_env` | | La même empreinte, depuis une variable d'environnement. Jamais les deux formes à la fois. |
 | `web.actions` | `true` | Les boutons de la page Collectes qui lancent une collecte, une découverte, un export ou un envoi. `false` les retire et refuse les requêtes. Sans compte, quiconque atteint la page peut appuyer dessus. |
+| `web.nmap` | `false` | Un scan de ports d'une adresse depuis l'interface : l'IP d'un équipement ouvre sa page de scan, avec un profil à choisir et le résultat conservé. Demande un compte et `web.actions`. Seul ce que `discovery.allowed` permet et que `discovery.exclude` épargne est scanné. |
 | `web.trusted_proxies` | `[]` | Réseaux des proxys inverses autorisés à annoncer l'adresse du lecteur dans `X-Forwarded-For` (et `X-Forwarded-Proto`). Tout autre est ignoré. `--trusted-proxy CIDR` prime pour une exécution. |
 | `web.auth.session_hours` | `12` | Durée d'une session ; les sessions vivent dans le processus et sont perdues au redémarrage. |
 

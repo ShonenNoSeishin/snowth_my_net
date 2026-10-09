@@ -144,6 +144,35 @@ first makes the other wait, exactly as two shells would.
 wants the interface strictly read-only. **With no account configured, anyone who reaches the
 page can press them** — a reason to declare an account under `web.auth.users`.
 
+## Scanning one address
+
+With `web.nmap: true`, an account and the buttons on, the IP of a device in the Devices tab opens
+its scan page, and so does the link at the top of a node's page. Pick a profile and press the
+button:
+
+| Profile | What it asks | Takes |
+|---|---|---|
+| quick | the 100 most common TCP ports | a few seconds |
+| common | the 1000 most common TCP ports, and the version of each service | about a minute |
+| all | the 65535 TCP ports and versions | many minutes |
+
+In `quick` the service name is only the usual name of that port; `common` and `all` ask the
+service itself, which is what makes a name or a version worth believing.
+
+It is `nmap` run without privilege, a plain TCP connection to each port: it changes nothing on the
+device and cannot guess the operating system. What it found is kept, one scan per address, and
+shown on the same page with its date. A scan counts as the one job that may run, like a collect.
+
+Only what `discovery.allowed` permits and `discovery.exclude` spares is scanned, and a name is
+never accepted, only an address. For many addresses at once the page prints the command to paste
+in a shell, which applies the same rules and keeps its results where this page shows them:
+
+```bash
+docker compose exec web snowth_my_net scan 198.51.100.0/24 --profile common
+```
+
+A port scan can look like reconnaissance to an IPS: tell whoever runs it before you start.
+
 ## What it does not do
 
 **It never changes what was collected.** Only names given by hand are written, and pressing a

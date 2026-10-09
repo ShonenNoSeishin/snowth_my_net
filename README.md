@@ -98,6 +98,7 @@ Details, systemd units, hardening and networking: [docs/en/deployment.md](docs/e
 | `health [--max-age]` | Exit 1 when the last successful collect is too old |
 | `tui` | Terminal interface |
 | `dns probe IP…` | Ask a host its own name (NetBIOS, LLMNR, mDNS), as `nbtstat -A` and a scanner do, and show what each answers |
+| `scan TARGET… [--profile quick\|common\|all]` | Scan addresses with `nmap`, without privilege, and keep the open ports (one address from the web interface with `web.nmap`) |
 | `names ask [--force]` | Ask every node its own name (`names.probe`): scheduled with `schedule.names`, or from a button |
 | `dns check IP…` | Ask the configured resolvers for a reverse lookup and say what came back, and what it means |
 | `dns flush [--misses-only]` | Forget the cached PTR answers, so the next export asks the resolver again |

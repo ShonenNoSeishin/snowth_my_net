@@ -604,6 +604,7 @@ class WebCfg:
     auth: WebAuthCfg = field(default_factory=WebAuthCfg)
     trusted_proxies: list[Network] = field(default_factory=list)   # who may set X-Forwarded-For
     actions: bool = True             # the buttons that start a collect, a discovery, an export
+    nmap: bool = False               # a port scan of one address, from its page (needs an account)
 
     def check(self) -> list[str]:
         errs = []

@@ -28,12 +28,12 @@
 
   // A cell holding a form holds its text in an input: filter and sort must look there too.
   function cellText(cell) {
-    var field = cell.querySelector("input[name]");
+    var field = cell.querySelector("input[name=name]");
     return (field ? field.value : cell.textContent).trim();
   }
 
   function rowText(row) {
-    var written = Array.prototype.map.call(row.querySelectorAll("input[name]"), function (i) {
+    var written = Array.prototype.map.call(row.querySelectorAll("input[name=name]"), function (i) {
       return i.value;
     }).join(" ");
     return (row.textContent + " " + written).toLowerCase();

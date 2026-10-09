@@ -221,7 +221,7 @@ table.plain th {
 table.plain td { padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
 table.plain td.bad { color: var(--bad); }
 form.inline { display: inline-flex; gap: 6px; align-items: center; margin: 0 6px 0 0; }
-form.inline select, form.inline input, .actions input {
+form.inline select, form.inline input, .actions input, .actions select {
   font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
   border-radius: 6px; padding: 5px 8px;
 }
