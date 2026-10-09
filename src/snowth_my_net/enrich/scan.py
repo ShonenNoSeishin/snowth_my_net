@@ -24,6 +24,7 @@ PROFILES: dict[str, tuple[tuple[str, ...], int]] = {
     "all": (("-p-", "-sV", "--version-light"), 1800),
 }
 DEFAULT_PROFILE = "common"
+SHARED_MIN = 5                                 # this many alike answers make a pattern, not luck
 MAX_HOSTS = 1024                               # one command, one /22: a mistake costs minutes
 
 
@@ -121,6 +122,38 @@ def parse(xml: str) -> list[dict]:
     return hosts
 
 
+def flag_shared(results: list[dict]) -> int:
+    """Mark the hosts whose answer is the same as that of most of the others: ``suspect``.
+
+    Without privilege, nmap decides that a host is up by connecting to ports 80 and 443. A
+    firewall or a transparent proxy that answers for every address makes every address "up"
+    with exactly those ports open, which is not what the hosts have. A real fleet differs from
+    host to host, so one identical set of open ports over at least ``SHARED_MIN`` addresses and
+    half of those that answered is read as a device in the path, never as ports of the hosts.
+    The ports stay recorded, but the status no longer says the host has them. Returns the
+    number of hosts marked.
+    """
+    def key(host: dict) -> tuple:
+        return tuple(sorted((p["port"], p["proto"], p["service"], p["product"], p["version"])
+                            for p in host["ports"]))
+
+    answered = [h for h in results if h["status"] == "ok" and h["ports"]]
+    groups: dict[tuple, list[dict]] = {}
+    for host in answered:
+        groups.setdefault(key(host), []).append(host)
+    marked = 0
+    for group in groups.values():
+        if len(group) < SHARED_MIN or len(group) * 2 < len(answered):
+            continue
+        ports = ", ".join(f"{p['port']}/{p['proto']}" for p in group[0]["ports"])
+        for host in group:
+            host["status"] = "suspect"
+            host["detail"] = (f"{len(group)} addresses answer with the same open ports ({ports}): "
+                              "a firewall or proxy in the path probably answers for them")
+            marked += 1
+    return marked
+
+
 def run(addresses: list[str], profile: str, binary: str | None = None) -> list[dict]:
     """Scan, and return one result per address asked — one nmap did not report is ``down``."""
     exe = binary or shutil.which("nmap")
@@ -147,4 +180,5 @@ def run(addresses: list[str], profile: str, binary: str | None = None) -> list[d
                                          "detail": "no answer to the host discovery", "ports": []}
         results.append({**host, "profile": profile,
                         "seconds": seconds if len(addresses) == 1 else 0.0})   # a share is no time
+    flag_shared(results)
     return results

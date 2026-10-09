@@ -130,12 +130,9 @@ def store_for(paths) -> Names:
 
 MAX_IMPORT_ROWS = 5000
 MAX_IMPORT_BYTES = 1024 * 1024
-TEMPLATE = ("mac,name\r\n"
-            "# One line per MAC: the address, then the name. Lines starting with # are ignored.\r\n"
-            "# 00:11:22:33:44:55,printer accounting\r\n"
-            "# aa-bb-cc-dd-ee-ff,Julie's desk\r\n")
 HEADERS = ("mac", "mac address", "adresse mac")
-ADDED, UPDATED, UNCHANGED, ERROR = "added", "updated", "unchanged", "error"
+ADDED, UPDATED, UNCHANGED, SKIPPED, ERROR = "added", "updated", "unchanged", "skipped", "error"
+RESULTS = (ERROR, UPDATED, ADDED, SKIPPED, UNCHANGED)   # the order a reader wants them in
 
 
 @dataclass(frozen=True)
@@ -143,8 +140,23 @@ class ImportLine:
     line: int
     mac: str
     name: str
-    result: str          # added | updated | unchanged | error
+    result: str          # one of RESULTS
     detail: str
+    before: str = ""     # the name this MAC had
+
+
+def template(nodes: list[tuple[str, str, str, str]]) -> str:
+    """The CSV to fill in: every node the network has shown, with the name it has (empty when
+    none). ``nodes`` is ``(mac, name, address, vendor)``; the last two are there to help
+    whoever fills the file and are not read back. With no node yet, an example is commented."""
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\r\n")
+    writer.writerow(["mac", "name", "ip", "vendor"])
+    for mac, name, address, vendor in sorted(nodes):
+        writer.writerow([mac, name, address, vendor])
+    if not nodes:
+        buffer.write("# 00:11:22:33:44:55,printer accounting\r\n")
+    return buffer.getvalue()
 
 
 def _rows(text: str) -> list[tuple[int, list[str]]]:
@@ -162,19 +174,19 @@ def _rows(text: str) -> list[tuple[int, list[str]]]:
     return rows
 
 
-def import_names(store: Names, text: str, known: set[str]) -> list[ImportLine]:
-    """Give names to MACs from a two-column CSV and write them all at once.
+def plan_import(current: dict[str, dict[str, str]], text: str,
+                known: set[str]) -> tuple[list[ImportLine], dict[str, str]]:
+    """What a two-column CSV (MAC, name) would do, and the names to write for it.
 
-    A MAC that already has a name is updated; any other is added (``known`` tells whether the
-    network has shown it yet, which the detail says). An empty name never erases one, a
-    repeated MAC keeps its first line, and a bad line is reported and skipped.
+    A MAC that already has a name is updated, any other is added (``known`` tells whether the
+    network has shown it yet, which the detail says). A line with no name changes nothing, a
+    repeated MAC keeps its first line, a bad line is reported and skipped. Nothing is written.
     """
     rows = _rows(text)
     if rows and rows[0][1][0].strip().lower() in HEADERS:    # a header: mac,name
         rows = rows[1:]
     if len(rows) > MAX_IMPORT_ROWS:
         raise NameError_(f"at most {MAX_IMPORT_ROWS} lines at a time, this file has {len(rows)}")
-    current = store.read()
     out: list[ImportLine] = []
     todo: dict[str, str] = {}
     seen: dict[str, int] = {}
@@ -193,27 +205,37 @@ def import_names(store: Names, text: str, known: set[str]) -> list[ImportLine]:
         except NameError_ as exc:
             out.append(ImportLine(number, mac, name.strip()[:60], ERROR, str(exc)))
             continue
-        if not name:
-            out.append(ImportLine(number, mac, "", ERROR, "empty name (nothing is erased)"))
-            continue
+        before = current.get(mac, {}).get("name", "")
         if mac in seen:
             out.append(ImportLine(number, mac, name, ERROR,
                                   f"MAC already on line {seen[mac]}, this line is ignored"))
             continue
         seen[mac] = number
-        before = current.get(mac, {}).get("name", "")
-        if before == name:
-            out.append(ImportLine(number, mac, name, UNCHANGED, "already named so"))
+        if not name:
+            out.append(ImportLine(number, mac, "", SKIPPED,
+                                  "no name on this line: nothing is changed", before))
+        elif before == name:
+            out.append(ImportLine(number, mac, name, UNCHANGED, "already named so", before))
         elif before:
             todo[mac] = name
-            out.append(ImportLine(number, mac, name, UPDATED, f"was {before!r}"))
+            out.append(ImportLine(number, mac, name, UPDATED, "", before))
         else:
             todo[mac] = name
             out.append(ImportLine(number, mac, name, ADDED,
                                   "" if mac in known else "not seen on the network yet"))
+    return out, todo
+
+
+def import_names(store: Names, text: str, known: set[str]) -> list[ImportLine]:
+    """Plan the import and write every name of it in one atomic write."""
+    lines, todo = plan_import(store.read(), text, known)
     if todo:
         store.set_many(todo)
-    return out
+    return lines
+
+
+def counts(lines: list[ImportLine]) -> dict[str, int]:
+    return {kind: sum(1 for x in lines if x.result == kind) for kind in RESULTS}
 
 
 def import_log(lines: list[ImportLine]) -> str:
@@ -224,9 +246,10 @@ def import_log(lines: list[ImportLine]) -> str:
 
     buffer = io.StringIO()
     writer = csv.writer(buffer, lineterminator="\r\n")
-    writer.writerow(["line", "mac", "name", "result", "detail"])
+    writer.writerow(["line", "mac", "name", "before", "result", "detail"])
     for entry in lines:
-        writer.writerow([entry.line, entry.mac, safe(entry.name), entry.result, safe(entry.detail)])
-    counts = {k: sum(1 for e in lines if e.result == k) for k in (ADDED, UPDATED, UNCHANGED, ERROR)}
-    writer.writerow(["", "", "", "total", ", ".join(f"{n} {k}" for k, n in counts.items())])
+        writer.writerow([entry.line, entry.mac, safe(entry.name), safe(entry.before),
+                         entry.result, safe(entry.detail)])
+    total = counts(lines)
+    writer.writerow(["", "", "", "", "total", ", ".join(f"{n} {k}" for k, n in total.items())])
     return buffer.getvalue()

@@ -1459,16 +1459,22 @@ def cmd_scan(args: argparse.Namespace) -> int:
             Repo(conn).save_scans(results, Clock().now())
         finally:
             conn.close()
-    open_ports = sum(len(r["ports"]) for r in results)
+    open_ports = sum(len(r["ports"]) for r in results if r["status"] != "suspect")
+    suspect = sum(r["status"] == "suspect" for r in results)
     payload = {"scanned": len(results), "up": sum(r["status"] == "ok" for r in results),
-               "open_ports": open_ports, "profile": args.profile,
+               "suspect": suspect, "open_ports": open_ports, "profile": args.profile,
                "skipped": [{"address": s.address, "reason": s.reason} for s in skipped],
                "hosts": results}
     if args.json:
         out_json(payload)
         return EXIT_OK
     for r in results:
-        out(f"{r['address']}  {r['status']}  {_port_line(r['ports']) or r['detail'] or '-'}")
+        shown = "-" if r["status"] == "suspect" else _port_line(r["ports"]) or r["detail"] or "-"
+        out(f"{r['address']}  {r['status']}  {shown}")
+    if suspect:
+        out(f"WARNING: {suspect} address(es) answer with the same open ports, so a firewall or "
+            "proxy on the way probably answers for them; they are marked 'suspect', not 'ok'. "
+            "Scan from the same network segment, or check the device in between.")
     out(f"{len(results)} address(es) scanned, {open_ports} open port(s) found"
         + (f"; {len(skipped)} left alone ({skipped[0].reason})" if skipped else "") + ".")
     return EXIT_OK

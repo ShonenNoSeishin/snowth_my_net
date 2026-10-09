@@ -289,3 +289,12 @@ footer { max-width: 1400px; margin: 0 auto; padding: 0 20px 26px; }
 
 /* The drop-down list is drawn by the browser: give it the page colours, in both themes. */
 select, option { color: var(--text); background: var(--panel); }
+
+.steps { padding-left: 1.2em; } .steps li { margin: 0 0 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.chip { padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 12.5px; }
+.chip.error, td.r-error { color: var(--bad); }
+.chip.updated, td.r-updated { color: var(--warn); }
+.chip.added, td.r-added { color: var(--accent); }
+.chip.skipped, .chip.unchanged, td.r-skipped, td.r-unchanged { color: var(--muted); }
+table.plain td { white-space: normal; }

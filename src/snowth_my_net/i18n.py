@@ -733,27 +733,65 @@ WEB = {
                       "Dernier scan : {when}, profil {profile}"),
     "web.scan.none": ("This address has not been scanned.", "Cette adresse n'a pas été scannée."),
     "web.scan.down": ("The host did not answer.", "L'hôte n'a pas répondu."),
+    "web.scan.suspect": (
+        "Not trusted: these ports are not shown as the host's own.",
+        "Non fiable : ces ports ne sont pas présentés comme ceux de l'hôte."),
     "web.scan.nothing_open": ("Nothing open was found", "Aucun port ouvert n'a été trouvé"),
     "web.scan.bad": ("{text} is not an IP address.", "{text} n'est pas une adresse IP."),
     "web.scan.refused": ("This address is {reason}: it is never scanned.",
                          "Cette adresse est {reason} : elle n'est jamais scannée."),
     "web.import.link": ("Import names from a CSV", "Importer des noms depuis un CSV"),
     "web.import.title": ("Import names", "Importer des noms"),
+    "web.import.s1": ("1. Get the list.", "1. Récupérer la liste."),
+    "web.import.template": ("Download the {count} nodes as a CSV",
+                            "Télécharger les {count} nœuds en CSV"),
+    "web.import.s1.note": (
+        "MAC, current name, then the address and the vendor to help you (not read back).",
+        "MAC, nom actuel, puis l'adresse et le fabricant pour vous aider (non relus)."),
+    "web.import.s2": ("2. Fill the name column", "2. Remplir la colonne des noms"),
+    "web.import.s2.note": (
+        "in your spreadsheet; a line with no name changes nothing. You can also add MACs.",
+        "dans votre tableur ; une ligne sans nom ne change rien. Vous pouvez aussi ajouter "
+        "des MAC."),
+    "web.import.s3": ("3. Send it back", "3. Le renvoyer"),
+    "web.import.check": ("Check the file", "Vérifier le fichier"),
+    "web.import.file": ("Nothing is written yet. At most {size} KiB.",
+                        "Rien n'est écrit pour l'instant. {size} Kio au plus."),
     "web.import.hint": (
-        "A CSV with the MAC address in the first column and the name in the second. A MAC "
-        "that already has a name is updated, any other is added; a MAC the network has not "
-        "shown yet is kept and appears once it is seen. An empty name erases nothing. The "
-        "result comes back as a log file, one line per line of yours.",
-        "Un CSV avec l'adresse MAC en première colonne et le nom en seconde. Une MAC qui a "
-        "déjà un nom est mise à jour, toute autre est ajoutée ; une MAC que le réseau n'a pas "
-        "encore montrée est gardée et apparaît dès qu'elle est vue. Un nom vide n'efface "
-        "rien. Le résultat revient sous forme de fichier de log, une ligne par ligne du "
-        "vôtre."),
-    "web.import.file": ("CSV file (at most {size} KiB)", "Fichier CSV ({size} Kio au plus)"),
-    "web.import.send": ("Import", "Importer"),
-    "web.import.template": ("Download the CSV template", "Télécharger le modèle de CSV"),
+        "The MAC is in the first column and the name in the second (, or ;). A MAC that "
+        "already has a name is updated, any other is added; one the network has not shown yet "
+        "is kept and appears once it is seen. An empty name erases nothing.",
+        "La MAC est en première colonne et le nom en seconde (, ou ;). Une MAC qui a déjà "
+        "un nom est mise à jour, toute autre est ajoutée ; une MAC que le réseau n'a pas encore "
+        "montrée est gardée et apparaît dès qu'elle est vue. Un nom vide n'efface rien."),
     "web.import.nofile": ("No file received: choose a CSV file.",
                           "Aucun fichier reçu : choisissez un fichier CSV."),
+    "web.import.preview": (
+        "Nothing has been written yet. This is what applying the file would do.",
+        "Rien n'a encore été écrit. Voici ce que ferait l'application du fichier."),
+    "web.import.apply": ("Apply {count} change(s)", "Appliquer {count} changement(s)"),
+    "web.import.other": ("Choose another file", "Choisir un autre fichier"),
+    "web.import.nothing": ("Nothing to change in this file.",
+                           "Rien à changer dans ce fichier."),
+    "web.import.errors": (
+        "{count} line(s) cannot be used and will be skipped; the others can be applied.",
+        "{count} ligne(s) inutilisable(s), sautée(s) ; les autres peuvent être appliquées."),
+    "web.import.done": ("Done. The names are written.", "Terminé. Les noms sont écrits."),
+    "web.import.log": ("Download the log (CSV)", "Télécharger le log (CSV)"),
+    "web.import.back": ("Back to the nodes", "Retour aux nœuds"),
+    "web.import.more": ("The first {shown} of {total} lines are shown; the log holds all.",
+                        "Les {shown} premières lignes sur {total} sont montrées ; le log les "
+                        "contient toutes."),
+    "web.import.r.error": ("error", "erreur"),
+    "web.import.r.updated": ("updated", "mis à jour"),
+    "web.import.r.added": ("added", "ajouté"),
+    "web.import.r.skipped": ("skipped", "ignoré"),
+    "web.import.r.unchanged": ("unchanged", "inchangé"),
+    "web.import.c.line": ("Line", "Ligne"),
+    "web.import.c.before": ("Before", "Avant"),
+    "web.import.c.name": ("Name", "Nom"),
+    "web.import.c.result": ("Result", "Résultat"),
+    "web.import.c.detail": ("Detail", "Détail"),
     "web.scan.mass.title": ("Many addresses at once", "Beaucoup d'adresses à la fois"),
     "web.scan.mass.hint": (
         "A network is scanned from a shell, not from this page: the same command and the same "

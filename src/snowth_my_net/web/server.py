@@ -37,13 +37,14 @@ from snowth_my_net.merge.view import build_view
 from snowth_my_net.names import (
     MAX_IMPORT_BYTES,
     MAX_LENGTH,
-    TEMPLATE,
     NameError_,
     clean_mac,
     import_log,
     import_names,
+    plan_import,
     store_for,
 )
+from snowth_my_net.names import template as names_template
 from snowth_my_net.state.db import StateError, open_db
 from snowth_my_net.state.repo import Repo
 from snowth_my_net.web import nodeimport, pages, snmp
@@ -78,6 +79,7 @@ CONTENT_TYPES = {".csv": "text/csv; charset=utf-8", ".json": "application/json; 
                  ".mmd": "text/plain; charset=utf-8"}
 MAX_FORM_BYTES = 4096
 IMPORT_PATH = "/import"
+IMPORT_POSTS = (IMPORT_PATH, IMPORT_PATH + "/log")
 TEMPLATE_PATH = "/import/template.csv"
 JSON = "application/json; charset=utf-8"
 
@@ -516,36 +518,60 @@ class Site:
 
     # ----------------------------------------------------------------- bulk names
 
-    def import_page(self, t=None, message: str = "") -> bytes:
+    def import_page(self, t=None, message: str = "", status: int = HTTPStatus.OK
+                    ) -> tuple[int, str, bytes]:
         t = t or self.t
-        return self.shell("/nodes", t("web.import.title"),
-                          nodeimport.body(t, TEMPLATE_PATH, message, MAX_IMPORT_BYTES), t=t)
+        body = nodeimport.choose(t, TEMPLATE_PATH, len(self.known_nodes()), message,
+                                 MAX_IMPORT_BYTES)
+        return status, "text/html; charset=utf-8", self.shell(
+            "/nodes", t("web.import.title"), body, t=t)
 
-    def known_macs(self) -> set[str]:
-        """The MACs the network has shown; none when there is no state to ask."""
+    def known_nodes(self) -> list[tuple[str, str, str, str]]:
+        """``(mac, name given, address, vendor)`` of the nodes the network has shown; none when
+        there is no state to ask."""
         try:
             with closing(self.state()) as repo:
-                return {n.mac for n in build_view(self.loaded, repo, self.clock.now()).nodes}
+                view = build_view(self.loaded, repo, self.clock.now())
+                return [(n.mac, view.given_name(n.mac),
+                         n.current_ip.ip if n.current_ip else "", view.vendor(n))
+                        for n in view.nodes]
         except StateError:
-            return set()
+            return []
 
-    def import_names(self, content_type: str, data: bytes, t=None) -> tuple[int, str, bytes]:
-        """POST /import: the uploaded CSV names MACs; the answer is the log, as a file."""
+    def import_template(self) -> bytes:
+        return names_template(self.known_nodes()).encode("utf-8")
+
+    def import_check(self, content_type: str, data: bytes, t=None) -> tuple[int, str, bytes]:
+        """POST /import with a file: what it would do, written nowhere."""
         t = t or self.t
         text = nodeimport.upload_text(content_type, data)
         if text is None:
-            return (HTTPStatus.BAD_REQUEST, "text/html; charset=utf-8",
-                    self.import_page(t, t("web.import.nofile")))
+            return self.import_page(t, t("web.import.nofile"), HTTPStatus.BAD_REQUEST)
         try:
-            known = self.known_macs()
+            lines, _todo = plan_import(self.labels.read(), text,
+                                       {n[0] for n in self.known_nodes()})
+        except NameError_ as exc:
+            return self.import_page(t, str(exc), HTTPStatus.BAD_REQUEST)
+        return (HTTPStatus.OK, "text/html; charset=utf-8",
+                self.shell("/nodes", t("web.import.title"), nodeimport.check(t, lines, text), t=t))
+
+    def import_apply(self, form: dict, t=None) -> tuple[int, str, bytes]:
+        """POST /import with the checked text: write it, and show what happened."""
+        t = t or self.t
+        text = (form.get("csv") or [""])[0]
+        if not text.strip() or len(text.encode("utf-8")) > MAX_IMPORT_BYTES:
+            return self.import_page(t, t("web.import.nofile"), HTTPStatus.BAD_REQUEST)
+        known = {n[0] for n in self.known_nodes()}
+        try:
             with self.writing:
                 lines = import_names(self.labels, text, known)
         except NameError_ as exc:
-            return (HTTPStatus.BAD_REQUEST, "text/html; charset=utf-8",
-                    self.import_page(t, str(exc)))
+            return self.import_page(t, str(exc), HTTPStatus.BAD_REQUEST)
         log.info("bulk names: %d line(s), %d error(s)", len(lines),
                  sum(1 for x in lines if x.result == "error"))
-        return HTTPStatus.OK, CONTENT_TYPES[".csv"], import_log(lines).encode("utf-8")
+        return (HTTPStatus.OK, "text/html; charset=utf-8",
+                self.shell("/nodes", t("web.import.title"),
+                           nodeimport.done(t, lines, import_log(lines)), t=t))
 
     # ----------------------------------------------------------------- SNMP connections
 
@@ -786,9 +812,9 @@ class Site:
         if path.startswith("/download/"):
             return self.download(path.removeprefix("/download/"))
         if path == IMPORT_PATH:
-            return HTTPStatus.OK, html_type, self.import_page(t)
+            return self.import_page(t)
         if path == TEMPLATE_PATH:
-            return HTTPStatus.OK, CONTENT_TYPES[".csv"], TEMPLATE.encode()
+            return HTTPStatus.OK, CONTENT_TYPES[".csv"], self.import_template()
         if path == "/scan":
             if not self.scannable:
                 return (HTTPStatus.NOT_FOUND, html_type,
@@ -944,16 +970,16 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         token = parse_cookie(self.headers.get("Cookie"))
         if parsed.path not in ("/login", "/logout", "/password", "/name", "/action",
-                               "/snmp", "/confirm", "/scan", IMPORT_PATH):
+                               "/snmp", "/confirm", "/scan", *IMPORT_POSTS):
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         if parsed.path in ("/snmp", "/confirm"):
             self.manage(parsed.path, token)
             return
-        if parsed.path not in ("/name", "/action", "/scan", IMPORT_PATH) and not site.guarded:
+        if parsed.path not in ("/name", "/action", "/scan", *IMPORT_POSTS) and not site.guarded:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
-        if parsed.path in ("/name", "/action", "/scan", IMPORT_PATH) and site.guarded and (
+        if parsed.path in ("/name", "/action", "/scan", *IMPORT_POSTS) and site.guarded and (
                 site.sessions.user_of(token) is None):
             if "application/json" in (self.headers.get("Accept") or ""):
                 self.finish_response(HTTPStatus.UNAUTHORIZED, JSON,
@@ -961,8 +987,8 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self.finish_response(HTTPStatus.SEE_OTHER, "/login", b"")
             return
-        if parsed.path == IMPORT_PATH:
-            self.import_upload(site, token)
+        if parsed.path in IMPORT_POSTS:
+            self.import_upload(site, parsed.path)
             return
         form = self.read_form()
         if parsed.path == "/logout":
@@ -1020,21 +1046,28 @@ class Handler(BaseHTTPRequestHandler):
         status, where, body = site.manage_snmp(form, user, lang)
         self.finish_response(status, where, body)
 
-    def import_upload(self, site, token: str | None) -> None:
-        """POST /import: a file is too big for the small form reader, so it has its own limit."""
+    def import_upload(self, site, path: str) -> None:
+        """POST /import and /import/log: a file is too big for the small form reader, so these
+        have their own limit (a file travelling back in a field is a little bigger than itself)."""
         lang = site.translator(parse_cookie(self.headers.get("Cookie"), LANG_COOKIE))
         length = int(self.headers.get("Content-Length") or 0)
-        if length > MAX_IMPORT_BYTES + 4096:
+        if length > 3 * MAX_IMPORT_BYTES + 8192:
             self.close_connection = True        # the body is not read: do not keep the socket
             self.finish_response(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "text/plain; charset=utf-8",
                                  b"file too large\n")
             return
         data = self.rfile.read(max(length, 0))
-        status, content_type, body = site.import_names(
-            self.headers.get("Content-Type") or "", data, lang)
-        stamp = site.clock.now()
-        name = f"names-import-{stamp}.csv" if status == HTTPStatus.OK else ""
-        self.finish_response(status, content_type, body, filename=name)
+        content_type = self.headers.get("Content-Type") or ""
+        if content_type.lower().startswith("multipart/form-data"):
+            self.finish_response(*site.import_check(content_type, data, lang))
+            return
+        form = parse_qs(data.decode("utf-8", errors="replace"))
+        if path.endswith("/log"):
+            log_text = (form.get("log") or [""])[0]
+            self.finish_response(HTTPStatus.OK, CONTENT_TYPES[".csv"], log_text.encode("utf-8"),
+                                 filename=f"names-import-{site.clock.now()}.csv")
+            return
+        self.finish_response(*site.import_apply(form, lang))
 
     def read_form(self) -> dict:
         length = min(int(self.headers.get("Content-Length") or 0), MAX_FORM_BYTES)

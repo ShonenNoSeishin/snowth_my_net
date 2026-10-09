@@ -86,6 +86,8 @@ def _result(t, stored: dict | None) -> str:
     head = f'<p class="note">{esc(said + took)}</p>'
     if stored["status"] == "down":
         return head + f'<p class="empty">{esc(t("web.scan.down"))}</p>'
+    if stored["status"] == "suspect":
+        return head + f'<p class="error">{esc(t("web.scan.suspect"))} {esc(stored["detail"])}</p>'
     if not stored["ports"]:
         why = f" ({stored['detail']})" if stored["detail"] else ""
         return head + f'<p class="empty">{esc(t("web.scan.nothing_open"))}{esc(why)}</p>'

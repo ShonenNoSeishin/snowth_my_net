@@ -108,21 +108,26 @@ knows.
 
 ## Naming many MACs from a CSV
 
-The **Import names from a CSV** link above the Nodes table opens `/import`: download the
-template (`mac,name`), fill it — the MAC in the first column, the name in the second, `,` or `;`
-as a spreadsheet writes it — and send it. A MAC that already has a name is **updated**, any
-other is **added**, and what comes back is a log file, `names-import-<time>.csv`, with one row
-per line of yours (`line`, `mac`, `name`, `result`, `detail`) and a last row with the totals.
+The **Import names from a CSV** link above the Nodes table opens `/import`, in three steps.
 
-- `result` is `added`, `updated`, `unchanged` or `error`; a bad line (not a MAC, no name, a name
-  over 60 characters, a MAC already given on an earlier line) is reported and skipped, the rest
-  goes through.
-- An empty name never erases one: use `node name MAC` for that.
-- A MAC the network has not shown yet is kept, and the log says `not seen on the network yet`.
-  It becomes a row of the Nodes page when a collect sees it: a name does not invent a node.
-- Lines starting with `#` and blank lines are ignored; a file holds at most 5000 lines and 1 MiB.
-- Same rules as naming by hand: it needs the account when accounts are configured, and it writes
-  `node_names.json` only, in one atomic write.
+1. **Get the list.** The download is every node the network has shown, as `mac,name,ip,vendor`,
+   with the name each one has now (empty when none). Only the first two columns are read back;
+   the address and the vendor are there to help you fill the names in.
+2. **Fill the name column** in a spreadsheet. You can also add MACs the network has not shown
+   yet: the name is kept and the node carries it once a collect sees it (a name does not invent
+   a node). A line with no name changes nothing, and `,` or `;` both work as the separator.
+3. **Send it back.** Nothing is written yet: the page shows, line by line, what would be
+   `added`, `updated` (with the name it had), `unchanged`, `skipped` (no name on the line) or
+   an `error` (not a MAC, a name over 60 characters, a MAC already given on an earlier line).
+   If it suits you, **Apply** writes the names in one atomic write, and the result page keeps
+   the same table and offers the **log** as a CSV (`line`, `mac`, `name`, `before`, `result`,
+   `detail`, and a last row of totals).
+
+A bad line is skipped and the others still go through. An empty name never erases one: use
+`node name MAC` for that. Lines starting with `#` and blank lines are ignored; a file holds at
+most 5000 lines and 1 MiB. The file travels in the page between the steps, so nothing is
+applied that was not shown. It follows the rules of naming by hand — the account when accounts
+are configured — and writes `node_names.json` only.
 
 ## SNMP connections
 
@@ -188,6 +193,14 @@ in a shell, which applies the same rules and keeps its results where this page s
 ```bash
 docker compose exec web snowth_my_net scan 198.51.100.0/24 --profile common
 ```
+
+**A firewall or proxy in the path can answer for every address.** Without privilege, nmap decides
+that a host is up by connecting to ports 80 and 443, so a device that accepts those connections
+for everyone makes every address look up, with exactly those two ports open. When one same set
+of open ports comes back from at least 5 addresses and from half of those that answered, a
+network scan marks them `suspect` instead of `ok`, keeps the ports without presenting them as
+the host's own, and says so. If you see it, scan from inside the segment or look at the device
+in between. A single-address scan cannot make that comparison.
 
 A port scan can look like reconnaissance to an IPS: tell whoever runs it before you start.
 

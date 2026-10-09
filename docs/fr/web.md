@@ -106,24 +106,29 @@ colonnes qu'il connaît.
 
 ## Nommer beaucoup de MAC depuis un CSV
 
-Le lien **Importer des noms depuis un CSV** au-dessus du tableau Nœuds ouvre `/import` :
-téléchargez le modèle (`mac,name`), remplissez-le — la MAC en première colonne, le nom en
-seconde, `,` ou `;` comme l'écrit un tableur — et envoyez-le. Une MAC qui a déjà un nom est
-**mise à jour**, toute autre est **ajoutée**, et ce qui revient est un fichier de log,
-`names-import-<time>.csv`, avec une ligne par ligne du vôtre (`line`, `mac`, `name`, `result`,
-`detail`) et une dernière ligne de totaux.
+Le lien **Importer des noms depuis un CSV** au-dessus du tableau Nœuds ouvre `/import`, en trois
+étapes.
 
-- `result` vaut `added`, `updated`, `unchanged` ou `error` ; une mauvaise ligne (pas une MAC,
-  pas de nom, un nom de plus de 60 caractères, une MAC déjà donnée plus haut) est signalée et
-  sautée, le reste passe.
-- Un nom vide n'en efface jamais un : pour cela, `node name MAC`.
-- Une MAC que le réseau n'a pas encore montrée est gardée, et le log dit `not seen on the
-  network yet`. Elle devient une ligne de la page Nœuds quand une collecte la voit : un nom
-  n'invente pas un nœud.
-- Les lignes qui commencent par `#` et les lignes vides sont ignorées ; un fichier fait au plus
-  5000 lignes et 1 Mio.
-- Mêmes règles que nommer à la main : il faut le compte quand des comptes sont configurés, et
-  seul `node_names.json` est écrit, en une seule écriture atomique.
+1. **Récupérer la liste.** Le téléchargement contient tous les nœuds que le réseau a montrés,
+   sous la forme `mac,name,ip,vendor`, avec le nom que chacun a aujourd'hui (vide s'il n'en a
+   pas). Seules les deux premières colonnes sont relues ; l'adresse et le fabricant sont là pour
+   vous aider à remplir les noms.
+2. **Remplir la colonne des noms** dans un tableur. Vous pouvez aussi ajouter des MAC que le
+   réseau n'a pas encore montrées : le nom est gardé et le nœud le porte dès qu'une collecte le
+   voit (un nom n'invente pas un nœud). Une ligne sans nom ne change rien, et `,` comme `;`
+   fonctionnent comme séparateur.
+3. **Le renvoyer.** Rien n'est encore écrit : la page montre, ligne par ligne, ce qui serait
+   `added`, `updated` (avec le nom qu'il avait), `unchanged`, `skipped` (pas de nom sur la
+   ligne) ou une `error` (pas une MAC, un nom de plus de 60 caractères, une MAC déjà donnée plus
+   haut). Si cela convient, **Appliquer** écrit les noms en une seule écriture atomique, et la
+   page de résultat garde le même tableau et propose le **log** en CSV (`line`, `mac`, `name`,
+   `before`, `result`, `detail`, et une dernière ligne de totaux).
+
+Une mauvaise ligne est sautée et les autres passent. Un nom vide n'en efface jamais un : pour
+cela, `node name MAC`. Les lignes qui commencent par `#` et les lignes vides sont ignorées ; un
+fichier fait au plus 5000 lignes et 1 Mio. Le fichier voyage dans la page d'une étape à l'autre,
+donc rien n'est appliqué qui n'ait été montré. Les règles sont celles de nommer à la main — le
+compte quand des comptes sont configurés — et seul `node_names.json` est écrit.
 
 ## Connexions SNMP
 
@@ -193,6 +198,15 @@ cette page les montre :
 ```bash
 docker compose exec web snowth_my_net scan 198.51.100.0/24 --profile common
 ```
+
+**Un pare-feu ou un proxy sur le chemin peut répondre pour toutes les adresses.** Sans
+privilège, nmap décide qu'un hôte est up en se connectant aux ports 80 et 443 : un équipement qui
+accepte ces connexions pour tout le monde fait paraître toutes les adresses up, avec exactement
+ces deux ports ouverts. Quand un même ensemble de ports ouverts revient d'au moins 5 adresses et
+de la moitié de celles qui ont répondu, un scan de réseau les marque `suspect` au lieu de `ok`,
+garde les ports sans les présenter comme ceux de l'hôte, et le dit. Si vous le voyez, scannez
+depuis l'intérieur du segment ou regardez l'équipement intermédiaire. Un scan d'une seule adresse
+ne peut pas faire cette comparaison.
 
 Un scan de ports peut ressembler à de la reconnaissance pour un IPS : prévenez celui qui
 l'exploite avant de commencer.

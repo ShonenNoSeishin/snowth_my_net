@@ -16,6 +16,7 @@ from snowth_my_net import cli
 from snowth_my_net.config.manual import ManualError
 from snowth_my_net.config.schema import WebUserCfg
 from snowth_my_net.enrich import scan
+from snowth_my_net.i18n import Translator
 from snowth_my_net.state.db import open_db
 from snowth_my_net.state.repo import Repo
 from snowth_my_net.web import jobs
@@ -424,3 +425,36 @@ def test_check_warns_when_the_setting_cannot_have_any_effect(tmp_path):
     assert not any("web.nmap" in w for w in config_warnings(loaded))
     loaded.cfg.web.actions = False
     assert any("web.nmap is on" in w for w in config_warnings(loaded))
+
+
+def host(address, ports, status="ok"):
+    return {"address": address, "status": status, "detail": "",
+            "ports": [{"port": p, "proto": "tcp", "state": "open", "service": "x",
+                       "product": "", "version": ""} for p in ports]}
+
+
+def test_the_same_answer_from_most_addresses_is_a_device_in_the_path_not_the_hosts():
+    results = [host(f"10.0.0.{i}", [80, 443]) for i in range(1, 9)]
+    results += [host("10.0.0.9", []), host("10.0.0.10", [], "down")]
+    assert scan.flag_shared(results) == 8
+    assert {r["status"] for r in results[:8]} == {"suspect"}
+    assert "same open ports (80/tcp, 443/tcp)" in results[0]["detail"]
+    assert results[8]["status"] == "ok" and results[9]["status"] == "down"
+
+
+def test_a_real_fleet_and_a_small_scan_are_left_alone():
+    varied = [host("10.0.0.1", [22]), host("10.0.0.2", [80, 443]), host("10.0.0.3", [80, 443]),
+              host("10.0.0.4", [445]), host("10.0.0.5", [631]), host("10.0.0.6", [80])]
+    assert scan.flag_shared(varied) == 0
+    few = [host(f"10.0.0.{i}", [80, 443]) for i in range(1, 5)]       # four alike: not a pattern
+    assert scan.flag_shared(few) == 0
+    mixed = [host(f"10.0.0.{i}", [80, 443]) for i in range(1, 6)]     # five alike among a dozen
+    mixed += [host(f"10.0.1.{i}", [i + 1000]) for i in range(1, 9)]
+    assert scan.flag_shared(mixed) == 0
+
+
+def test_a_suspect_host_is_shown_as_not_trusted(tmp_path):
+    stored = {**host("10.0.0.1", [80]), "status": "suspect", "detail": "8 addresses answer",
+              "profile": "quick", "seconds": 0.0, "scanned_at": 1_700_000_000}
+    html = scanpage._result(Translator("en"), stored)
+    assert "Not trusted" in html and "8 addresses answer" in html and "<table" not in html
