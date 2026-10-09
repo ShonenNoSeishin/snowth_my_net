@@ -54,3 +54,12 @@ def test_arp_tables():
     assert [(e.ip, e.table) for e in media] == [("192.0.2.50", "media")]
     merged = arp.merge_tables(entries, media)
     assert len(merged) == 2 and next(e for e in merged if e.ip == "192.0.2.50").table == "physical"
+
+
+def test_invalid_and_unknown_neighbour_states_are_not_bindings():
+    from snowth_my_net.collect.tables import arp
+    suffix = (1, 1, 4, 10, 0, 0, 5)
+    phys = {suffix: bytes.fromhex("00005e005301")}
+    for state in (5, 6, 7):
+        assert arp.parse_net_to_physical(phys, {}, {suffix: state}) == []
+    assert arp.parse_net_to_physical(phys, {}, {suffix: 1})

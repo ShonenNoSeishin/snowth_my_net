@@ -152,3 +152,25 @@ def test_a_radio_is_never_an_uplink_because_of_its_station_count():
     assert where(node(data)) == [(1, 7)]
     data = inputs([fdb(HOST, 1, 8), *filler(1, 8, 80)], ports=ports)
     assert where(node(data)) == []
+
+
+def test_a_mac_that_moved_is_on_its_new_port_not_the_empty_one_it_left():
+    """sw1 walked again (run 11) and no longer lists the laptop; sw2 lists it among 3 others."""
+    data = inputs([fdb(HOST, 1, 3, seen=NOW - 600, run=10), *filler(1, 9, 2, run=11),
+                   fdb(HOST, 2, 7, run=11), *filler(2, 7, 3, run=11)])
+    n = node(data)
+    assert where(n) == [(2, 7)]
+    old = next(s for s in n.sightings if s.device_id == 1)
+    assert old.verdict == "shadowed" and old.shadowed_by.device_id == 2
+
+
+def test_two_ports_both_still_listed_keep_the_quieter_one():
+    data = inputs([fdb(HOST, 1, 3, run=11), fdb(HOST, 2, 7, run=11), *filler(2, 7, 3, run=11),
+                   *filler(1, 9, 1, run=11)])
+    assert where(node(data)) == [(1, 3)]
+
+
+def test_when_no_candidate_is_current_the_old_rule_still_decides():
+    data = inputs([fdb(HOST, 1, 3, seen=NOW - 60, run=9), fdb(HOST, 2, 7, seen=NOW - 60, run=9),
+                   *filler(1, 9, 1, run=11), *filler(2, 9, 1, run=11)])
+    assert len(where(node(data))) == 1

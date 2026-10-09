@@ -284,3 +284,15 @@ def test_a_sysname_is_not_lent_to_a_node_that_is_not_the_device(tmp_path):
     assert view.snmp_name(node) == "IM C3000"
     view.polled = {ADDRESS: (7, "")}
     assert view.snmp_name(node) == ""                      # nothing reported, nothing claimed
+
+
+def test_when_several_probes_answer_one_address_the_order_is_fixed(tmp_path):
+    from snowth_my_net.state.db import open_db
+    from snowth_my_net.state.repo import Repo
+    repo = Repo(open_db(tmp_path / "state.sqlite"))
+    for source, name in (("mdns", "from-mdns"), ("llmnr", "from-llmnr"), ("netbios", "FROM-NB")):
+        repo.save_probes(source, {"10.0.0.7": (name, "", "ok")}, 1000, 3600, 60)
+    assert repo.probe_names(1001)["10.0.0.7"] == ("FROM-NB", "netbios")
+    repo.conn.execute("DELETE FROM name_probe WHERE source = 'netbios'")
+    assert repo.probe_names(1001)["10.0.0.7"] == ("from-mdns", "mdns")
+    repo.conn.close()

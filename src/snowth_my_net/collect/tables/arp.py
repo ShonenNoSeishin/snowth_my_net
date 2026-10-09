@@ -1,7 +1,7 @@
 """IP-MIB neighbour caches: ``ipNetToPhysicalTable`` (v4 + v6) and ``ipNetToMediaTable``.
 
 Both are always read: some agents only fill the legacy one (typical of firewalls), others only
-the new one. Invalid, local and incomplete entries are dropped.
+the new one. Invalid, local, incomplete and unknown entries are dropped.
 """
 
 from __future__ import annotations
@@ -12,7 +12,8 @@ from snowth_my_net.snmp.index import decode_inet_address, decode_ipv4_index
 from snowth_my_net.snmp.values import is_multicast, normalize_mac
 
 TYPE_INVALID, TYPE_LOCAL = 2, 5
-STATE_INCOMPLETE = 7
+STATE_INVALID, STATE_UNKNOWN, STATE_INCOMPLETE = 5, 6, 7
+UNUSABLE_STATES = (STATE_INVALID, STATE_UNKNOWN, STATE_INCOMPLETE)   # RFC 4293: not a binding
 
 Column = dict[tuple[int, ...], object]
 
@@ -42,7 +43,7 @@ def parse_net_to_physical(phys: Column, types: Column, states: Column) -> list[A
             continue
         if types.get(suffix) in (TYPE_INVALID, TYPE_LOCAL):
             continue
-        if states.get(suffix) == STATE_INCOMPLETE:
+        if states.get(suffix) in UNUSABLE_STATES:
             continue
         mac = _mac(value)
         if mac is None:

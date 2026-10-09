@@ -320,7 +320,12 @@ def resolve_mac(ctx: MergeContext, mac: str) -> Node:
         newest = max(s.last_seen for s in access)
         window = [s for s in access if s.last_seen >= newest - cfg.transit_window]
         if len(window) > 1:
-            keep = min(window, key=lambda s: (s.mac_count, -s.last_seen, s.device_id, s.ifindex))
+            # A port the MAC is no longer listed on (its device walked again since) cannot win
+            # against one where it is still listed: "fewest MACs" is a way to tell an edge from
+            # a transit among sightings of the same walk, and a port it left always looks empty.
+            current = [s for s in window if s.last_run_id == ctx.latest_run.get(s.device_id)]
+            keep = min(current or window,
+                       key=lambda s: (s.mac_count, -s.last_seen, s.device_id, s.ifindex))
             for s in window:
                 if s is not keep:
                     s.verdict, s.shadowed_by = "shadowed", keep

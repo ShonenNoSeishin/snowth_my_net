@@ -458,3 +458,17 @@ def test_a_suspect_host_is_shown_as_not_trusted(tmp_path):
               "profile": "quick", "seconds": 0.0, "scanned_at": 1_700_000_000}
     html = scanpage._result(Translator("en"), stored)
     assert "Not trusted" in html and "8 addresses answer" in html and "<table" not in html
+
+
+def test_a_down_from_the_discovery_never_replaces_a_scan_that_found_the_host(tmp_path):
+    repo = Repo(open_db(tmp_path / "state.sqlite"))
+    one = {"address": "192.0.2.30", "profile": "quick", "status": "ok",
+           "ports": [{"port": 9100, "proto": "tcp", "state": "open", "service": "jetdirect",
+                      "product": "", "version": ""}]}
+    repo.save_scans([one], NOW)
+    repo.save_scans([{"address": "192.0.2.30", "profile": "common", "status": "down"}], NOW + 5)
+    kept = repo.scans("192.0.2.30")["192.0.2.30"]
+    assert kept["status"] == "ok" and kept["scanned_at"] == NOW and kept["ports"][0]["port"] == 9100
+    repo.save_scans([{"address": "192.0.2.31", "profile": "common", "status": "down"}], NOW)
+    assert repo.scans("192.0.2.31")["192.0.2.31"]["status"] == "down"      # nothing to protect
+    repo.conn.close()

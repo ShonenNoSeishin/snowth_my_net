@@ -14,6 +14,14 @@ KEEP_STATUS_RUNS = 50
 KEEP_RUNS_DAYS = 90
 
 
+PROBE_ORDER = ("netbios", "mdns", "llmnr")   # which answer stands when several hosts' sources reply
+
+
+def _probe_rank(source: str) -> int:
+    """NetBIOS first: it is the one that states an adapter address to check the name against."""
+    return PROBE_ORDER.index(source) if source in PROBE_ORDER else len(PROBE_ORDER)
+
+
 class Repo:
     def __init__(self, conn: sqlite3.Connection) -> None:
         self.conn = conn
@@ -544,9 +552,14 @@ class Repo:
 
     def probe_names(self, now: int) -> dict[str, tuple[str, str]]:
         """``{address: (name, source)}`` for names a host stated about itself, still valid."""
-        return {r[0]: (r[1], r[2]) for r in self.conn.execute(
-            "SELECT address, name, source FROM name_probe "
-            "WHERE status = 'ok' AND expires_at >= ?", (now,)) if r[1]}
+        found = {}
+        for row in self.conn.execute(
+                "SELECT address, name, source FROM name_probe "
+                "WHERE status = 'ok' AND expires_at >= ?", (now,)):
+            held = found.get(row[0])
+            if row[1] and (held is None or _probe_rank(row[2]) < _probe_rank(held[1])):
+                found[row[0]] = (row[1], row[2])
+        return found
 
     def probe_outcomes(self, now: int) -> dict[str, dict[str, tuple[str, str, int]]]:
         """``{address: {source: (status, mac, asked_at)}}`` for answers still valid — the
@@ -586,7 +599,12 @@ class Repo:
 
     def save_scans(self, results: list[dict], now: int) -> None:
         """Replace the stored scan of each address: ``address, profile, status, detail, ports,
-        seconds`` per result. A scan describes the host now, so the last one is the only one."""
+        seconds`` per result. A scan describes the host now, so the last one is the only one,
+        except that "down" never replaces a scan that found the host: unprivileged, that only
+        says nothing answered on the two ports the discovery tries, not that the host is gone."""
+        results = [r for r in results if not (
+            r["status"] == "down" and self.scans(r["address"]).get(r["address"], {}).get(
+                "status") in ("ok", "suspect"))]
         with self.conn:
             self.conn.executemany(
                 "INSERT INTO host_scan(address, profile, status, detail, ports, scanned_at, "
