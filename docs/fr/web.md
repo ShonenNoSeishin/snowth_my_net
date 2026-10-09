@@ -104,6 +104,27 @@ Il arrive aussi dans `snapshot.json` et dans `explain`. Il est absent de `nodes.
 `export.nodes.include_name: true`, pour que ce qui lit ce fichier continue d'y trouver les
 colonnes qu'il connaît.
 
+## Nommer beaucoup de MAC depuis un CSV
+
+Le lien **Importer des noms depuis un CSV** au-dessus du tableau Nœuds ouvre `/import` :
+téléchargez le modèle (`mac,name`), remplissez-le — la MAC en première colonne, le nom en
+seconde, `,` ou `;` comme l'écrit un tableur — et envoyez-le. Une MAC qui a déjà un nom est
+**mise à jour**, toute autre est **ajoutée**, et ce qui revient est un fichier de log,
+`names-import-<time>.csv`, avec une ligne par ligne du vôtre (`line`, `mac`, `name`, `result`,
+`detail`) et une dernière ligne de totaux.
+
+- `result` vaut `added`, `updated`, `unchanged` ou `error` ; une mauvaise ligne (pas une MAC,
+  pas de nom, un nom de plus de 60 caractères, une MAC déjà donnée plus haut) est signalée et
+  sautée, le reste passe.
+- Un nom vide n'en efface jamais un : pour cela, `node name MAC`.
+- Une MAC que le réseau n'a pas encore montrée est gardée, et le log dit `not seen on the
+  network yet`. Elle devient une ligne de la page Nœuds quand une collecte la voit : un nom
+  n'invente pas un nœud.
+- Les lignes qui commencent par `#` et les lignes vides sont ignorées ; un fichier fait au plus
+  5000 lignes et 1 Mio.
+- Mêmes règles que nommer à la main : il faut le compte quand des comptes sont configurés, et
+  seul `node_names.json` est écrit, en une seule écriture atomique.
+
 ## Connexions SNMP
 
 L'onglet **SNMP** n'existe que si un compte est configuré, et il **redemande ce mot de passe**

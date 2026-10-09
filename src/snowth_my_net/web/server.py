@@ -33,10 +33,20 @@ from snowth_my_net.config.manual import ManualError, normalize_address
 from snowth_my_net.config.schema import LOOPBACK
 from snowth_my_net.i18n import Translator, detect_language
 from snowth_my_net.logs import get_logger
-from snowth_my_net.names import MAX_LENGTH, NameError_, clean_mac, store_for
+from snowth_my_net.merge.view import build_view
+from snowth_my_net.names import (
+    MAX_IMPORT_BYTES,
+    MAX_LENGTH,
+    TEMPLATE,
+    NameError_,
+    clean_mac,
+    import_log,
+    import_names,
+    store_for,
+)
 from snowth_my_net.state.db import StateError, open_db
 from snowth_my_net.state.repo import Repo
-from snowth_my_net.web import pages, snmp
+from snowth_my_net.web import nodeimport, pages, snmp
 from snowth_my_net.web import scan as scanpage
 from snowth_my_net.web.accounts import (
     MIN_LENGTH,
@@ -67,6 +77,8 @@ CONTENT_TYPES = {".csv": "text/csv; charset=utf-8", ".json": "application/json; 
                  ".html": "text/html; charset=utf-8", ".dot": "text/plain; charset=utf-8",
                  ".mmd": "text/plain; charset=utf-8"}
 MAX_FORM_BYTES = 4096
+IMPORT_PATH = "/import"
+TEMPLATE_PATH = "/import/template.csv"
 JSON = "application/json; charset=utf-8"
 
 
@@ -502,6 +514,39 @@ class Site:
             return self.scan_page(address, t, t("web.do.busy"), HTTPStatus.CONFLICT)
         return HTTPStatus.SEE_OTHER, "/scan?address=" + quote(address, safe=":"), b""
 
+    # ----------------------------------------------------------------- bulk names
+
+    def import_page(self, t=None, message: str = "") -> bytes:
+        t = t or self.t
+        return self.shell("/nodes", t("web.import.title"),
+                          nodeimport.body(t, TEMPLATE_PATH, message, MAX_IMPORT_BYTES), t=t)
+
+    def known_macs(self) -> set[str]:
+        """The MACs the network has shown; none when there is no state to ask."""
+        try:
+            with closing(self.state()) as repo:
+                return {n.mac for n in build_view(self.loaded, repo, self.clock.now()).nodes}
+        except StateError:
+            return set()
+
+    def import_names(self, content_type: str, data: bytes, t=None) -> tuple[int, str, bytes]:
+        """POST /import: the uploaded CSV names MACs; the answer is the log, as a file."""
+        t = t or self.t
+        text = nodeimport.upload_text(content_type, data)
+        if text is None:
+            return (HTTPStatus.BAD_REQUEST, "text/html; charset=utf-8",
+                    self.import_page(t, t("web.import.nofile")))
+        try:
+            known = self.known_macs()
+            with self.writing:
+                lines = import_names(self.labels, text, known)
+        except NameError_ as exc:
+            return (HTTPStatus.BAD_REQUEST, "text/html; charset=utf-8",
+                    self.import_page(t, str(exc)))
+        log.info("bulk names: %d line(s), %d error(s)", len(lines),
+                 sum(1 for x in lines if x.result == "error"))
+        return HTTPStatus.OK, CONTENT_TYPES[".csv"], import_log(lines).encode("utf-8")
+
     # ----------------------------------------------------------------- SNMP connections
 
     def confirm_page(self, t, message: str = "") -> bytes:
@@ -740,6 +785,10 @@ class Site:
             return HTTPStatus.SEE_OTHER, "/password", b""
         if path.startswith("/download/"):
             return self.download(path.removeprefix("/download/"))
+        if path == IMPORT_PATH:
+            return HTTPStatus.OK, html_type, self.import_page(t)
+        if path == TEMPLATE_PATH:
+            return HTTPStatus.OK, CONTENT_TYPES[".csv"], TEMPLATE.encode()
         if path == "/scan":
             if not self.scannable:
                 return (HTTPStatus.NOT_FOUND, html_type,
@@ -778,8 +827,10 @@ class Site:
         column = 4 if path == "/nodes" else 0    # the MAC: three hostnames and a description first
         if path == "/" and self.scannable:
             link, column = "/scan?address=", 1   # the address of a device opens its scan page
+        before = (f'<p class="note"><a href="{IMPORT_PATH}">{esc(t("web.import.link"))}</a></p>'
+                  if path == "/nodes" else "")
         return (HTTPStatus.OK, html_type,
-                self.table_page(path, title, table, subtitle, link, t, column,
+                self.table_page(path, title, table, subtitle, link, t, column, before=before,
                                 disagreeing_only=bool(query.get("disagree"))))
 
     def asset(self, name: str) -> tuple[int, str, bytes]:
@@ -883,7 +934,9 @@ class Handler(BaseHTTPRequestHandler):
             log.exception("%s failed", parsed.path)
             status, content_type = HTTPStatus.INTERNAL_SERVER_ERROR, "text/plain; charset=utf-8"
             body = b"internal error; see the logs\n"
-        self.finish_response(status, content_type, body)
+        self.finish_response(status, content_type, body,
+                             filename="names-template.csv"
+                             if parsed.path == TEMPLATE_PATH and status == HTTPStatus.OK else "")
 
     def do_POST(self) -> None:             # name imposed by BaseHTTPRequestHandler
         """Only the login and logout forms; every page itself stays a GET."""
@@ -891,22 +944,25 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         token = parse_cookie(self.headers.get("Cookie"))
         if parsed.path not in ("/login", "/logout", "/password", "/name", "/action",
-                               "/snmp", "/confirm", "/scan"):
+                               "/snmp", "/confirm", "/scan", IMPORT_PATH):
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         if parsed.path in ("/snmp", "/confirm"):
             self.manage(parsed.path, token)
             return
-        if parsed.path not in ("/name", "/action", "/scan") and not site.guarded:
+        if parsed.path not in ("/name", "/action", "/scan", IMPORT_PATH) and not site.guarded:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
-        if parsed.path in ("/name", "/action", "/scan") and site.guarded and (
+        if parsed.path in ("/name", "/action", "/scan", IMPORT_PATH) and site.guarded and (
                 site.sessions.user_of(token) is None):
             if "application/json" in (self.headers.get("Accept") or ""):
                 self.finish_response(HTTPStatus.UNAUTHORIZED, JSON,
                                      json.dumps({"error": "sign in again"}).encode())
                 return
             self.finish_response(HTTPStatus.SEE_OTHER, "/login", b"")
+            return
+        if parsed.path == IMPORT_PATH:
+            self.import_upload(site, token)
             return
         form = self.read_form()
         if parsed.path == "/logout":
@@ -964,6 +1020,22 @@ class Handler(BaseHTTPRequestHandler):
         status, where, body = site.manage_snmp(form, user, lang)
         self.finish_response(status, where, body)
 
+    def import_upload(self, site, token: str | None) -> None:
+        """POST /import: a file is too big for the small form reader, so it has its own limit."""
+        lang = site.translator(parse_cookie(self.headers.get("Cookie"), LANG_COOKIE))
+        length = int(self.headers.get("Content-Length") or 0)
+        if length > MAX_IMPORT_BYTES + 4096:
+            self.close_connection = True        # the body is not read: do not keep the socket
+            self.finish_response(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "text/plain; charset=utf-8",
+                                 b"file too large\n")
+            return
+        data = self.rfile.read(max(length, 0))
+        status, content_type, body = site.import_names(
+            self.headers.get("Content-Type") or "", data, lang)
+        stamp = site.clock.now()
+        name = f"names-import-{stamp}.csv" if status == HTTPStatus.OK else ""
+        self.finish_response(status, content_type, body, filename=name)
+
     def read_form(self) -> dict:
         length = min(int(self.headers.get("Content-Length") or 0), MAX_FORM_BYTES)
         if length <= 0:
@@ -972,7 +1044,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def finish_response(self, status: int, content_type: str, body: bytes,
                         set_cookie: str | None = None, clear_cookie: bool = False,
-                        lang_cookie: str | None = None) -> None:
+                        lang_cookie: str | None = None, filename: str = "") -> None:
         """A 303 puts the target in ``content_type``; anything else is a normal answer."""
         self.send_response(status)
         if status == HTTPStatus.SEE_OTHER:
@@ -981,6 +1053,8 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
+        if filename:
+            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
         if set_cookie or clear_cookie:
             flags = "Path=/; HttpOnly; SameSite=Strict"
             if self.secure_request():

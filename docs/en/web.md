@@ -106,6 +106,24 @@ It reaches `snapshot.json` and `explain` too. It is left out of `nodes.csv` unle
 `export.nodes.include_name: true`, so that whatever reads that file keeps finding the columns it
 knows.
 
+## Naming many MACs from a CSV
+
+The **Import names from a CSV** link above the Nodes table opens `/import`: download the
+template (`mac,name`), fill it — the MAC in the first column, the name in the second, `,` or `;`
+as a spreadsheet writes it — and send it. A MAC that already has a name is **updated**, any
+other is **added**, and what comes back is a log file, `names-import-<time>.csv`, with one row
+per line of yours (`line`, `mac`, `name`, `result`, `detail`) and a last row with the totals.
+
+- `result` is `added`, `updated`, `unchanged` or `error`; a bad line (not a MAC, no name, a name
+  over 60 characters, a MAC already given on an earlier line) is reported and skipped, the rest
+  goes through.
+- An empty name never erases one: use `node name MAC` for that.
+- A MAC the network has not shown yet is kept, and the log says `not seen on the network yet`.
+  It becomes a row of the Nodes page when a collect sees it: a name does not invent a node.
+- Lines starting with `#` and blank lines are ignored; a file holds at most 5000 lines and 1 MiB.
+- Same rules as naming by hand: it needs the account when accounts are configured, and it writes
+  `node_names.json` only, in one atomic write.
+
 ## SNMP connections
 
 The **SNMP** tab exists only when an account is configured, and it **asks for that password

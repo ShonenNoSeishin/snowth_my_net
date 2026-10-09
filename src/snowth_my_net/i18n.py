@@ -737,6 +737,23 @@ WEB = {
     "web.scan.bad": ("{text} is not an IP address.", "{text} n'est pas une adresse IP."),
     "web.scan.refused": ("This address is {reason}: it is never scanned.",
                          "Cette adresse est {reason} : elle n'est jamais scannée."),
+    "web.import.link": ("Import names from a CSV", "Importer des noms depuis un CSV"),
+    "web.import.title": ("Import names", "Importer des noms"),
+    "web.import.hint": (
+        "A CSV with the MAC address in the first column and the name in the second. A MAC "
+        "that already has a name is updated, any other is added; a MAC the network has not "
+        "shown yet is kept and appears once it is seen. An empty name erases nothing. The "
+        "result comes back as a log file, one line per line of yours.",
+        "Un CSV avec l'adresse MAC en première colonne et le nom en seconde. Une MAC qui a "
+        "déjà un nom est mise à jour, toute autre est ajoutée ; une MAC que le réseau n'a pas "
+        "encore montrée est gardée et apparaît dès qu'elle est vue. Un nom vide n'efface "
+        "rien. Le résultat revient sous forme de fichier de log, une ligne par ligne du "
+        "vôtre."),
+    "web.import.file": ("CSV file (at most {size} KiB)", "Fichier CSV ({size} Kio au plus)"),
+    "web.import.send": ("Import", "Importer"),
+    "web.import.template": ("Download the CSV template", "Télécharger le modèle de CSV"),
+    "web.import.nofile": ("No file received: choose a CSV file.",
+                          "Aucun fichier reçu : choisissez un fichier CSV."),
     "web.scan.mass.title": ("Many addresses at once", "Beaucoup d'adresses à la fois"),
     "web.scan.mass.hint": (
         "A network is scanned from a shell, not from this page: the same command and the same "

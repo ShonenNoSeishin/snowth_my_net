@@ -9,9 +9,12 @@ touching what the collector owns.
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import os
 import stat
+from dataclasses import dataclass
 from pathlib import Path
 
 from snowth_my_net.snmp.values import normalize_mac
@@ -91,6 +94,15 @@ class Names:
         self._write(names)
         return value
 
+    def set_many(self, given: dict[str, str], field: str = "name") -> None:
+        """Set one field of many MACs in one atomic write (values already cleaned)."""
+        names = self.read()
+        for mac, value in given.items():
+            entry = dict(names.get(mac, {}))
+            entry[field] = value
+            names[mac] = entry
+        self._write(names)
+
     def _write(self, names: dict[str, dict[str, str]]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temp = self.path.with_name(self.path.name + ".new")
@@ -112,3 +124,109 @@ class Names:
 def store_for(paths) -> Names:
     """The store of a loaded configuration (``loaded.paths``)."""
     return Names(paths.state_dir / STORE_NAME)
+
+
+# ---------------------------------------------------------------------- bulk import
+
+MAX_IMPORT_ROWS = 5000
+MAX_IMPORT_BYTES = 1024 * 1024
+TEMPLATE = ("mac,name\r\n"
+            "# One line per MAC: the address, then the name. Lines starting with # are ignored.\r\n"
+            "# 00:11:22:33:44:55,printer accounting\r\n"
+            "# aa-bb-cc-dd-ee-ff,Julie's desk\r\n")
+HEADERS = ("mac", "mac address", "adresse mac")
+ADDED, UPDATED, UNCHANGED, ERROR = "added", "updated", "unchanged", "error"
+
+
+@dataclass(frozen=True)
+class ImportLine:
+    line: int
+    mac: str
+    name: str
+    result: str          # added | updated | unchanged | error
+    detail: str
+
+
+def _rows(text: str) -> list[tuple[int, list[str]]]:
+    """``(line number, cells)`` of the non-empty, non-comment lines. The separator is the one
+    the first line uses (a spreadsheet in French writes ``;``)."""
+    text = text.lstrip("\ufeff")
+    first = next((ln for ln in text.splitlines() if ln.strip() and not ln.startswith("#")), "")
+    delimiter = max(",;\t", key=first.count) if any(c in first for c in ",;\t") else ","
+    rows = []
+    reader = csv.reader(io.StringIO(text), delimiter=delimiter)
+    for cells in reader:
+        if not cells or not "".join(cells).strip() or cells[0].lstrip().startswith("#"):
+            continue
+        rows.append((reader.line_num, cells))
+    return rows
+
+
+def import_names(store: Names, text: str, known: set[str]) -> list[ImportLine]:
+    """Give names to MACs from a two-column CSV and write them all at once.
+
+    A MAC that already has a name is updated; any other is added (``known`` tells whether the
+    network has shown it yet, which the detail says). An empty name never erases one, a
+    repeated MAC keeps its first line, and a bad line is reported and skipped.
+    """
+    rows = _rows(text)
+    if rows and rows[0][1][0].strip().lower() in HEADERS:    # a header: mac,name
+        rows = rows[1:]
+    if len(rows) > MAX_IMPORT_ROWS:
+        raise NameError_(f"at most {MAX_IMPORT_ROWS} lines at a time, this file has {len(rows)}")
+    current = store.read()
+    out: list[ImportLine] = []
+    todo: dict[str, str] = {}
+    seen: dict[str, int] = {}
+    for number, cells in rows:
+        raw_mac = cells[0].strip()
+        name = cells[1] if len(cells) > 1 else ""
+        mac = normalize_mac(raw_mac)
+        if mac is None:
+            out.append(ImportLine(number, raw_mac, name.strip(), ERROR, "not a MAC address"))
+            continue
+        if len(cells) < 2:
+            out.append(ImportLine(number, mac, "", ERROR, "no second column: the name"))
+            continue
+        try:
+            name = clean_field("name", name)
+        except NameError_ as exc:
+            out.append(ImportLine(number, mac, name.strip()[:60], ERROR, str(exc)))
+            continue
+        if not name:
+            out.append(ImportLine(number, mac, "", ERROR, "empty name (nothing is erased)"))
+            continue
+        if mac in seen:
+            out.append(ImportLine(number, mac, name, ERROR,
+                                  f"MAC already on line {seen[mac]}, this line is ignored"))
+            continue
+        seen[mac] = number
+        before = current.get(mac, {}).get("name", "")
+        if before == name:
+            out.append(ImportLine(number, mac, name, UNCHANGED, "already named so"))
+        elif before:
+            todo[mac] = name
+            out.append(ImportLine(number, mac, name, UPDATED, f"was {before!r}"))
+        else:
+            todo[mac] = name
+            out.append(ImportLine(number, mac, name, ADDED,
+                                  "" if mac in known else "not seen on the network yet"))
+    if todo:
+        store.set_many(todo)
+    return out
+
+
+def import_log(lines: list[ImportLine]) -> str:
+    """The result as a CSV, one row per line of the upload and a last row with the totals.
+    A cell a spreadsheet would run as a formula is quoted with a leading apostrophe."""
+    def safe(value: str) -> str:
+        return "'" + value if value[:1] in ("=", "+", "-", "@") else value
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\r\n")
+    writer.writerow(["line", "mac", "name", "result", "detail"])
+    for entry in lines:
+        writer.writerow([entry.line, entry.mac, safe(entry.name), entry.result, safe(entry.detail)])
+    counts = {k: sum(1 for e in lines if e.result == k) for k in (ADDED, UPDATED, UNCHANGED, ERROR)}
+    writer.writerow(["", "", "", "total", ", ".join(f"{n} {k}" for k, n in counts.items())])
+    return buffer.getvalue()
