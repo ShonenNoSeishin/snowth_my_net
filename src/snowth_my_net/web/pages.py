@@ -28,7 +28,7 @@ class Cell:
     text: str
     note: str = ""
     title: str = ""                         # shown on hover: the exact stored value
-    tone: str = ""                          # "", "bad" or "warn": how the cell reads at a glance
+    tone: str = ""                          # "", "ok", "bad" or "warn": how it reads at a glance
     more: tuple[str, ...] = ()              # folded away behind a "+n": they would widen the row
 
 
@@ -67,7 +67,7 @@ def help_for(t, page: str, columns: list[tuple[str, str]], keys: list[str | None
     return pairs + [("", t(key)) for key in extra]
 
 
-TONES = {"failed": "bad", "never": "bad", "partial": "warn"}
+TONES = {"ok": "ok", "failed": "bad", "never": "bad", "partial": "warn"}
 
 
 def _status_cell(status: str, error: str) -> Cell:
@@ -307,7 +307,7 @@ def runs(repo: Repo, t, limit: int = 50) -> Table:
         stats = json.loads(run["stats"] or "{}")
         duration = f"{run['finished_at'] - run['started_at']} s" if run["finished_at"] else "…"
         rows.append([str(run["id"]), run["command"], When(run["started_at"]), duration,
-                     run["status"] or "running",
+                     Cell(run["status"] or "running", tone=TONES.get(run["status"] or "", "")),
                      f"{stats.get('reachable', '—')}/{stats.get('devices', '—')}"])
     columns = [(t("col.run"), "number"), (t("col.command"), "text"),
                (t("col.started"), "text"), (t("col.duration"), "text"),

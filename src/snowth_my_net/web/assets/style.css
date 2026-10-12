@@ -1,21 +1,26 @@
 /* snowth_my_net web interface: one column, one table, nothing that moves on its own. */
+/* Light: cool paper, ink chassis bar, one fibre-teal accent. Status is read from its LED. */
 :root {
-  --bg: #f7f7f5; --panel: #fff; --text: #1d2126; --muted: #69707a; --line: #e2e3e0;
-  --accent: #2f6f5e; --stripe: #fafaf8; --hover: #eef4f1; --bad: #b3261e; --warn: #8a6100;
+  --bg: #eceff2; --panel: #fbfcfd; --text: #16222d; --muted: #566676; --line: #d3d9df;
+  --accent: #0b7285; --stripe: #f4f6f8; --hover: #e4eef1; --bad: #b3261e; --warn: #8f5d00;
+  --ok: #2b7a4b; --ink: #14202b; --ink-text: #e8eef3; --ink-muted: #9fb0bf;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Liberation Mono", Consolas, monospace;
   color-scheme: light;
 }
 /* Dark: the system preference, unless the reader chose otherwise with the header button. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #15181c; --panel: #1c2026; --text: #e3e6ea; --muted: #97a0aa; --line: #2c323a;
-    --accent: #7cc7ae; --stripe: #1f242a; --hover: #243029; --bad: #f2b8b5; --warn: #e0c08b;
+    --bg: #0f151b; --panel: #172029; --text: #e2e8ee; --muted: #91a0af; --line: #26333e;
+    --accent: #5cc4d6; --stripe: #1a242d; --hover: #1f3038; --bad: #f5a5a0; --warn: #e6c27a;
+    --ok: #6fcf97; --ink: #0a1016; --ink-text: #e2e8ee; --ink-muted: #8394a4;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #15181c; --panel: #1c2026; --text: #e3e6ea; --muted: #97a0aa; --line: #2c323a;
-  --accent: #7cc7ae; --stripe: #1f242a; --hover: #243029; --bad: #f2b8b5; --warn: #e0c08b;
+  --bg: #0f151b; --panel: #172029; --text: #e2e8ee; --muted: #91a0af; --line: #26333e;
+  --accent: #5cc4d6; --stripe: #1a242d; --hover: #1f3038; --bad: #f5a5a0; --warn: #e6c27a;
+  --ok: #6fcf97; --ink: #0a1016; --ink-text: #e2e8ee; --ink-muted: #8394a4;
 }
 * { box-sizing: border-box; }
 body {
@@ -115,7 +120,7 @@ td.col-port, th.col-port { max-width: 12ch; }
 td.col-vlan, th.col-vlan { max-width: 7ch; }
 /* The addresses column never clips: it holds a fold that must be able to open. */
 td.col-ip, th.col-ip { max-width: 24ch; overflow: visible; }
-td.col-seen, th.col-seen { max-width: 18ch; }
+td.col-seen, th.col-seen { max-width: 22ch; }
 
 /* The addresses an elected one hides. The list opens inside its own cell and the row grows
    with it: a panel floating over the row was clipped by the ellipsis its cell needs, and it
@@ -332,3 +337,56 @@ form.cell input:hover, form.cell input:focus { border-radius: 5px; }
 form.cell input::placeholder { color: var(--line); }
 nav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; white-space: nowrap; }
 @media (max-width: 600px) { header { gap: 8px 16px; } nav { order: 3; flex-basis: 100%; } .btn.right { margin-left: 0; } }
+
+/* ---- Chassis bar, identifiers in monospace, a table that keeps its head, LEDs for status. ---- */
+header { background: var(--ink); border-bottom: 0; padding: 9px 20px; align-items: center; }
+.brand { color: var(--ink-text); letter-spacing: .01em; display: inline-flex; gap: 8px; align-items: center; }
+.brand::before {
+  content: ""; width: 10px; height: 10px; border-radius: 2px; background: var(--accent);
+  box-shadow: 13px 0 0 var(--accent), 26px 0 0 var(--ink-muted); margin-right: 26px;
+}
+nav { align-items: center; gap: 4px; }
+nav a { color: var(--ink-muted); padding: 5px 10px; border-radius: 5px; border-bottom: 0; }
+nav a:hover { color: var(--ink-text); background: rgba(255, 255, 255, .07); }
+nav a.on { color: var(--ink-text); background: rgba(255, 255, 255, .12); box-shadow: inset 0 -2px 0 var(--accent); }
+.tools .lang, button.icon { color: var(--ink-muted); }
+.tools .lang:hover, .lang.on, button.icon:hover { color: var(--ink-text); }
+button.icon:focus-visible, nav a:focus-visible, .lang:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+form.out button { background: transparent; color: var(--ink-text); border-color: rgba(255, 255, 255, .25); }
+form.out button:hover { border-color: var(--accent); color: var(--accent); }
+h1 { font-size: 22px; font-weight: 620; letter-spacing: -.01em; }
+
+td.col-mac, td.col-ip, td.col-port, td.col-vlan, td.col-seen, td.col-tried,
+td.col-switch { font-family: var(--mono); font-size: 12.5px; }
+td.col-hostname_manual, td.col-hostname_dns, td.col-hostname_probe { font-weight: 500; }
+form.cell input { font-weight: 500; }
+tbody tr:nth-child(even) { background: transparent; }
+tbody tr:hover { background: var(--hover); }
+thead th { box-shadow: 0 1px 0 var(--line); border-bottom: 0; }
+
+/* The table scrolls inside its card and keeps its column heads in view. */
+.wrap { max-height: calc(100vh - 170px); overflow: auto; border-radius: 8px; }
+thead th { position: sticky; top: 0; z-index: 1; background: var(--panel); }
+th button { font-size: 12px; letter-spacing: 0; font-weight: 600; }
+
+/* A status is a light before it is a word. */
+td.ok, td.warn, td.bad { padding-left: 12px; }
+td.ok::before, td.warn::before, td.bad::before {
+  content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px;
+  background: currentColor; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent);
+  vertical-align: 1px;
+}
+td.ok { color: var(--ok); }
+td.ok .note { color: var(--muted); }
+
+.chip, .views a, .cols > summary { font-size: 12.5px; }
+.views a.on, .cols[open] > summary { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+main { padding-top: 26px; }
+.subtitle { margin-bottom: 20px; }
+@media (max-width: 600px) {
+  header { gap: 8px 14px; padding: 8px 14px; }
+  .brand::before { display: none; }
+  main { padding: 18px 14px 32px; }
+  .wrap { max-height: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
