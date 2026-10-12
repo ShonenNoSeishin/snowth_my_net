@@ -25,6 +25,8 @@ def candidates_for(
     remembered: str | None = None,
     forced: str | None = None,
 ) -> list[ResolvedCredential]:
+    if ip.version == 6 and ip.ipv4_mapped is not None:      # the same host, the same scope rules
+        ip = ip.ipv4_mapped
     in_scope = [
         c for c in credentials
         if not c.cfg.scope or any(n and ip.version == n.version and ip in n for n in c.cfg.scope)

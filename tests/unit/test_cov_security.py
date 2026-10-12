@@ -193,3 +193,14 @@ def test_a_text_cell_of_the_terminal_interface_is_never_markup():
 
     assert asyncio.run(run()) == "[/x]"
     assert escape("[/x] \\[") == "\\[/x] \\\\\\["
+
+
+def test_a_credential_scope_sees_an_ipv4_mapped_address_as_the_ipv4_host():
+    import ipaddress
+
+    from snowth_my_net.snmp.credentials import candidates_for
+    from tests.unit.test_cov_snmp import v2c
+    lan = v2c("lan", scope=["10.9.0.0/24"])
+    assert [c.name for c in candidates_for(ipaddress.ip_address("::ffff:10.9.0.5"), [lan])] == [
+        "lan"]
+    assert candidates_for(ipaddress.ip_address("::ffff:10.1.0.5"), [lan]) == []
