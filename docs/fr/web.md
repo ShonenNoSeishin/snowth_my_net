@@ -318,6 +318,20 @@ pour une exécution.
 * Les téléchargements sont limités aux noms de fichiers exportés connus (`devices.csv`,
   `nodes.csv`, `links.csv`, `snapshot.json`, `map.html`, `map.dot`, `map.mmd`) : aucun chemin
   venant d'une requête n'atteint le système de fichiers.
+* **Les écritures doivent venir de ce site.** Un POST portant un `Origin` autre que l'hôte de la
+  page, ou `Sec-Fetch-Site: cross-site`, est refusé avec un 403 : une page ouverte dans un autre
+  onglet ne peut ni lancer une tâche ni renommer un nœud, alors que sans compte aucun témoin ne
+  s'en charge. Sur une écoute en boucle locale, l'en-tête `Host` doit aussi être un nom de boucle
+  locale (`localhost`, `127.0.0.1`, `::1`), ce qui arrête une page de DNS rebinding.
+* **Les échecs de connexion sont comptés avant d'être vérifiés** : une rafale d'essais en
+  parallèle ne passe donc pas le verrouillage ensemble. Changer un mot de passe ferme les autres
+  sessions du compte.
+* **La page SNMP reste dans la découverte.** Elle refuse `add`, `test` et l'épinglage d'un
+  identifiant pour une adresse hors de `discovery.allowed` ou dans `discovery.exclude`, et un
+  identifiant épinglé n'est envoyé que là où son `scope` le permet. Pour le reste, utilisez
+  `snowth_my_net device add` depuis un shell.
+* **Le premier mot de passe est écrit sur la console du processus, jamais dans le journal**, et
+  `general.log_file` est créé avec le mode 0640.
 
 ## La garder en fonctionnement (installation sur l'hôte)
 

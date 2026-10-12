@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import sqlite3
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
@@ -345,10 +346,18 @@ class Collector:
                 if r.system is not None:
                     known_hosts |= {a.address for a in r.addresses}
                 if self.repo and run_id is not None and r.alias_of is None:
-                    if r.reachable:
-                        r.device_id = self.repo.save_device(r, now, run_id)
-                    else:
-                        self.repo.save_failure(r, now, run_id, r.device_id)
+                    try:
+                        if r.reachable:
+                            r.device_id = self.repo.save_device(r, now, run_id)
+                        else:
+                            self.repo.save_failure(r, now, run_id, r.device_id)
+                    except (OverflowError, ValueError, sqlite3.Error) as exc:
+                        # What a device answered cannot be stored (an integer beyond 64 bits,
+                        # say): that device is left out of this run, not the whole run.
+                        message = f"{r.target}: not saved ({type(exc).__name__}: {exc})"
+                        log.warning("%s", message)
+                        if notes is not None:
+                            notes.append(message)
                 if explore and r.alias_of is None and r.neighbors:
                     found, skipped = neighbor_targets(self.cfg, r.neighbors, r.depth,
                                                       known_hosts, self.manual)

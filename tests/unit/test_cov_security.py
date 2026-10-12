@@ -12,7 +12,7 @@ from snowth_my_net.web import scan as scanpage
 from snowth_my_net.web.auth import LoginLimiter, Sessions
 from snowth_my_net.web.server import build, safe_target
 from tests.unit.test_cov_web import FixedClock
-from tests.unit.test_cov_web_passwd import declared
+from tests.unit.test_cov_web_passwd import PASSWORD, declared
 
 
 def test_parallel_guesses_cannot_all_pass_the_lockout_check():
@@ -135,3 +135,61 @@ def test_a_netbios_name_is_printable_and_a_reply_to_another_question_is_ignored(
                                + bytes(6))
     assert "\x1b" not in reply.name
     assert (len(probe.nbstat_query()) > 12 and probe.nbstat_query()[:2] != b"\x00\x00") or True
+
+
+def test_an_ipv4_mapped_address_is_judged_as_the_ipv4_host_it_reaches():
+    import ipaddress
+
+    from snowth_my_net.collect.discovery import Scope
+    scope = Scope([ipaddress.ip_network("0.0.0.0/0"), ipaddress.ip_network("::/0")],
+                  [ipaddress.ip_network("10.9.0.0/24")], set())
+    assert scope.check(ipaddress.ip_address("::ffff:10.9.0.5")) == "excluded"
+    assert scope.check(ipaddress.ip_address("::ffff:10.1.0.5")) is None
+
+
+def test_an_lldp_management_address_in_mapped_form_is_stored_as_ipv4():
+    from snowth_my_net.collect.tables import neighbors
+    mapped = (2, 16, *([0] * 10), 0xFF, 0xFF, 10, 9, 0, 5)
+    assert neighbors._man_addr(mapped) == "10.9.0.5"
+
+
+def test_driver_text_and_versions_are_bounded():
+    from snowth_my_net.drivers.base import MAX_TEXT, VERSION_RE, text
+    assert len(text(b"9" * 100000)) == MAX_TEXT
+    assert VERSION_RE.search("RouterOS 6.48.6").group() == "6.48.6"
+    assert VERSION_RE.search("1" * 5000) is None
+
+
+def test_the_web_does_not_aim_the_collector_outside_discovery(tmp_path):
+    from snowth_my_net.i18n import Translator
+    loaded = declared(tmp_path, "alice")
+    loaded.cfg.web.actions = True
+    site = build(loaded, "127.0.0.1", 0, FixedClock()).site
+    site.set_password("alice", PASSWORD)
+    loaded.cfg.discovery.allowed = []                       # nothing is allowed
+    for action in ("add", "test", "credential"):
+        status, _type, body = site.manage_snmp({"do": [action], "address": ["203.0.113.9"]},
+                                               "alice", Translator("en"))
+        assert status == HTTPStatus.BAD_REQUEST and b"the interface does not send SNMP" in body
+
+
+def test_a_text_cell_of_the_terminal_interface_is_never_markup():
+    import asyncio
+
+    from textual.app import App
+
+    from snowth_my_net.tui.safe import SafeTable, escape
+
+    class Probe(App):
+        def compose(self):
+            yield SafeTable()
+
+    async def run():
+        async with Probe().run_test() as pilot:
+            table = pilot.app.query_one(SafeTable)
+            table.add_column("a")
+            table.add_row("[/x]", label="[@click=app.quit]y")      # would raise or click
+            return table.get_row_at(0)[0].plain
+
+    assert asyncio.run(run()) == "[/x]"
+    assert escape("[/x] \\[") == "\\[/x] \\\\\\["

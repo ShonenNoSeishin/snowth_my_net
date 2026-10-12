@@ -305,6 +305,19 @@ The Nodes page sends at most `node_limit` rows and says so when it truncates; th
 * Downloads are limited to the known exported file names (`devices.csv`, `nodes.csv`,
   `links.csv`, `snapshot.json`, `map.html`, `map.dot`, `map.mmd`): no path from a request ever
   reaches the file system.
+* **Writes must come from this site.** A POST carrying an `Origin` other than the page's own host,
+  or `Sec-Fetch-Site: cross-site`, is refused with 403, so a page open in another tab cannot start
+  a job or rename a node; with no account there is no cookie to do that job. On a loopback
+  listener the `Host` header must also be a loopback name (`localhost`, `127.0.0.1`, `::1`),
+  which stops a DNS-rebinding page.
+* **Failed logins are counted before they are checked**, so a burst of parallel guesses cannot
+  pass the lockout together. Changing a password closes the account's other sessions.
+* **The SNMP page stays inside discovery.** It refuses `add`, `test` and a credential pin for an
+  address outside `discovery.allowed` or inside `discovery.exclude`, and a pinned credential is
+  still only sent where its `scope` says. For anything else use `snowth_my_net device add` from a
+  shell.
+* **The first password is printed on the console of the process, never in the log**, and
+  `general.log_file` is created with mode 0640.
 
 ## Keep it running (host install)
 

@@ -24,6 +24,8 @@ class Scope:
 
     def check(self, ip: IpAddr) -> str | None:
         """None if the address may be queried, else the reason why not."""
+        if ip.version == 6 and ip.ipv4_mapped is not None:   # the datagram goes to the IPv4 host
+            ip = ip.ipv4_mapped
         if any(n and ip.version == n.version and ip in n for n in self.exclude):
             return "excluded"
         if str(ip) in self.seeds:

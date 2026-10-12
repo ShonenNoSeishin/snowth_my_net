@@ -679,6 +679,14 @@ class Site:
         if what not in snmp.ACTIONS:
             return HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", b"not found\n"
         try:
+            if what in ("add", "test", "credential"):
+                # A web account may aim the collector only where discovery may go: a stored
+                # credential is never sent to an address the operator did not allow.
+                wanted = normalize_address(address)
+                reason = scanpage.refusal(self.loaded.cfg, wanted)
+                if reason:
+                    return self._snmp_answer(t, t("web.snmp.refused", address=wanted,
+                                                  reason=reason), "failed")
             if what == "test":
                 host = normalize_address(address)
                 if self.jobs.start("collect", user, extra=("--device", host)) is None:

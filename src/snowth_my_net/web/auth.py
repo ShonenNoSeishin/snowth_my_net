@@ -63,6 +63,17 @@ def verify_password(password: str, stored: str) -> bool:
     return hmac.compare_digest(computed, expected)
 
 
+def _locked(method):
+    """The sessions are shared by every request thread: one at a time touches them."""
+    import functools
+
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    return wrapper
+
+
 @dataclass
 class Sessions:
     """Opaque session tokens with an expiry, kept in memory."""
@@ -71,21 +82,26 @@ class Sessions:
     clock: object = time.monotonic
     _open: dict[str, tuple[str, float]] = field(default_factory=dict)   # token -> (user, until)
     _confirmed: dict[str, float] = field(default_factory=dict)          # token -> when
+    _lock: threading.RLock = field(default_factory=threading.RLock)     # one thread per request
 
+    @_locked
     def open(self, user: str) -> str:
         self.purge()
         token = secrets.token_urlsafe(TOKEN_BYTES)
         self._open[token] = (user, self.clock() + self.lifetime)
         return token
 
+    @_locked
     def confirm(self, token: str) -> None:
         """The password was typed again: what it unlocks stays open for a while, not forever."""
         self._confirmed[token] = self.clock()
 
+    @_locked
     def confirmed(self, token: str | None, within: float = CONFIRM_SECONDS) -> bool:
         when = self._confirmed.get(token or "")
         return when is not None and self.clock() - when < within
 
+    @_locked
     def user_of(self, token: str | None) -> str | None:
         if not token:
             return None
@@ -98,11 +114,13 @@ class Sessions:
             return None
         return user
 
+    @_locked
     def close(self, token: str | None) -> None:
         if token:
             self._open.pop(token, None)
             self._confirmed.pop(token, None)
 
+    @_locked
     def close_user(self, user: str, keep: str | None = None) -> int:
         """Close every session of an account but one (the one that just changed the password)."""
         gone = [t for t, (who, _until) in self._open.items() if who == user and t != keep]
@@ -111,6 +129,7 @@ class Sessions:
             self._confirmed.pop(token, None)
         return len(gone)
 
+    @_locked
     def purge(self) -> None:
         now = self.clock()
         for token in [t for t, (_user, until) in self._open.items() if now >= until]:

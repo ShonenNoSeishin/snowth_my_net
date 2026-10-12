@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -32,6 +33,8 @@ def managed(tmp_path, actions: bool = True, credentials: bool = True):
     loaded = make_loaded(tmp_path)
     loaded.cfg.web.auth.users = [WebUserCfg("alice")]
     loaded.cfg.web.actions = actions
+    loaded.cfg.discovery.allowed = [ipaddress.ip_network("192.0.2.0/24"),
+                                      ipaddress.ip_network("10.1.50.0/24")]   # where the page may aim
     if credentials:
         from snowth_my_net.config.schema import CredentialCfg
 

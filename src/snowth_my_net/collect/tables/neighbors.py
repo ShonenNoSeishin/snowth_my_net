@@ -106,6 +106,8 @@ def _man_addr(parts: tuple[int, ...]) -> str | None:
     if len(rest) != size or any(not 0 <= b <= 255 for b in rest):
         return None
     ip = ipaddress.ip_address(bytes(rest))
+    if ip.version == 6 and ip.ipv4_mapped is not None:      # ::ffff:10.9.0.5 is 10.9.0.5
+        ip = ip.ipv4_mapped
     return str(ip)
 
 

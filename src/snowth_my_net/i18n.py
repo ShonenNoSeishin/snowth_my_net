@@ -740,6 +740,11 @@ WEB = {
     "web.scan.bad": ("{text} is not an IP address.", "{text} n'est pas une adresse IP."),
     "web.scan.refused": ("This address is {reason}: it is never scanned.",
                          "Cette adresse est {reason} : elle n'est jamais scannée."),
+    "web.snmp.refused": (
+        "{address} is {reason}: the interface does not send SNMP there. Add it from a shell "
+        "(snowth_my_net device add) if it is meant.",
+        "{address} est {reason} : l'interface n'y envoie pas de SNMP. Ajoutez-la depuis un "
+        "shell (snowth_my_net device add) si c'est voulu."),
     "web.import.link": ("Import names from a CSV", "Importer des noms depuis un CSV"),
     "web.import.title": ("Import names", "Importer des noms"),
     "web.import.s1": ("Get the list.", "Récupérer la liste."),

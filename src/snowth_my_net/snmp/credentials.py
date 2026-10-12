@@ -25,13 +25,14 @@ def candidates_for(
     remembered: str | None = None,
     forced: str | None = None,
 ) -> list[ResolvedCredential]:
-    by_name = {c.name: c for c in credentials}
-    if forced:
-        return [by_name[forced]] if forced in by_name else []
     in_scope = [
         c for c in credentials
         if not c.cfg.scope or any(n and ip.version == n.version and ip in n for n in c.cfg.scope)
     ]
+    if forced:
+        # Pinned by hand, but still only where its scope says it may be sent: a credential that
+        # the configuration confines to some networks never leaves them, whoever pinned it.
+        return [c for c in in_scope if c.name == forced]
     ordered = [c for c in in_scope if c.name == remembered]
     ordered += [c for c in in_scope if c.name != remembered]
     return ordered

@@ -9,11 +9,9 @@ from rich.text import Text
 from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Grid, Horizontal, Vertical, VerticalScroll
-from textual.markup import escape
 from textual.screen import Screen
 from textual.widgets import (
     Button,
-    DataTable,
     Footer,
     Input,
     Label,
@@ -37,6 +35,8 @@ from snowth_my_net.reports.service import (
     push_report,
     report_definition,
 )
+from snowth_my_net.tui.safe import SafeTable as DataTable
+from snowth_my_net.tui.safe import escape
 
 SQL_SOURCE = "__sql__"
 PREVIEW_ROWS = 200

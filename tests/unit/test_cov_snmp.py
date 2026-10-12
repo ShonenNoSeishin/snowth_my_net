@@ -258,7 +258,10 @@ def test_candidates_scope_remembered_and_forced():
     ip = ipaddress.ip_address("192.0.2.7")
     assert [c.name for c in candidates_for(ip, [lan, dmz, anywhere])] == ["lan", "any"]
     assert [c.name for c in candidates_for(ip, [lan, dmz, anywhere], "any")] == ["any", "lan"]
-    assert [c.name for c in candidates_for(ip, [lan, dmz, anywhere], None, "dmz")] == ["dmz"]
+    # A pinned credential is still only sent where its scope says: dmz is not for 192.0.2.7.
+    assert candidates_for(ip, [lan, dmz, anywhere], None, "dmz") == []
+    assert [c.name for c in candidates_for(ip, [lan, dmz, anywhere], None, "lan")] == ["lan"]
+    assert [c.name for c in candidates_for(ip, [lan, dmz, anywhere], None, "any")] == ["any"]
     assert candidates_for(ip, [lan], None, "missing") == []
 
 

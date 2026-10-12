@@ -18,11 +18,9 @@ from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Grid, Horizontal, Vertical, VerticalScroll
-from textual.markup import escape
 from textual.screen import ModalScreen, Screen
 from textual.widgets import (
     Button,
-    DataTable,
     Footer,
     Input,
     Label,
@@ -60,6 +58,8 @@ from snowth_my_net.state.db import open_db
 from snowth_my_net.state.repo import Repo
 from snowth_my_net.tui.data import DeviceRow, list_devices, plan_form_change
 from snowth_my_net.tui.i18n import Translator, detect_language
+from snowth_my_net.tui.safe import SafeTable as DataTable
+from snowth_my_net.tui.safe import escape
 
 DEVICE_TYPES = ("switch", "router", "firewall", "wireless", "server", "printer", "facility",
                 "other")
@@ -158,7 +158,7 @@ class ConfirmModal(ModalScreen[bool]):
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog"):
-            yield Static(self.message, classes="dialog-text")
+            yield Static(Text(self.message), classes="dialog-text")
             with Horizontal(classes="dialog-buttons"):
                 yield Button(self.ctx.t("no"), id="no")
                 yield Button(self.ctx.t("yes"), id="yes",
@@ -1114,7 +1114,7 @@ class DeviceScreen(Screen):
                 (t("id.why"), Text(f"{rule} — {reason}" if rule else "—", style="italic")),
                 (t("id.seen"), self.ctx.local_time(device["last_seen"])),
             ):
-                grid.add_row(label, value)
+                grid.add_row(label, Text(value) if isinstance(value, str) else value)
         self.query_one("#identity", Static).update(grid)
 
     def load_form(self) -> None:
@@ -1440,6 +1440,11 @@ class DeviceScreen(Screen):
 
 
 class SnowthApp(App):
+    def notify(self, message, *, title="", severity="information", timeout=None, markup=False):
+        """Notifications carry device and host text: markup is off unless asked for."""
+        return super().notify(message, title=title, severity=severity, timeout=timeout,
+                              markup=markup)
+
     CSS_PATH = "app.tcss"
     TITLE = "snowth_my_net"
     ENABLE_COMMAND_PALETTE = True

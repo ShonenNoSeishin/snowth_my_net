@@ -37,8 +37,11 @@ def index_mac(index: tuple[int, ...]) -> str | None:
     return normalize_mac(bytes(index))
 
 
+MAX_TEXT = 512          # no identity string of a device is longer; a hostile one must not be
+
+
 def text(value: Value) -> str:
-    return one_line(decode_text(value)) if isinstance(value, bytes | str) else ""
+    return one_line(decode_text(value))[:MAX_TEXT] if isinstance(value, bytes | str) else ""
 
 
 class Driver:
@@ -85,4 +88,4 @@ def fill_identity(ident: Identification, found: dict[str, str]) -> list[str]:
     return filled
 
 
-VERSION_RE = re.compile(r"\d+(?:\.\d+)+")
+VERSION_RE = re.compile(r"\d{1,9}(?:\.\d{1,9}){1,8}")
