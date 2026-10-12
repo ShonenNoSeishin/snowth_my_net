@@ -83,7 +83,7 @@ def test_setup_logging_file_quiet_and_no_stderr(tmp_path, capsys):
         setup_logging("debug", str(log_file), quiet=True)
         root = logging.getLogger(LOGGER_NAME)
         assert [type(h).__name__ for h in root.handlers] == ["StreamHandler",
-                                                              "RotatingFileHandler"]
+                                                              "_PrivateRotatingFileHandler"]
         get_logger("test").info("password hunter2-cov")
         get_logger("test").warning("visible")
         err = capsys.readouterr().err

@@ -145,7 +145,7 @@ def test_a_host_that_answers_is_named(monkeypatch):
     sock, port = responder(b"")
     monkeypatch.setattr(probe, "NBNS_PORT", port)
     try:
-        answer_once(sock, reply([("POSTE-JULIE", 0x00, 0x0400)]))
+        answer_once(sock, reply([("POSTE-JULIE", 0x00, 0x0400)]), mirror_id=True)
         answer = asyncio.run(probe.ask_netbios("127.0.0.1", timeout=2))
     finally:
         sock.close()

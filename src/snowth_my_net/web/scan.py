@@ -8,6 +8,7 @@ scan many hosts is made where the shell's own history and access rules apply.
 from __future__ import annotations
 
 import ipaddress
+import shlex
 import shutil
 from html import escape as esc
 
@@ -20,9 +21,12 @@ PROFILES = tuple(engine.PROFILES)
 def parse_address(text: str) -> str | None:
     """The address as ``ipaddress`` writes it, or nothing: never a name, never an option."""
     try:
-        return str(ipaddress.ip_address((text or "").strip()))
+        address = ipaddress.ip_address((text or "").strip())
     except ValueError:
         return None
+    # A zone id ("fe80::1%eth0") is free text to ipaddress: it would end up in a command the
+    # page tells the reader to paste. A scan target never needs one.
+    return None if getattr(address, "scope_id", None) else str(address)
 
 
 def refusal(cfg, address: str) -> str:
@@ -71,7 +75,8 @@ def body(t, address: str, stored: dict | None, job, message: str, can_scan: bool
     elif error:
         parts.append(error)
     parts.append(_result(t, stored))
-    command = f"docker compose exec web snowth_my_net scan {network_of(address)} --profile common"
+    command = ("docker compose exec web snowth_my_net scan "
+               f"{shlex.quote(network_of(address))} --profile common")
     parts.append(f'<h2>{esc(t("web.scan.mass.title"))}</h2>'
                  f'<p class="note">{esc(t("web.scan.mass.hint"))}</p>'
                  f'<pre class="explain"><span class="ok">{esc(command)}</span></pre>')

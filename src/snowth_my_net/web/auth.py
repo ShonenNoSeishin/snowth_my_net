@@ -12,6 +12,7 @@ import base64
 import hashlib
 import hmac
 import secrets
+import threading
 import time
 from dataclasses import dataclass, field
 
@@ -102,6 +103,14 @@ class Sessions:
             self._open.pop(token, None)
             self._confirmed.pop(token, None)
 
+    def close_user(self, user: str, keep: str | None = None) -> int:
+        """Close every session of an account but one (the one that just changed the password)."""
+        gone = [t for t, (who, _until) in self._open.items() if who == user and t != keep]
+        for token in gone:
+            del self._open[token]
+            self._confirmed.pop(token, None)
+        return len(gone)
+
     def purge(self) -> None:
         now = self.clock()
         for token in [t for t, (_user, until) in self._open.items() if now >= until]:
@@ -122,6 +131,23 @@ class LoginLimiter:
     lockout: float = LOCKOUT_SECONDS
     clock: object = time.monotonic
     _failures: dict[str, tuple[int, float]] = field(default_factory=dict)
+    _lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def begin(self, address: str) -> float:
+        """Reserve an attempt, atomically: seconds to wait, or 0 and the attempt is counted.
+
+        The count is taken before the (slow) verification, so that a burst of parallel guesses
+        cannot all pass a check made before any of them was recorded. A success clears it.
+        """
+        with self._lock:
+            if len(self._failures) > 4096:               # bounded, whatever the sources
+                now = self.clock()
+                self._failures = {a: v for a, v in self._failures.items() if v[1] > now}
+            waiting = self.locked_for(address)
+            if waiting > 0:
+                return waiting
+            self.failed(address)
+            return 0.0
 
     def locked_for(self, address: str) -> float:
         count, until = self._failures.get(address, (0, 0.0))
@@ -136,6 +162,11 @@ class LoginLimiter:
 
     def succeeded(self, address: str) -> None:
         self._failures.pop(address, None)
+
+
+# Verified when an account does not exist, so that a missing account costs what a wrong password
+# costs and the time says nothing about which user names exist.
+DUMMY_HASH = hash_password(secrets.token_urlsafe(16))
 
 
 def parse_cookie(header: str | None, name: str = COOKIE) -> str | None:

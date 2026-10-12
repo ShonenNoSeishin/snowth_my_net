@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
-import random
+import secrets
 import socket
 from dataclasses import dataclass
 
@@ -48,10 +48,15 @@ def _first_level(name: str) -> bytes:
 
 def nbstat_query() -> bytes:
     """The question ``nbtstat -A`` asks: a node status request for the wildcard name."""
-    # A transaction id only has to differ from the last one; it protects nothing.
-    header = bytes((random.randrange(256), random.randrange(256),
-                    0x00, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0))
+    # The transaction id is the only thing that ties a reply to this question: unguessable, and
+    # checked against the reply.
+    header = secrets.token_bytes(2) + bytes((0x00, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0))
     return header + _first_level("*") + NBSTAT.to_bytes(2) + IN.to_bytes(2)
+
+
+def _printable(text: str) -> str:
+    """What a host announced, without the characters a terminal would act on."""
+    return "".join(c for c in text if c.isprintable())
 
 
 def parse_nbstat(payload: bytes) -> Answer:
@@ -69,7 +74,7 @@ def parse_nbstat(payload: bytes) -> Answer:
         entry = rdata[index * 18:(index + 1) * 18]
         if len(entry) < 18:
             break
-        names.append((entry[:15].decode("latin-1").strip(), entry[15],
+        names.append((_printable(entry[:15].decode("latin-1")).strip(), entry[15],
                       int.from_bytes(entry[16:18])))
     mac = rdata[count * 18:count * 18 + 6]
     # Samba, NAS and printers state 00:00:00:00:00:00: that is no adapter address, it says nothing.
@@ -87,8 +92,10 @@ async def ask_netbios(ip: str, timeout: float = 2.0) -> Answer:
     loop = asyncio.get_running_loop()
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setblocking(False)
+    question = nbstat_query()
     try:
-        await loop.sock_sendto(sock, nbstat_query(), (ip, NBNS_PORT))
+        sock.connect((ip, NBNS_PORT))             # the kernel drops datagrams from anyone else
+        await loop.sock_sendall(sock, question)
         payload = await asyncio.wait_for(loop.sock_recv(sock, 1024), timeout)
     except TimeoutError:
         return Answer("netbios", detail="no answer")
@@ -96,6 +103,8 @@ async def ask_netbios(ip: str, timeout: float = 2.0) -> Answer:
         return Answer("netbios", detail=str(exc))
     finally:
         sock.close()
+    if payload[:2] != question[:2]:
+        return Answer("netbios", detail="reply to another question")
     return parse_nbstat(payload)
 
 

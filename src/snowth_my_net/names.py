@@ -14,9 +14,11 @@ import io
 import json
 import os
 import stat
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
+from snowth_my_net.export.csvout import formula_safe
 from snowth_my_net.snmp.values import normalize_mac
 
 STORE_NAME = "node_names.json"
@@ -34,6 +36,7 @@ def clean_field(field: str, text: str) -> str:
     if field not in FIELDS:
         raise NameError_(f"unknown field {field!r}; it is one of {', '.join(FIELDS)}")
     value = " ".join(str(text).split())
+    value = "".join(c for c in value if unicodedata.category(c)[0] != "C")   # ESC, BEL, NUL…
     if len(value) > MAX_LENGTH[field]:
         raise NameError_(f"a {field} is at most {MAX_LENGTH[field]} characters")
     return value
@@ -153,7 +156,7 @@ def template(nodes: list[tuple[str, str, str, str]]) -> str:
     writer = csv.writer(buffer, lineterminator="\r\n")
     writer.writerow(["mac", "name", "ip", "vendor"])
     for mac, name, address, vendor in sorted(nodes):
-        writer.writerow([mac, name, address, vendor])
+        writer.writerow([mac, formula_safe(name), address, formula_safe(vendor)])
     if not nodes:
         buffer.write("# 00:11:22:33:44:55,printer accounting\r\n")
     return buffer.getvalue()

@@ -79,13 +79,16 @@ def test_an_initial_password_can_be_read_from_a_log_and_typed_back():
 # --------------------------------------------------------------------------- first password
 
 
-def test_a_declared_account_gets_a_first_password_printed_in_the_log(tmp_path, caplog):
+def test_a_declared_account_gets_a_first_password_printed_on_the_console(
+        tmp_path, caplog, capsys):
     loaded = declared(tmp_path, "alice")
     with caplog.at_level("WARNING"):
         site = Site(loaded, FixedClock())
-    message = "\n".join(record.getMessage() for record in caplog.records)
+    message = capsys.readouterr().err
     assert "alice" in message and "no password yet" in message
     password = message.split("sign in once with: ")[1].split(" ")[0]
+    # The log (a file, a shipper, a backup) never holds a password valid until first used.
+    assert password not in "\n".join(record.getMessage() for record in caplog.records)
     assert site.guarded and site.must_change("alice")
     assert verify_password(password, site.account_of("alice").hash)
 
@@ -101,11 +104,10 @@ def test_the_first_password_is_kept_across_restarts(tmp_path, caplog):
     assert "no password yet" not in "\n".join(r.getMessage() for r in caplog.records)
 
 
-def test_signing_in_with_the_first_password_lands_on_the_password_page(tmp_path, caplog):
+def test_signing_in_with_the_first_password_lands_on_the_password_page(tmp_path, capsys):
     loaded = declared(tmp_path, "alice")
-    with caplog.at_level("WARNING"):
-        site = Site(loaded, FixedClock())
-    password = caplog.records[0].getMessage().split("sign in once with: ")[1].split(" ")[0]
+    site = Site(loaded, FixedClock())
+    password = capsys.readouterr().err.split("sign in once with: ")[1].split(" ")[0]
     status, where, _body, token = site.sign_in(
         {"user": ["alice"], "password": [password], "next": ["/nodes"]}, "10.0.0.1")
     assert (status, where) == (HTTPStatus.SEE_OTHER, "/password")   # not /nodes
@@ -130,12 +132,15 @@ def signed_in(tmp_path, password: str = PASSWORD):
 
 def test_a_reader_chooses_their_own_password_and_the_old_one_stops_working(tmp_path):
     site, token = signed_in(tmp_path)
+    other = site.sessions.open("alice")                     # a session someone else holds
     status, where, _body = site.change_password("alice", {"current": [PASSWORD],
                                                          "new": ["a-new-one"],
-                                                         "again": ["a-new-one"]})
+                                                         "again": ["a-new-one"]},
+                                                token=token)
     assert (status, where) == (HTTPStatus.SEE_OTHER, "/")
     assert not site.must_change("alice")
     assert site.respond("/", {}, token)[0] == HTTPStatus.OK
+    assert site.sessions.user_of(other) is None            # and it is closed by the change
     assert verify_password("a-new-one", site.account_of("alice").hash)
     assert not verify_password(PASSWORD, site.account_of("alice").hash)
 
@@ -258,11 +263,10 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 @pytest.fixture
-def running(tmp_path, caplog):
+def running(tmp_path, capsys):
     """A real server with one account and its invented first password."""
-    with caplog.at_level("WARNING"):
-        server = build(declared(tmp_path, "alice"), "127.0.0.1", 0, FixedClock())
-    password = caplog.records[0].getMessage().split("sign in once with: ")[1].split(" ")[0]
+    server = build(declared(tmp_path, "alice"), "127.0.0.1", 0, FixedClock())
+    password = capsys.readouterr().err.split("sign in once with: ")[1].split(" ")[0]
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     yield f"http://127.0.0.1:{server.server_address[1]}", server.site, password

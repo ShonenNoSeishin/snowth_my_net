@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import html
 import json
+import sys
 import threading
 from dataclasses import dataclass
 from http import HTTPStatus
@@ -24,7 +25,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
 from ipaddress import ip_address
 from pathlib import Path
-from urllib.parse import parse_qs, quote, urlparse
+from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 from snowth_my_net import __version__
 from snowth_my_net.clock import Clock, local_zone
@@ -58,6 +59,7 @@ from snowth_my_net.web.accounts import (
 )
 from snowth_my_net.web.auth import (
     COOKIE,
+    DUMMY_HASH,
     SCHEME,
     LoginLimiter,
     Sessions,
@@ -165,8 +167,12 @@ class Site:
             password = initial_password()
             with self.writing:
                 self.store.set(name, hash_password(password), must_change=True)
-            log.warning("web user %r has no password yet - sign in once with: %s "
-                        "(the interface then asks you to choose your own)", name, password)
+            # Printed on the console of this process only: a log file, a log shipper or a
+            # rotated backup must never hold a password that is valid until it is first used.
+            print(f"web user {name!r} has no password yet - sign in once with: {password} "
+                  "(the interface then asks you to choose your own)", file=sys.stderr, flush=True)
+            log.warning("web user %r has no password yet: the one-time password was printed on "
+                        "the console of this process, not in the log", name)
 
     def account_of(self, name: str) -> Account | None:
         """The account as it stands now; the store is re-read so that 'web passwd' in a
@@ -201,7 +207,7 @@ class Site:
         """``(status, content type, body, new session token)`` for POST /login."""
         t = t or self.t
         target = safe_target((form.get("next") or ["/"])[0])
-        waiting = self.logins.locked_for(address)
+        waiting = self.logins.begin(address)
         if waiting > 0:
             log.warning("login refused for %s: too many failures", address)
             return (HTTPStatus.TOO_MANY_REQUESTS, "text/html; charset=utf-8",
@@ -210,8 +216,8 @@ class Site:
         user = (form.get("user") or [""])[0]
         password = (form.get("password") or [""])[0]
         account = self.account_of(user)
-        if account is None or not verify_password(password, account.hash):
-            self.logins.failed(address)
+        if not verify_password(password, account.hash if account else DUMMY_HASH) or (
+                account is None):
             reason = "no such account" if account is None else "wrong password"
             log.warning("failed login for %r from %s: %s", user[:40], address, reason)
             return (HTTPStatus.UNAUTHORIZED, "text/html; charset=utf-8",
@@ -246,8 +252,8 @@ class Site:
                 f'{error}<button type="submit">{esc(t("web.password.save"))}</button></form>')
         return self.shell("", t("web.password.title"), body, forced, t=t)
 
-    def change_password(self, user: str, form: dict, t=None, address: str = ""
-                        ) -> tuple[int, str, bytes]:
+    def change_password(self, user: str, form: dict, t=None, address: str = "",
+                        token: str | None = None) -> tuple[int, str, bytes]:
         """``(status, content type or target, body)`` for POST /password.
 
         The current password is asked for again: a session left open on an unlocked screen
@@ -258,14 +264,12 @@ class Site:
         if account is None or account.from_file:
             return (HTTPStatus.OK, "text/html; charset=utf-8",
                     self.password_page(user, t=t))
-        waiting = self.logins.locked_for(address) if address else 0.0
+        waiting = self.logins.begin(address) if address else 0.0
         if waiting > 0:
             return (HTTPStatus.TOO_MANY_REQUESTS, "text/html; charset=utf-8",
                     self.password_page(user, t("web.too_many", seconds=int(waiting) + 1), t))
         current = (form.get("current") or [""])[0]
         if not verify_password(current, account.hash):
-            if address:
-                self.logins.failed(address)
             log.warning("%s gave the wrong current password from %s", user, address or "?")
             return (HTTPStatus.BAD_REQUEST, "text/html; charset=utf-8",
                     self.password_page(user, t("web.password.wrong"), t))
@@ -280,7 +284,8 @@ class Site:
         self.set_password(user, new)
         if address:
             self.logins.succeeded(address)
-        log.info("%s changed their password", user)
+        closed = self.sessions.close_user(user, keep=token)    # a stolen session ends here
+        log.info("%s changed their password (%d other session(s) closed)", user, closed)
         return HTTPStatus.SEE_OTHER, "/", b""
 
     def must_change(self, user: str | None) -> bool:
@@ -652,13 +657,12 @@ class Site:
                 ) -> tuple[int, str, bytes]:
         """POST /confirm: the password again, counted by the same limiter as a login."""
         t = t or self.t
-        waiting = self.logins.locked_for(address)
+        waiting = self.logins.begin(address)
         if waiting > 0:
             return (HTTPStatus.TOO_MANY_REQUESTS, "text/html; charset=utf-8",
                     self.confirm_page(t, t("web.too_many", seconds=int(waiting) + 1)))
         account = self.account_of(user)
         if account is None or not verify_password(password, account.hash):
-            self.logins.failed(address)
             log.warning("failed confirmation for %r from %s", user[:40], address)
             return (HTTPStatus.UNAUTHORIZED, "text/html; charset=utf-8",
                     self.confirm_page(t, t("web.bad_login")))
@@ -889,7 +893,8 @@ def esc(value: object) -> str:
 
 def safe_target(target: str) -> str:
     """Only a path of this site: never redirect a browser somewhere else after a login."""
-    if not target.startswith("/") or target.startswith("//") or "\\" in target:
+    if (not target.startswith("/") or target.startswith("//") or "\\" in target
+            or not target.isprintable()):
         return "/"
     return target
 
@@ -944,14 +949,38 @@ class Handler(BaseHTTPRequestHandler):
     sys_version = ""                       # do not advertise the Python version
     protocol_version = "HTTP/1.1"
 
+    def refused(self, writing: bool) -> bool:
+        """Answer 421 or 403 and return True when the request must not be served.
+
+        Two cheap checks against a page in the reader's own browser: on a loopback listener the
+        Host must be a loopback name (a DNS-rebinding page arrives under its own name), and a
+        write must come from this site (``Origin`` and ``Sec-Fetch-Site``), because without an
+        account there is no cookie to make a cross-site form fail.
+        """
+        host = urlparse("//" + (self.headers.get("Host") or "")).hostname or ""
+        bound = str(self.server.server_address[0])
+        if bound in LOOPBACK and host not in ("localhost", "127.0.0.1", "::1"):
+            self.send_error(HTTPStatus.MISDIRECTED_REQUEST, "unexpected Host")
+            return True
+        if writing:
+            origin = self.headers.get("Origin")
+            site = self.headers.get("Sec-Fetch-Site")
+            if (site and site not in ("same-origin", "none")) or (
+                    origin is not None and urlparse(origin).hostname != host):
+                self.send_error(HTTPStatus.FORBIDDEN, "cross-site request refused")
+                return True
+        return False
+
     def do_GET(self) -> None:              # name imposed by BaseHTTPRequestHandler
+        if self.refused(False):
+            return
         parsed = urlparse(self.path)
         cookies = self.headers.get("Cookie")
         token = parse_cookie(cookies)
         query = parse_qs(parsed.query)
         chosen = (query.pop("lang", [""]) or [""])[0]
         if chosen in LANGUAGES:            # the reader picked a language: remember it
-            rest = "&".join(f"{k}={v[0]}" for k, v in query.items())
+            rest = urlencode({k: v[0] for k, v in query.items()})   # never the raw bytes back
             self.finish_response(HTTPStatus.SEE_OTHER,
                                  parsed.path + (f"?{rest}" if rest else ""), b"",
                                  lang_cookie=chosen)
@@ -972,6 +1001,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:             # name imposed by BaseHTTPRequestHandler
         """Only the login and logout forms; every page itself stays a GET."""
+        if self.refused(True):
+            return
         site = self.server.site
         parsed = urlparse(self.path)
         token = parse_cookie(self.headers.get("Cookie"))
@@ -1023,7 +1054,7 @@ class Handler(BaseHTTPRequestHandler):
             if user is None:
                 self.finish_response(HTTPStatus.SEE_OTHER, "/login", b"")
                 return
-            status, where, body = site.change_password(user, form, lang, self.caller())
+            status, where, body = site.change_password(user, form, lang, self.caller(), token)
             self.finish_response(status, where, body)
             return
         status, where, body, new_token = site.sign_in(form, self.caller(), lang)
@@ -1087,6 +1118,8 @@ class Handler(BaseHTTPRequestHandler):
         """A 303 puts the target in ``content_type``; anything else is a normal answer."""
         self.send_response(status)
         if status == HTTPStatus.SEE_OTHER:
+            if not content_type.isprintable():       # CR, LF or any control character
+                content_type = "/"
             self.send_header("Location", content_type)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
         else:
@@ -1128,7 +1161,9 @@ class Handler(BaseHTTPRequestHandler):
                 and site.trusts(self.address_string()))
 
     def log_message(self, fmt: str, *args: object) -> None:
-        log.info("%s %s", self.caller(), fmt % args)
+        text = fmt % args
+        log.info("%s %s", self.caller(), "".join(c if c.isprintable() else f"\\x{ord(c):02x}"
+                                                 for c in text))
 
 
 class WebServer(ThreadingHTTPServer):

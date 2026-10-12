@@ -26,7 +26,8 @@ def _csv_header(labels: list[str], eol: str) -> str:
 def to_csv(table: ReportTable, line_terminator: str = "crlf") -> bytes:
     rows = [[display(v, t) for v, (_l, t) in zip(row, table.columns, strict=True)]
             for row in table.rows]
-    return render_csv(_csv_header(table.labels, EOL[line_terminator]), rows, line_terminator)
+    return render_csv(_csv_header(table.labels, EOL[line_terminator]), rows, line_terminator,
+                      safe=True)
 
 
 def _json_value(value: Any, type_: str) -> Any:

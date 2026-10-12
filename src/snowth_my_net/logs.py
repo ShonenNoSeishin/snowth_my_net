@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import logging.handlers
+import os
 import sys
 import threading
 import time
@@ -82,7 +83,7 @@ def setup_logging(level: str = "info", log_file: str | None = None, quiet: bool 
         root.addHandler(stderr)
 
     if log_file:
-        file_handler = logging.handlers.RotatingFileHandler(
+        file_handler = _PrivateRotatingFileHandler(
             log_file, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"
         )
         file_handler.setFormatter(RedactingFormatter())
@@ -95,6 +96,17 @@ def setup_logging(level: str = "info", log_file: str | None = None, quiet: bool 
 
     # pysnmp's own debug output can contain community strings: keep it quiet whatever happens.
     logging.getLogger("pysnmp").setLevel(logging.WARNING)
+
+
+class _PrivateRotatingFileHandler(logging.handlers.RotatingFileHandler):
+    """A log file only its owner and group read: it names accounts, addresses and failures."""
+
+    def _open(self):
+        old = os.umask(0o027)
+        try:
+            return super()._open()
+        finally:
+            os.umask(old)
 
 
 def get_logger(name: str) -> logging.Logger:
