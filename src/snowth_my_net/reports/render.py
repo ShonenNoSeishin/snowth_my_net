@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import json
+import re
 from importlib import resources
 from typing import Any
 
@@ -50,7 +51,8 @@ def to_json(table: ReportTable, cfg: ReportCfg, now: int) -> bytes:
 
 
 def _md_cell(text: str) -> str:
-    return " ".join(text.split()).replace("\\", "\\\\").replace("|", "\\|")
+    flat = " ".join(text.split()).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return re.sub(r"([\\|`*_\[\]!~])", r"\\\1", flat)
 
 
 def to_markdown(table: ReportTable, cfg: ReportCfg, now: int) -> bytes:

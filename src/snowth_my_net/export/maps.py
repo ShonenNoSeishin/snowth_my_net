@@ -187,7 +187,8 @@ def render_html(graph: Graph, title: str, generated_at: str) -> str:
         "edges": [{"a": e.a, "b": e.b, "label": e.label, "kind": e.kind, "details": e.details}
                   for e in graph.edges],
     }
-    payload = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
+    payload = (json.dumps(data, ensure_ascii=False).replace("<", "\\u003c").replace(">", "\\u003e")
+               .replace("&", "\\u0026").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029"))
     template = resources.files("snowth_my_net.export").joinpath("map_template.html").read_text(
         "utf-8")
     safe_title = re.sub(r"[<>&\"']", "", title)

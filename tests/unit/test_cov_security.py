@@ -204,3 +204,26 @@ def test_a_credential_scope_sees_an_ipv4_mapped_address_as_the_ipv4_host():
     assert [c.name for c in candidates_for(ipaddress.ip_address("::ffff:10.9.0.5"), [lan])] == [
         "lan"]
     assert candidates_for(ipaddress.ip_address("::ffff:10.1.0.5"), [lan]) == []
+
+
+def test_a_multipart_part_with_thousands_of_headers_is_read_in_bounded_time():
+    from snowth_my_net.web.nodeimport import upload_text
+    head = b"X-A: 1\r\n" * 50_000
+    body = (b"--b\r\n" + head + b"Content-Disposition: form-data; name=\"file\"; "
+            b"filename=\"a.csv\"\r\n\r\nmac,name\r\n--b--\r\n")
+    assert upload_text("multipart/form-data; boundary=b", body) is None   # head too long: ignored
+    ok = (b"--b\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.csv\"\r\n\r\n"
+          b"aa:bb:cc:dd:ee:ff,x\r\n--b--\r\n")
+    assert upload_text("multipart/form-data; boundary=b", ok) == "aa:bb:cc:dd:ee:ff,x"
+    assert upload_text("multipart/form-data", ok) is None
+
+
+def test_report_markdown_neutralises_html_and_links():
+    from snowth_my_net.reports.render import _md_cell
+    cell = _md_cell("<img src=x onerror=1> [a](http://e) `c` *b*")
+    assert "<" not in cell and "\\[a\\]" in cell and "\\`c\\`" in cell
+
+
+def test_tui_escape_makes_every_bracket_literal():
+    from snowth_my_net.tui.safe import escape
+    assert escape("[red]x\\[") == "\\[red]x\\\\\\["

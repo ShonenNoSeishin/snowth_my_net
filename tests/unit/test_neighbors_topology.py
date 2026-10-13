@@ -147,6 +147,6 @@ def test_map_renderers_escape_and_stay_offline():
     mmd = maps.render_mermaid(graph)
     assert 'n0["sw #quot;1#quot;<br/>10.0.0.1"]:::switch' in mmd
     html = maps.render_html(graph, "map", "2026-09-17T10:00:00Z")
-    assert "</script><b>" not in html and "<\\/script>" in html
+    assert "</script><b>" not in html and "\\u003c/script\\u003e" in html
     assert "http://" not in html.replace("http://www.w3.org/2000/svg", "")
     assert "https://" not in html

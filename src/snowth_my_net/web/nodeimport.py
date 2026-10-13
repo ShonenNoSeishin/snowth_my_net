@@ -13,8 +13,6 @@ reload or a second reader cannot apply something nobody has seen.
 from __future__ import annotations
 
 import re
-from email import policy
-from email.parser import BytesParser
 from html import escape as esc
 
 from snowth_my_net.names import ERROR, RESULTS, ImportLine, counts
@@ -22,18 +20,36 @@ from snowth_my_net.names import ERROR, RESULTS, ImportLine, counts
 SHOWN = 1000                  # lines of the table; the log always holds all of them
 
 
+MAX_PARTS = 16                # a form with the import has two or three fields
+MAX_PART_HEAD = 4096
+
+
+def _boundary(content_type: str) -> bytes | None:
+    found = re.search(r'boundary=(?:"([^"]{1,200})"|([^\s;"]{1,200}))', content_type, re.I)
+    return (found[1] or found[2]).encode("latin-1", "replace") if found else None
+
+
 def upload_text(content_type: str, data: bytes) -> str | None:
-    """The text of the first file of a ``multipart/form-data`` body, or nothing."""
+    """The text of the first file of a ``multipart/form-data`` body, or nothing.
+
+    Read by hand and bounded: the standard e-mail parser costs far more than the body is long
+    when a part carries thousands of header lines.
+    """
     if not content_type.lower().startswith("multipart/form-data"):
         return None
-    message = BytesParser(policy=policy.HTTP).parsebytes(
-        b"Content-Type: " + content_type.encode("latin-1", "replace")
-        + b"\r\nMIME-Version: 1.0\r\n\r\n" + data)
-    for part in message.iter_parts():
-        if part.get_param("name", header="content-disposition") == "file" and (
-                part.get_filename() is not None):
-            raw = part.get_payload(decode=True) or b""
-            return raw.decode("utf-8-sig", errors="replace") if raw.strip() else None
+    boundary = _boundary(content_type)
+    if not boundary:
+        return None
+    for part in data.split(b"--" + boundary)[1:MAX_PARTS + 1]:
+        head, sep, body = part.partition(b"\r\n\r\n")
+        if not sep or len(head) > MAX_PART_HEAD:
+            continue
+        disposition = next((line for line in head.decode("latin-1").split("\r\n")
+                            if line.lower().startswith("content-disposition:")), "")
+        if not re.search(r'[; ]name="file"', disposition) or "filename=" not in disposition:
+            continue
+        raw = body[:-2] if body.endswith(b"\r\n") else body
+        return raw.decode("utf-8-sig", errors="replace") if raw.strip() else None
     return None
 
 
