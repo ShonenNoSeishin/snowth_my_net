@@ -74,7 +74,7 @@ SNMPv3 authPriv est recommandé : v2c envoie sa communauté en clair (`check` le
 |---|---|---|
 | `credentials[].name` | obligatoire | Nom affiché dans les journaux et les sorties (jamais le secret). |
 | `credentials[].version` | obligatoire | `2c` ou `3`. |
-| `credentials[].scope` | `[]` (tout) | Adresses/CIDR où cet identifiant est essayé. |
+| `credentials[].scope` | `[]` (tout) | Adresses/CIDR où cet identifiant est essayé. Un identifiant sans portée n'est jamais envoyé à une adresse que seul un voisin (LLDP/CDP) a annoncée : donnez-lui une portée pour qu'il suive les voisins. |
 | `credentials[].community_file` | | Communauté v2c, depuis un fichier. |
 | `credentials[].community_env` | | Communauté v2c, depuis une variable d'environnement. |
 | `credentials[].username` | | Utilisateur SNMPv3. |
@@ -276,11 +276,11 @@ Interface web en lecture seule (`snowth_my_net web`, ou le service `web` de Comp
 | `web.bind` | `127.0.0.1` | Adresse d'écoute. `0.0.0.0` seulement avec des comptes, derrière un proxy inverse TLS. |
 | `web.port` | `8080` | Port d'écoute. Avec Docker, le conteneur écoute toujours sur 8080 et `SNOWTH_WEB_PORT` choisit le port de l'hôte. |
 | `web.node_limit` | `2000` | Lignes envoyées au navigateur sur la page Nœuds ; la page le signale quand elle tronque. |
-| `web.auth.users` | `[]` | Comptes de l'interface. Vide : aucune authentification, ce qui n'est sûr que sur la boucle locale. |
+| `web.auth.users` | `[]` | Comptes de l'interface. Vide : aucune authentification, et l'interface est en lecture seule (ni noms, ni boutons, ni import, ni scan). |
 | `web.auth.users[].name` | obligatoire | Nom d'utilisateur saisi dans le formulaire. Un nom seul suffit : le premier mot de passe est inventé et journalisé, puis `web passwd` le change. |
 | `web.auth.users[].password_file` | | Facultatif : un fichier contenant l'empreinte affichée par `snowth_my_net web --hash-password` (relatif à `general.secrets_dir`), pour un mot de passe géré hors de l'outil. |
 | `web.auth.users[].password_env` | | La même empreinte, depuis une variable d'environnement. Jamais les deux formes à la fois. |
-| `web.actions` | `true` | Les boutons de la page Collectes qui lancent une collecte, une découverte, un export ou un envoi. `false` les retire et refuse les requêtes. Sans compte, quiconque atteint la page peut appuyer dessus. |
+| `web.actions` | `true` | Les boutons de la page Collectes qui lancent une collecte, une découverte, un export ou un envoi. `false` les retire et refuse les requêtes. Sans compte, ces boutons n'existent pas. |
 | `web.nmap` | `false` | Un scan de ports d'une adresse depuis l'interface : l'IP d'un équipement ouvre sa page de scan, avec un profil à choisir et le résultat conservé. Demande un compte et `web.actions`. Seul ce que `discovery.allowed` permet et que `discovery.exclude` épargne est scanné. |
 | `web.trusted_proxies` | `[]` | Réseaux des proxys inverses autorisés à annoncer l'adresse du lecteur dans `X-Forwarded-For` (et `X-Forwarded-Proto`). Tout autre est ignoré. `--trusted-proxy CIDR` prime pour une exécution. |
 | `web.auth.session_hours` | `12` | Durée d'une session ; les sessions vivent dans le processus et sont perdues au redémarrage. |

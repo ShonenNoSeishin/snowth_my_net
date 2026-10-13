@@ -11,6 +11,7 @@ from snowth_my_net.enrich import probe
 from snowth_my_net.web import scan as scanpage
 from snowth_my_net.web.auth import LoginLimiter, Sessions
 from snowth_my_net.web.server import build, safe_target
+from tests.unit.signed import cookie_of
 from tests.unit.test_cov_web import FixedClock
 from tests.unit.test_cov_web_passwd import PASSWORD, declared
 
@@ -83,12 +84,13 @@ def request(base, method, path, headers=None, body=None):
 
 
 def test_the_real_server_refuses_cross_site_writes_and_foreign_hosts(tmp_path):
-    server = build(declared(tmp_path), "127.0.0.1", 0, FixedClock())
+    server = build(declared(tmp_path, "alice"), "127.0.0.1", 0, FixedClock())
     threading.Thread(target=server.serve_forever, daemon=True).start()
     base = ("127.0.0.1", server.server_address[1])
     host = f"127.0.0.1:{base[1]}"
     try:
-        form = {"Content-Type": "application/x-www-form-urlencoded", "Host": host}
+        form = {"Content-Type": "application/x-www-form-urlencoded", "Host": host,
+                "Cookie": cookie_of(server)}
         body = b"mac=00:11:22:33:44:55&name=x"
         assert request(base, "POST", "/name", {**form, "Origin": "https://evil.example"},
                        body)[0] == HTTPStatus.FORBIDDEN
@@ -227,3 +229,38 @@ def test_report_markdown_neutralises_html_and_links():
 def test_tui_escape_makes_every_bracket_literal():
     from snowth_my_net.tui.safe import escape
     assert escape("[red]x\\[") == "\\[red]x\\\\\\["
+
+
+def test_an_address_a_neighbour_announced_only_gets_credentials_that_name_a_scope():
+    import ipaddress
+
+    from snowth_my_net.snmp.credentials import candidates_for
+    from tests.unit.test_cov_snmp import v2c
+    anywhere, lan = v2c("anywhere"), v2c("lan", scope=["10.9.0.0/24"])
+    ip = ipaddress.ip_address("10.9.0.5")
+    assert [c.name for c in candidates_for(ip, [anywhere, lan])] == ["anywhere", "lan"]
+    assert [c.name for c in candidates_for(ip, [anywhere, lan], scoped_only=True)] == ["lan"]
+    assert candidates_for(ipaddress.ip_address("10.1.0.5"), [anywhere, lan],
+                          scoped_only=True) == []
+
+
+def test_with_no_account_the_site_is_read_only_and_every_write_is_refused(tmp_path):
+    from tests.unit.test_cov_names import named
+    loaded = named(tmp_path)
+    server = build(loaded, "127.0.0.1", 0, FixedClock())
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = ("127.0.0.1", server.server_address[1])
+    host = {"Host": f"127.0.0.1:{base[1]}",
+            "Content-Type": "application/x-www-form-urlencoded"}
+    try:
+        for path, body in (("/name", b"mac=00:11:22:33:44:55&name=x"), ("/action", b"what=collect"),
+                           ("/import", b"apply=1&csv=x"), ("/scan", b"address=10.0.0.1")):
+            assert request(base, "POST", path, host, body)[0] == HTTPStatus.NOT_FOUND
+        assert request(base, "GET", "/import", host)[0] == HTTPStatus.NOT_FOUND
+        page = request(base, "GET", "/nodes", host)[2].decode()
+        assert 'action="/name"' not in page and "/import" not in page
+        assert "imprimante compta" in page                   # still readable
+        assert names_mod.store_for(loaded.paths).get("00:11:22:33:44:55") == ""
+    finally:
+        server.shutdown()
+        server.server_close()

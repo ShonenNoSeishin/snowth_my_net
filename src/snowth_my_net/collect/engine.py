@@ -412,7 +412,7 @@ class Collector:
         settings = r.settings
         params = snmp_params(settings)
         cands = candidates_for(r.target.ip, self.credentials, planned.remembered_credential,
-                               settings.credential)
+                               settings.credential, scoped_only=planned.origin == "neighbor")
         if not cands:
             r.error = "no credential in scope for this address"
             return

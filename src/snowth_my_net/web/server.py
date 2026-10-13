@@ -144,6 +144,14 @@ class Site:
         return bool(self.names)
 
     @property
+    def writable(self) -> bool:
+        """Names, buttons and the import change things: they exist only for a signed-in account.
+
+        With no account anyone who reaches the port could use them, so the site is read-only.
+        """
+        return self.guarded
+
+    @property
     def manageable(self) -> bool:
         """The SNMP page exists only with an account: it asks for that password again."""
         return self.guarded and self.loaded.cfg.web.actions
@@ -371,7 +379,7 @@ class Site:
                     hint = getattr(value, "title", "")
                 else:
                     main, note = str(value), ""
-                if isinstance(value, Editable):
+                if isinstance(value, Editable) and self.writable:
                     cells.append(f'<td class="{kind} write">'
                                  f'{self.name_field(value, t)}</td>')
                     continue
@@ -427,7 +435,7 @@ class Site:
 
     def actions_panel(self, t, message: str = "") -> str:
         """The buttons above the runs, and what the last one did."""
-        if not self.loaded.cfg.web.actions:
+        if not self.loaded.cfg.web.actions or not self.writable:
             return ""
         now = self.clock.now()
         current = self.jobs.current
@@ -461,7 +469,7 @@ class Site:
     def start_job(self, what: str, user: str, t=None) -> tuple[int, str, bytes]:
         """``(status, target, body)`` for POST /action: start it, then show the runs."""
         t = t or self.t
-        if not self.loaded.cfg.web.actions or what not in self.offered():
+        if not self.writable or not self.loaded.cfg.web.actions or what not in self.offered():
             return HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", b"not found\n"
         extra = ("--force",) if what == "names" else ()      # a button that does nothing because
         if self.jobs.start(what, user, extra=extra) is None:     # answers are fresh is a mystery
@@ -755,6 +763,8 @@ class Site:
     def name_form(self, mac: str, t, message: str = "") -> str:
         """Naming a MAC is the one thing a reader may write, and it is theirs, not collected."""
         error = f'<p class="error">{esc(message)}</p>' if message else ""
+        if not self.writable:
+            return error
         try:
             given = self.labels.get(clean_mac(mac))
         except NameError_:
@@ -829,6 +839,9 @@ class Site:
             return HTTPStatus.SEE_OTHER, "/password", b""
         if path.startswith("/download/"):
             return self.download(path.removeprefix("/download/"))
+        if path in (IMPORT_PATH, TEMPLATE_PATH) and not self.writable:
+            return (HTTPStatus.NOT_FOUND, html_type,
+                    self.shell("/", t("web.not_found"), "", t=t))
         if path == IMPORT_PATH:
             return self.import_page(t)
         if path == TEMPLATE_PATH:
@@ -872,7 +885,7 @@ class Site:
         if path == "/" and self.scannable:
             link, column = "/scan?address=", 1   # the address of a device opens its scan page
         extra = (f'<a class="btn right" href="{IMPORT_PATH}">{esc(t("web.import.link"))}</a>'
-                 if path == "/nodes" else "")
+                 if path == "/nodes" and self.writable else "")
         return (HTTPStatus.OK, html_type,
                 self.table_page(path, title, table, subtitle, link, t, column, extra=extra,
                                 disagreeing_only=bool(query.get("disagree"))))
@@ -1021,10 +1034,10 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path in ("/snmp", "/confirm"):
             self.manage(parsed.path, token)
             return
-        if parsed.path not in ("/name", "/action", "/scan", *IMPORT_POSTS) and not site.guarded:
+        if not site.writable:                  # no account: read-only, nothing is accepted
             self.send_error(HTTPStatus.NOT_FOUND)
             return
-        if parsed.path in ("/name", "/action", "/scan", *IMPORT_POSTS) and site.guarded and (
+        if parsed.path in ("/name", "/action", "/scan", *IMPORT_POSTS) and (
                 site.sessions.user_of(token) is None):
             if "application/json" in (self.headers.get("Accept") or ""):
                 self.finish_response(HTTPStatus.UNAUTHORIZED, JSON,
@@ -1197,7 +1210,8 @@ def serve(loaded: LoadedConfig, bind: str | None = None, port: int | None = None
     log.info("web interface on http://%s:%s (read-only; Ctrl+C to stop)", host, listening)
     if not server.site.guarded and str(host) not in LOOPBACK:
         log.warning("listening on %s with no account in web.auth.users: everyone who reaches "
-                    "this address sees the whole inventory", host)
+                    "this address reads the whole inventory (read-only: names, buttons and "
+                    "import need an account)", host)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:

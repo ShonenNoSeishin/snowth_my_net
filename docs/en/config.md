@@ -70,7 +70,7 @@ v2c sends its community in clear text (`check` warns about it).
 |---|---|---|
 | `credentials[].name` | required | Name shown in logs and outputs (never the secret). |
 | `credentials[].version` | required | `2c` or `3`. |
-| `credentials[].scope` | `[]` (all) | Addresses/CIDRs where this credential is tried. |
+| `credentials[].scope` | `[]` (all) | Addresses/CIDRs where this credential is tried. A credential with no scope is never sent to an address that only a neighbour (LLDP/CDP) announced: give it a scope to let it follow neighbours. |
 | `credentials[].community_file` | | v2c community, from a file. |
 | `credentials[].community_env` | | v2c community, from an environment variable. |
 | `credentials[].username` | | SNMPv3 user. |
@@ -272,11 +272,11 @@ Read-only web interface (`snowth_my_net web`, or the `web` service of Compose), 
 | `web.bind` | `127.0.0.1` | Address it listens on. Use `0.0.0.0` only with accounts, behind a TLS reverse proxy. |
 | `web.port` | `8080` | Port it listens on. In Docker the container always listens on 8080 and `SNOWTH_WEB_PORT` chooses the host port. |
 | `web.node_limit` | `2000` | Rows sent to the browser on the Nodes page; the page says when it truncates. |
-| `web.auth.users` | `[]` | Accounts of the interface. Empty: no login, which is only safe on the loopback. |
+| `web.auth.users` | `[]` | Accounts of the interface. Empty: no login, and the interface is read-only (no names, buttons, import or scan). |
 | `web.auth.users[].name` | required | User name typed in the login form. A name alone is enough: the first password is invented and logged, then `web passwd` changes it. |
 | `web.auth.users[].password_file` | | Optional: a file holding the hash printed by `snowth_my_net web --hash-password` (relative to `general.secrets_dir`), for a password managed outside the tool. |
 | `web.auth.users[].password_env` | | The same hash, from an environment variable. Never both forms at once. |
-| `web.actions` | `true` | The buttons of the Runs page that start a collect, a discovery, an export or a push. `false` removes them and refuses the requests. Without an account, anyone who reaches the page can press them. |
+| `web.actions` | `true` | The buttons of the Runs page that start a collect, a discovery, an export or a push. `false` removes them and refuses the requests. Without an account the buttons do not exist. |
 | `web.nmap` | `false` | A port scan of one address from the interface: the IP of a device opens its scan page, with a profile to choose and the result kept. Needs an account and `web.actions`. Only what `discovery.allowed` permits and `discovery.exclude` spares is scanned. |
 | `web.trusted_proxies` | `[]` | Networks of the reverse proxies allowed to state the reader's address in `X-Forwarded-For` (and `X-Forwarded-Proto`). Anyone else is ignored. `--trusted-proxy CIDR` overrides it for one run. |
 | `web.auth.session_hours` | `12` | Lifetime of a session; sessions live in the process and are lost on restart. |

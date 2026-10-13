@@ -12,9 +12,10 @@ from http import HTTPStatus
 
 import pytest
 
+from snowth_my_net.config.schema import WebUserCfg
 from snowth_my_net.i18n import Translator
 from snowth_my_net.web import jobs
-from snowth_my_net.web.server import Site
+from tests.unit.signed import SignedSite, cookie_of
 from tests.unit.test_cov_views import build_state, make_loaded
 from tests.unit.test_cov_web import FixedClock
 
@@ -132,7 +133,7 @@ def site_with(tmp_path, runner=None, actions: bool = True):
     repo.conn.close()
     loaded = make_loaded(tmp_path)
     loaded.cfg.web.actions = actions
-    site = Site(loaded, FixedClock())
+    site = SignedSite(loaded)
     site.jobs = runner or FakeRunner()
     return site
 
@@ -187,6 +188,7 @@ def serve(loaded, runner):
 
     from snowth_my_net.web.server import build
 
+    loaded.cfg.web.auth.users = loaded.cfg.web.auth.users or [WebUserCfg("alice")]
     server = build(loaded, "127.0.0.1", 0, FixedClock())
     server.site.jobs = runner
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -201,7 +203,9 @@ def test_a_reader_presses_the_button(tmp_path):
     try:
         base = f"http://127.0.0.1:{server.server_address[1]}"
         form = urllib.parse.urlencode({"what": "collect"}).encode()
-        with urllib.request.urlopen(base + "/action", form) as response:
+        request = urllib.request.Request(base + "/action", form,
+                                         headers={"Cookie": cookie_of(server)})
+        with urllib.request.urlopen(request) as response:
             assert response.url.endswith("/runs")
         wait_for(lambda: runner.last is not None)
         assert runner.last.what == "collect"

@@ -167,8 +167,9 @@ d'elle-même toutes les cinq secondes jusqu'à la fin. Le planificateur garde so
 le premier qui prend le verrou de l'état fait attendre l'autre, exactement comme deux terminaux.
 
 `web.actions: false` retire les boutons et refuse les requêtes, pour une installation qui veut
-l'interface strictement en lecture seule. **Sans compte configuré, quiconque atteint la page
-peut appuyer dessus** — une raison de déclarer un compte sous `web.auth.users`.
+l'interface strictement en lecture seule. **Sans compte configuré, les boutons n'existent pas** :
+l'interface est en lecture seule, de même que les noms, l'import et le scan. Déclarez un compte
+sous `web.auth.users` pour écrire.
 
 ## Scanner une adresse
 
@@ -320,8 +321,8 @@ pour une exécution.
   venant d'une requête n'atteint le système de fichiers.
 * **Les écritures doivent venir de ce site.** Un POST portant un `Origin` autre que l'hôte de la
   page, ou `Sec-Fetch-Site: cross-site`, est refusé avec un 403 : une page ouverte dans un autre
-  onglet ne peut ni lancer une tâche ni renommer un nœud, alors que sans compte aucun témoin ne
-  s'en charge. Sur une écoute en boucle locale, l'en-tête `Host` doit aussi être un nom de boucle
+  onglet ne peut ni lancer une tâche ni renommer un nœud ; sans compte, toute écriture est de
+  toute façon refusée (404). Sur une écoute en boucle locale, l'en-tête `Host` doit aussi être un nom de boucle
   locale (`localhost`, `127.0.0.1`, `::1`), ce qui arrête une page de DNS rebinding.
 * **Les échecs de connexion sont comptés avant d'être vérifiés** : une rafale d'essais en
   parallèle ne passe donc pas le verrouillage ensemble. Changer un mot de passe ferme les autres

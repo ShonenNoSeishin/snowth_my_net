@@ -164,8 +164,9 @@ every five seconds until it ends. The scheduler keeps its own pace; whoever gets
 first makes the other wait, exactly as two shells would.
 
 `web.actions: false` removes the buttons and refuses the requests, for an installation that
-wants the interface strictly read-only. **With no account configured, anyone who reaches the
-page can press them** — a reason to declare an account under `web.auth.users`.
+wants the interface strictly read-only. **With no account configured the buttons do not exist**:
+the interface is read-only, and so are the names, the import and the scan. Declare an account
+under `web.auth.users` to write.
 
 ## Scanning one address
 
@@ -307,7 +308,7 @@ The Nodes page sends at most `node_limit` rows and says so when it truncates; th
   reaches the file system.
 * **Writes must come from this site.** A POST carrying an `Origin` other than the page's own host,
   or `Sec-Fetch-Site: cross-site`, is refused with 403, so a page open in another tab cannot start
-  a job or rename a node; with no account there is no cookie to do that job. On a loopback
+  a job or rename a node; with no account every write is refused anyway (404). On a loopback
   listener the `Host` header must also be a loopback name (`localhost`, `127.0.0.1`, `::1`),
   which stops a DNS-rebinding page.
 * **Failed logins are counted before they are checked**, so a burst of parallel guesses cannot

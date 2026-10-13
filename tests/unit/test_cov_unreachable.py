@@ -22,6 +22,7 @@ from snowth_my_net.state.db import open_db
 from snowth_my_net.state.repo import Repo
 from snowth_my_net.web import jobs, pages
 from snowth_my_net.web.server import Site
+from tests.unit.signed import SignedSite
 from tests.unit.test_cov_views import NOW, build_state, make_loaded
 from tests.unit.test_cov_web import FixedClock
 from tests.unit.test_cov_web_jobs import FakeRunner, wait_for
@@ -173,7 +174,7 @@ def site_with(tmp_path, probe: bool):
     repo.conn.close()
     loaded = make_loaded(tmp_path)
     loaded.cfg.names.probe = ["netbios"] if probe else []
-    site = Site(loaded, FixedClock())
+    site = SignedSite(loaded)
     site.jobs = FakeRunner()
     return site
 

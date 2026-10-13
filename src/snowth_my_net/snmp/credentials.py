@@ -2,9 +2,11 @@
 
 Order of attempts for an address: the credential forced by ``devices[].credential`` (and only
 that one), else the credential remembered in the state for this address, then every credential
-whose ``scope`` contains the address, in configuration order. A wrong SNMPv3 user or key is
-reported immediately by the agent; a wrong v2c community is silence, i.e. a timeout — hence the
-short ``probe_timeout`` and the value of narrow scopes.
+whose ``scope`` contains the address, in configuration order. An address that only a
+neighbour announced (``scoped_only``) is tried with the credentials that name a scope, never
+with the unscoped ones: a device cannot make us send a secret where nobody chose to.
+A wrong SNMPv3 user or key is reported immediately by the agent; a wrong v2c community is
+silence, i.e. a timeout — hence the short ``probe_timeout`` and the value of narrow scopes.
 """
 
 from __future__ import annotations
@@ -24,13 +26,16 @@ def candidates_for(
     credentials: list[ResolvedCredential],
     remembered: str | None = None,
     forced: str | None = None,
+    scoped_only: bool = False,
 ) -> list[ResolvedCredential]:
     if ip.version == 6 and ip.ipv4_mapped is not None:      # the same host, the same scope rules
         ip = ip.ipv4_mapped
-    in_scope = [
-        c for c in credentials
-        if not c.cfg.scope or any(n and ip.version == n.version and ip in n for n in c.cfg.scope)
-    ]
+    def covers(c: ResolvedCredential) -> bool:
+        if not c.cfg.scope:
+            return not scoped_only
+        return any(n and ip.version == n.version and ip in n for n in c.cfg.scope)
+
+    in_scope = [c for c in credentials if covers(c)]
     if forced:
         # Pinned by hand, but still only where its scope says it may be sent: a credential that
         # the configuration confines to some networks never leaves them, whoever pinned it.

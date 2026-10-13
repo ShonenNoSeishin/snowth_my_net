@@ -12,7 +12,9 @@ import pytest
 
 from snowth_my_net import names as mod
 from snowth_my_net.i18n import Translator
+from snowth_my_net.web.auth import COOKIE
 from snowth_my_net.web.server import Site, WebServer
+from tests.unit.signed import SignedSite
 from tests.unit.test_cov_names import named
 from tests.unit.test_cov_views import D
 from tests.unit.test_cov_web import FixedClock
@@ -152,16 +154,19 @@ def test_the_three_screens_check_first_then_apply_then_log(tmp_path):
 
 
 def test_the_pages_and_the_real_routes(tmp_path):
-    site = Site(named(tmp_path, "imprimante"), FixedClock())
+    site = SignedSite(named(tmp_path, "imprimante"))
     assert "/import" in site.respond("/nodes", {})[2].decode()
     status, _t, page = site.respond("/import", {})
     assert status == 200 and 'enctype="multipart/form-data"' in page.decode()
     template = site.respond("/import/template.csv", {})[2].decode()
     assert template.startswith("mac,name,ip,vendor") and f"{D},imprimante" in template
 
-    server = WebServer(("127.0.0.1", 0), site)
+    server = WebServer(("127.0.0.1", 0), site.site)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     base = f"http://127.0.0.1:{server.server_address[1]}"
+    opener = urllib.request.build_opener()
+    opener.addheaders = [("Cookie", f"{COOKIE}={site.token}")]
+    urllib.request.install_opener(opener)
     try:
         ctype, body = multipart(f"{D},from the route\n".encode())
         with urllib.request.urlopen(urllib.request.Request(
@@ -183,6 +188,7 @@ def test_the_pages_and_the_real_routes(tmp_path):
         with pytest.raises(OSError):
             urllib.request.urlopen(big)             # 413, or a socket closed on the oversize body
     finally:
+        urllib.request.install_opener(urllib.request.build_opener())
         server.shutdown()
         server.server_close()
 

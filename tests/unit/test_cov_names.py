@@ -11,8 +11,10 @@ import pytest
 
 from snowth_my_net import names as mod
 from snowth_my_net.config.manual import ManualError
+from snowth_my_net.config.schema import WebUserCfg
 from snowth_my_net.i18n import Translator
 from snowth_my_net.web.server import Site
+from tests.unit.signed import SignedSite, cookie_of
 from tests.unit.test_cov_views import D, build_state, make_loaded
 from tests.unit.test_cov_web import FixedClock
 
@@ -85,7 +87,7 @@ def named(tmp_path, name: str = "imprimante compta"):
 
 
 def test_the_name_shows_in_the_table_and_in_the_explanation(tmp_path):
-    site = Site(named(tmp_path), FixedClock())
+    site = SignedSite(named(tmp_path))
     page = site.respond("/nodes", {})[2].decode()
     assert f'<input type="hidden" name="mac" value="{D}">' in page   # written in the table
     assert 'value="imprimante compta"' in page
@@ -181,10 +183,16 @@ def running(tmp_path):
 
     from snowth_my_net.web.server import build
 
-    server = build(named(tmp_path, ""), "127.0.0.1", 0, FixedClock())
+    loaded = named(tmp_path, "")
+    loaded.cfg.web.auth.users = [WebUserCfg("alice")]
+    server = build(loaded, "127.0.0.1", 0, FixedClock())
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
+    opener = urllib.request.build_opener()
+    opener.addheaders = [("Cookie", cookie_of(server))]
+    urllib.request.install_opener(opener)
     yield f"http://127.0.0.1:{server.server_address[1]}", server.site
+    urllib.request.install_opener(urllib.request.build_opener())
     server.shutdown()
     server.server_close()
 
