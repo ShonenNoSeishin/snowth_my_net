@@ -330,10 +330,19 @@ def resolve_mac(ctx: MergeContext, mac: str) -> Node:
             for s in window:
                 if s is not keep:
                     s.verdict, s.shadowed_by = "shadowed", keep
-        node.positions = [s for s in access if s.verdict != "shadowed"]
+        # A port the MAC left: its device walked again without it, and the MAC has since been
+        # heard on a hard uplink, i.e. it sits further away. Reporting the old port would be
+        # reporting where it is not; the sighting stays in the explanation as history.
+        hard_newest = max((s.last_seen for s in node.sightings
+                           if s.role.uplink and s.role.strength == HARD), default=0)
+        for s in access:
+            if (s.verdict != "shadowed" and s.last_run_id < ctx.latest_run.get(s.device_id, 0)
+                    and hard_newest > s.last_seen + cfg.transit_window):
+                s.verdict = "left"
+        node.positions = [s for s in access if s.verdict not in ("shadowed", "left")]
         for s in node.positions:
             s.verdict = "position"
-        node.position_kind = "access"
+        node.position_kind = "access" if node.positions else "none"
     elif node.sightings and cfg.uplink_fallback and all(
             s.role.strength == SOFT for s in node.sightings):
         best = min(node.sightings, key=lambda s: (s.mac_count, -s.last_seen))

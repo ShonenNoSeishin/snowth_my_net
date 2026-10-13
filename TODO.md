@@ -21,15 +21,21 @@ fails without it. "Done" items are in commit `1a07b93`.
 - A bridge port absent from a non-empty dot1dBasePortIfIndex table is no longer taken for an
   ifIndex; the collect warns. Cisco per-VLAN instances still fall back to the default table.
 
-## Open
-7. A newer sighting behind an uplink does not supersede an older access position (`current`
-   stays on the old port, `live` is true).
+## Done (third batch)
+- 7. A MAC heard later on a hard uplink leaves an access port its device no longer lists it on
+  (verdict `left`, no position rather than a stale one). Soft uplinks (MAC-count threshold only)
+  do not trigger it: a busy access port is not proof the host went elsewhere.
+- 11 (part). HSRP IPv6 and GLBP virtual MACs are ignored by default; `AIR-CT*` / `AIR-WLC*` CDP
+  platforms (wireless controllers) are no longer taken for access points. The NetBIOS reply check
+  was done with the security batch.
+
+## Open (each needs data the collect does not hold, or a decision)
 8. DNS name beats a verified self-stated name with no disagreement flag.
-9. IP supersession ignores the VRF (`latest_by_ip` keyed by IP only).
-10. `positions: all` exports one row per historical port for the same MAC.
-11. Minor: HSRP IPv6 / GLBP virtual MAC prefixes; `is_live` and long ARP caches; LLDP guessed
-    local-port mappings as HARD uplink reason; `AIR-` regex matches wireless controllers;
-    NetBIOS UDP replies not checked for transaction id / source.
+9. IP supersession ignores the VRF (`latest_by_ip` keyed by IP only): needs the VRF of an ARP
+   entry, which is not collected.
+10. `positions: all` exports one row per historical port for the same MAC (opt-in; a port the
+    MAC left is now dropped when an uplink heard it later, see 7).
+11. Left: `is_live` and long ARP caches; LLDP guessed local-port mappings as HARD uplink reason.
 
 ## Not audited
 `web/*`, `tui/*`, `collect/tables/entity.py`, `collect/tables/system.py`, `merge/explain.py`.

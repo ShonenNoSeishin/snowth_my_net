@@ -25,7 +25,8 @@ PORT_ALIAS, PORT_MAC, PORT_NETWORK, PORT_NAME, PORT_LOCAL = 1, 3, 4, 5, 7
 CDP_CAPS = ((0x01, "router"), (0x02, "bridge"), (0x04, "bridge"), (0x08, "bridge"),
             (0x10, "station"), (0x40, "repeater"), (0x80, "telephone"))
 # Cisco access points announce themselves through their CDP platform string.
-CISCO_AP_PLATFORM = re.compile(r"^(cisco\s+)?(AIR-|C91\d\d|CW91\d\d|AP\d{4})", re.IGNORECASE)
+CISCO_AP_PLATFORM = re.compile(
+    r"^(cisco\s+)?(AIR-(?!CT|WLC|VWLC)|C91\d\d|CW91\d\d|AP\d{4})", re.IGNORECASE)
 NXOS_SERIAL_SUFFIX = re.compile(r"^(?P<name>.+?)\((?P<serial>[A-Za-z0-9]{6,})\)$")
 
 

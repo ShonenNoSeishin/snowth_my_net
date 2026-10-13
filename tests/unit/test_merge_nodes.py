@@ -207,3 +207,30 @@ def test_an_ipv4_and_an_ipv6_seen_together_still_elect_the_ipv4():
     data = inputs([fdb(HOST, 1, 3)], [arp(HOST, "10.0.0.5"),
                                       arp(HOST, "2001:db8::5", family=6)])
     assert node(data).current_ip.ip == "10.0.0.5"
+
+
+def test_a_port_the_mac_left_is_not_its_position_once_an_uplink_hears_it_later():
+    later = NOW + 3600
+    # sw1 listed it on port 3 in run 5, walked again (run 6) without it; sw2's trunk hears it now
+    data = inputs([fdb(HOST, 1, 3, seen=NOW - 7200, run=5), *filler(1, 4, 1, run=6),
+                   fdb(HOST, 2, 48, seen=later, run=10), *filler(2, 48, 60, run=10, seen=later)])
+    data.devices[2] = DeviceInfo("sw2", uplinks=("48",))
+    data.ports[(2, 48)] = PortInfo(name="48")
+    n = node(data, now=later)
+    assert n.positions == [] and n.position_kind == "none"
+    assert next(s for s in n.sightings if s.ifindex == 3).verdict == "left"
+
+
+def test_a_port_still_listing_the_mac_stays_its_position_whatever_the_uplink_says():
+    later = NOW + 3600
+    data = inputs([fdb(HOST, 1, 3, seen=later, run=6), fdb(HOST, 2, 48, seen=later, run=10)],
+                  devices={1: DeviceInfo("sw1"), 2: DeviceInfo("sw2", uplinks=("48",))},
+                  ports={(2, 48): PortInfo(name="48")})
+    assert where(node(data, now=later)) == [(1, 3)]
+
+
+def test_hsrp_ipv6_and_glbp_virtual_macs_are_not_nodes():
+    from snowth_my_net.config.schema import DEFAULT_IGNORED_PREFIXES
+    cfg = NodesCfg(ignore_mac_prefixes=list(DEFAULT_IGNORED_PREFIXES))
+    for mac in ("00:05:73:a0:00:0a", "00:07:b4:00:01:02"):
+        assert node(inputs([fdb(mac, 1, 3)]), mac=mac, cfg=cfg).excluded is not None

@@ -277,6 +277,8 @@ DEFAULT_IGNORED_PREFIXES = [
     "00:00:5e:00:02",  # VRRP IPv6 virtual router MAC
     "00:00:0c:07:ac",  # HSRPv1 virtual MAC
     "00:00:0c:9f:f",   # HSRPv2 virtual MAC
+    "00:05:73:a0",     # HSRP IPv6 virtual MAC (00:05:73:a0:00:00 to 00:05:73:a0:0f:ff)
+    "00:07:b4:00",     # GLBP virtual MAC
 ]
 
 

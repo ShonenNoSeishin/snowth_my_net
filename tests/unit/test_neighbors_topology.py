@@ -150,3 +150,11 @@ def test_map_renderers_escape_and_stay_offline():
     assert "</script><b>" not in html and "\\u003c/script\\u003e" in html
     assert "http://" not in html.replace("http://www.w3.org/2000/svg", "")
     assert "https://" not in html
+
+
+def test_a_wireless_controller_platform_is_not_an_access_point():
+    from snowth_my_net.collect.tables.neighbors import CISCO_AP_PLATFORM
+    assert CISCO_AP_PLATFORM.match("cisco AIR-AP2802I-E-K9")
+    assert CISCO_AP_PLATFORM.match("AIR-CAP3702I-E-K9")
+    assert not CISCO_AP_PLATFORM.match("cisco AIR-CT5520-K9")
+    assert not CISCO_AP_PLATFORM.match("AIR-WLC2504-K9")

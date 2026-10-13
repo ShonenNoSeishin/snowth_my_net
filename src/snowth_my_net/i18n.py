@@ -924,6 +924,8 @@ EXPLAIN = {
                             "derrière un uplink souple : {reasons}"),
     "xp.verdict_transit": ("transit (same time on {where}, fewer MACs)",
                            "transit (au même moment sur {where}, moins de MAC)"),
+    "xp.verdict_left": ("left: the device no longer lists it here, and an uplink heard it later",
+                        "quitté : l'équipement ne le liste plus ici et un uplink l'a vu depuis"),
     "xp.verdict_uplink": ("uplink: {reasons}", "uplink : {reasons}"),
     "xp.arp_title": ("ARP sightings", "Observations ARP"),
     "xp.last": ("last", "vue"),

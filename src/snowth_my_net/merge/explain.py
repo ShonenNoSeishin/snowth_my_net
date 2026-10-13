@@ -85,6 +85,8 @@ def explain_node(view: NodeView, node: Node, t: Text = ENGLISH) -> list[Line]:
         elif s.verdict == "shadowed" and s.shadowed_by is not None:
             lines.append((f"  ↷ {base}  " + t(
                 "xp.verdict_transit", where=view.sighting_label(s.shadowed_by)), "transit"))
+        elif s.verdict == "left":
+            lines.append((f"  ✘ {base}  " + t("xp.verdict_left"), "bad"))
         else:
             lines.append((f"  ✘ {base}  " + t("xp.verdict_uplink",
                                               reasons=_reasons(s.role.reasons, t)), "bad"))
