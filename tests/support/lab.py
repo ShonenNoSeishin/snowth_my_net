@@ -185,6 +185,7 @@ general:
 credentials:
   - name: v3-main
     version: 3
+    scope: [127.0.0.0/8]
     username: {V3_USER}
     auth_protocol: sha256
     auth_key_file: v3_auth
@@ -192,6 +193,7 @@ credentials:
     priv_key_file: v3_priv
   - name: v2c-lab
     version: 2c
+    scope: [127.0.0.0/8]
     community_file: community
 discovery:
   seeds:
