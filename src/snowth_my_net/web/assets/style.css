@@ -390,3 +390,10 @@ main { padding-top: 26px; }
   .wrap { max-height: none; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
+
+/* On a phone the five name columns would push the MAC, the address and the port off screen: a
+   MAC links to its own page, where it is named. */
+@media (max-width: 600px) {
+  th.col-hostname_manual, td.col-hostname_manual, th.col-hostname_dns, td.col-hostname_dns,
+  th.col-hostname_probe, td.col-hostname_probe, th.col-description, td.col-description { display: none; }
+}
