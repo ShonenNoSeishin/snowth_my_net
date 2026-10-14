@@ -209,6 +209,7 @@ being named, the answer came from something else and the name is dropped.
 | `export.allow_empty` | `[]` | CSV files allowed to have no data row. Otherwise an empty CSV is neither written over the previous one nor pushed, and the command exits 1. |
 | `export.csv.line_terminator` | `crlf` | `crlf` (RFC 4180) or `lf`. |
 | `export.csv.formula_safe` | `true` | A text cell starting with `=`, `+`, `-` or `@` (a name a host announced) gets a leading apostrophe, so a spreadsheet never runs it. `false` for an importer that cannot take it. |
+| `export.nodes.random_macs` | `keep` | `skip` leaves the locally administered (randomised) MACs out of `nodes.csv` and the map. Nothing is merged either way: a rotated MAC is another node. |
 | `export.nodes.live_only` | `true` | `nodes.csv` and the map carry the nodes seen at the last full collect, not the memory kept for `nodes.retention_days`. `false` brings the memory back. |
 | `export.devices.include_type` | `true` | Trailing `"Device Type"` column. |
 | `export.nodes.include_name` | `false` | Add a first `Name` column to `nodes.csv` with the names given by hand (`node name`). Off by default so that an importer keeps reading the same columns. |

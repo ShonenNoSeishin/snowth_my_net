@@ -445,6 +445,20 @@ WEB = {
                       "Vues à la dernière collecte ({count})"),
     "web.view.all": ("Everything, history included ({count})",
                      "Tout, historique compris ({count})"),
+    "web.view.norandom": ("Without random MACs ({count})", "Sans MAC aléatoires ({count})"),
+    "web.view.random": ("Random MACs only ({count})", "MAC aléatoires seulement ({count})"),
+    "web.random.badge": ("random MAC", "MAC aléatoire"),
+    "web.random.title": ("Locally administered MAC: phones and laptops rotate it, so one device "
+                         "can appear as several nodes. Nothing here says they are the same "
+                         "device.",
+                         "MAC administré localement : les téléphones et portables le changent, "
+                         "un même appareil peut donc apparaître en plusieurs nœuds. Rien ici "
+                         "ne dit que c'est le même appareil."),
+    "web.random.note": ("Sorted by where they were heard. Two random MACs on one port are a "
+                        "coincidence of place, not proof of one device; nothing is merged.",
+                        "Triés par lieu d'écoute. Deux MAC aléatoires sur un même port sont une "
+                        "coïncidence de lieu, pas la preuve d'un seul appareil ; rien n'est "
+                        "fusionné."),
     "web.view.stale": ("{count} row(s) are memory: last seen before the last collect.",
                        "{count} ligne(s) sont de la mémoire : vues avant la dernière collecte."),
     "web.theme": ("Light or dark", "Clair ou sombre"),

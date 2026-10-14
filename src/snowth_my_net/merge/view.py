@@ -311,9 +311,10 @@ class NodeView:
         """The nodes nodes.csv and the map carry: those seen at the last full collect, so that
         a host gone for three weeks is not listed as if it were there (``export.nodes.live_only``).
         The web page keeps showing the memory, with its own filter."""
-        if not self.loaded.cfg.export.nodes.live_only:
-            return self.nodes
-        return [n for n in self.nodes if n.live]
+        cfg = self.loaded.cfg.export.nodes
+        return [n for n in self.nodes
+                if (n.live or not cfg.live_only) and not (cfg.random_macs == "skip"
+                                                           and n.random_mac)]
 
     @staticmethod
     def observed_vlan(position) -> str:

@@ -58,6 +58,11 @@ part inventory and part memory. Two pills above the table tell them apart:
 |---|---|
 | Seen at the last collect | what was still there the last time every device was polled |
 | Everything, history included | the same, plus what the network no longer shows |
+| Without random MACs / Random MACs only | locally administered MACs (phones and laptops rotate them) kept out or alone; they carry a "random MAC" badge and, alone, are sorted by port |
+
+A rotated MAC is another node: nothing is merged on a guess, and two random MACs heard on one
+port are a coincidence of place, not one device. `export.nodes.random_macs: skip` leaves them out
+of `nodes.csv` and the map.
 
 The reference is the last **full** collect — testing one address alone never makes the rest of
 the network look gone. A line under the table says how many rows are memory.

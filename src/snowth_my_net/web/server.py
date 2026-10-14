@@ -878,7 +878,8 @@ class Site:
             elif path == "/nodes":
                 table = pages.nodes(self.loaded, repo, now, t, self.loaded.cfg.web.node_limit,
                                     live_only=bool(query.get("live")),
-                                    disagreeing_only=bool(query.get("disagree")))
+                                    disagreeing_only=bool(query.get("disagree")),
+                                    random_macs=(query.get("random") or [""])[0])
                 title = t("tab.nodes")
             elif path == "/links":
                 table = pages.links(self.loaded, repo, now, t)

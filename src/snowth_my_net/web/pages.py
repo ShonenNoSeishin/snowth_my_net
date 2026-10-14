@@ -132,7 +132,10 @@ def _devices_and_names(loaded: LoadedConfig, repo: Repo, now: int):
 
 
 def nodes(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int,
-          live_only: bool = False, disagreeing_only: bool = False) -> Table:
+          live_only: bool = False, disagreeing_only: bool = False,
+          random_macs: str = "") -> Table:
+    """``random_macs``: ``hide`` or ``only`` filters the locally administered MACs; nodes are
+    never grouped or merged on a guess, a rotated MAC is just another MAC."""
     view = build_view(loaded, repo, now)
     cfg = loaded.cfg.nodes
     rows = []
@@ -143,7 +146,12 @@ def nodes(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int,
             continue
         if disagreeing_only and not view.hostnames_disagree(node):
             continue
+        if (random_macs == "hide" and node.random_mac) or (
+                random_macs == "only" and not node.random_mac):
+            continue
         vendor = view.vendor(node)
+        if node.random_mac:
+            vendor = Cell("", note=t("web.random.badge"), title=t("web.random.title"))
         current = node.current_ip.ip if node.current_ip else ""
         # Link-local addresses are not folded away either: a bare "+1" promised something to
         # read and held an address nothing can be reached by.
@@ -168,6 +176,8 @@ def nodes(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int,
                          "", When(node.last_seen)])
     rows.sort(key=lambda row: (str(row[10]), text_of(row[4]), str(row[7]), str(row[8])))
     rows.sort(key=lambda row: str(row[10]), reverse=True)
+    if random_macs == "only":      # read side by side, by where they were heard
+        rows.sort(key=lambda row: (str(row[7]), str(row[8]), str(row[9])))
     columns = [(t("col.hostname.manual"), "text"), (t("col.hostname.dns"), "text"),
                (t("col.hostname.probe"), "text"), (t("col.description"), "text"),
                (t("col.mac"), "text"), (t("col.vendor"), "text"), (t("col.ip"), "text"),
@@ -176,9 +186,18 @@ def nodes(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int,
     keys = ["hostname_manual", "hostname_dns", "hostname_probe", "description", "mac", "vendor",
             "ip", "switch", "port", "vlan", "seen"]
     live = len(view.nodes) - stale
-    views = [(t("web.view.live", count=live), "/nodes?live=1", live_only),
-             (t("web.view.all", count=len(view.nodes)), "/nodes", not live_only)]
+    randoms = sum(1 for node in view.nodes if node.random_mac)
+    views = [(t("web.view.live", count=live), "/nodes?live=1", live_only and not random_macs),
+             (t("web.view.all", count=len(view.nodes)), "/nodes",
+              not live_only and not random_macs)]
+    if randoms:
+        views += [(t("web.view.norandom", count=len(view.nodes) - randoms), "/nodes?random=hide",
+                   random_macs == "hide"),
+                  (t("web.view.random", count=randoms), "/nodes?random=only",
+                   random_macs == "only")]
     note = t("web.view.stale", count=stale) if stale and not live_only else ""
+    if random_macs == "only":
+        note = t("web.random.note")
     return Table(columns, rows[:limit], len(rows), t("web.no_nodes"),
                  help_for(t, "nodes", columns, keys,
                           extra=["hint.nodes.live", "hint.nodes.click"]), keys, views, note,
