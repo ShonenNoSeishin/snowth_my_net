@@ -29,28 +29,28 @@ fails without it. "Done" items are in commit `1a07b93`.
   platforms (wireless controllers) are no longer taken for access points. The NetBIOS reply check
   was done with the security batch.
 
-## Open (each needs data the collect does not hold, or a decision)
-8. DNS name beats a verified self-stated name with no disagreement flag.
-9. IP supersession ignores the VRF (`latest_by_ip` keyed by IP only): needs the VRF of an ARP
-   entry, which is not collected.
-10. `positions: all` exports one row per historical port for the same MAC (opt-in; a port the
-    MAC left is now dropped when an uplink heard it later, see 7).
-11. Left: `is_live` and long ARP caches; LLDP guessed local-port mappings as HARD uplink reason.
+## Done (fourth batch, 2026-10-14)
+- 8. A DNS name that differs from the name the host states about itself (NetBIOS cut at 15
+  characters allowed for) is flagged like a hand-written/DNS disagreement; the order is unchanged.
+- 9. An address is declared taken over by another MAC only when one device listed both MACs for
+  it: the VRF of an ARP entry is not collected, so two devices may be two routing contexts.
+  Two nodes can now both show the same address (honest) instead of one wrongly losing it.
+- 10. `positions: all` kept as is and documented (it is what the option promises).
+- 11 (part). A polled neighbour whose local port was guessed from its number
+  (`port_num_ifindex`, `port_num_bridge_port`) is a soft uplink reason, not proof.
+- 12. Random MACs: badge, "without / only" views on Nodes (sorted by port, never merged),
+  `export.nodes.random_macs: skip`. Not done: the same filter in the TUI.
+- 13. Sessions: idle expiry renewed by use (`session_hours`) with an absolute cap
+  (`session_max_hours`), persisted as token hashes in `web_sessions.json`, bound to the account's
+  current password (checked at every request), cookie `Max-Age`, refusal reason logged.
+- `/scan` without an address asks for one; the scan refusal reads as one sentence.
 
-## To investigate (asked 2026-10-14)
-12. **Random (locally administered) MACs.** Phones and laptops rotate them, so one device shows up
-    as many nodes and `live_only` hides none of it. Decide how to treat them: a column or filter
-    (`random_mac` already exists on `Node`), grouping by port/VLAN/hostname, a separate view, an
-    export option, and what never to claim (a rotated MAC is not "the same device"). No false
-    positive: do not merge nodes on a guess.
-13. **Login TTL: being signed out in the middle of a session.** Things to check in
-    `web/auth.py` / `web/server.py`: the expiry is fixed (`session_hours`, 12 h from login), not
-    renewed by activity; sessions live in memory, so a restart, a redeploy or a Docker
-    restart signs everyone out; the clock is `time.monotonic`; `change_password` closes the other
-    sessions; the cookie's `Max-Age`/flags; several processes or workers behind nginx; the
-    "password again" confirmation window (`CONFIRM_SECONDS`). Reproduce first (log the reason a
-    token is refused: expired, unknown, closed), then choose between a sliding expiry with an
-    absolute cap and persisting sessions.
+## Open
+11. Left: `is_live` and long ARP caches (an entry kept for weeks keeps a node live).
+12. The random-MAC filter in the TUI; grouping by announced hostname was not done (a guess).
+13. Several worker processes would not share `web_sessions.json` writes (one process today).
+    The refusal reason `unknown` after a redeploy means a cookie issued before the file existed.
+- Wording: the scan refusal reason (`outside discovery.allowed`) is still an English config key.
 
 ## Not audited
 `web/*`, `tui/*`, `collect/tables/entity.py`, `collect/tables/system.py`, `merge/explain.py`.
