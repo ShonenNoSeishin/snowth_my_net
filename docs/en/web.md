@@ -27,6 +27,7 @@ SNOWTH_HTTPS_PORT=9443 docker compose up -d
 | Unreachable | what cannot be polled over SNMP, which neighbours are not polled, which nodes state no name — each with what was tried and why not |
 | Runs | the last 50 runs, their status and how many devices answered |
 | Files | the exported files present in the output directory, to download |
+| Documentation | the essentials in the interface itself, in its language: reading the Nodes table, local MACs, addresses that change, what the export carries, the limits. The full manuals are in `docs/` |
 
 A MAC seen in several places takes several lines, each marked with its number of positions; the
 IP column shows the elected address and then, in grey, the other addresses known for that MAC. In

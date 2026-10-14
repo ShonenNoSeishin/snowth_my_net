@@ -48,7 +48,7 @@ from snowth_my_net.names import (
 from snowth_my_net.names import template as names_template
 from snowth_my_net.state.db import StateError, open_db
 from snowth_my_net.state.repo import Repo
-from snowth_my_net.web import nodeimport, pages, snmp
+from snowth_my_net.web import doctext, nodeimport, pages, snmp
 from snowth_my_net.web import scan as scanpage
 from snowth_my_net.web.accounts import (
     MIN_LENGTH,
@@ -95,7 +95,7 @@ class Page:
 
 NAV = (Page("/", "tab.devices"), Page("/nodes", "tab.nodes"), Page("/links", "tab.links"),
        Page("/unreachable", "web.tab.unreachable"), Page("/runs", "tab.runs"),
-       Page("/files", "web.tab.files"))
+       Page("/files", "web.tab.files"), Page("/docs", "web.tab.docs"))
 SNMP_PAGE = Page("/snmp", "web.snmp.tab")
 
 
@@ -882,6 +882,9 @@ class Site:
         if path not in {page.path for page in NAV}:
             return (HTTPStatus.NOT_FOUND, html_type,
                     self.shell("/", t("web.not_found"), "", t=t))
+        if path == "/docs":
+            return (HTTPStatus.OK, html_type,
+                    self.shell("/docs", t("web.tab.docs"), doctext.render(t.lang), t=t))
         if path == "/runs":
             return HTTPStatus.OK, html_type, self.runs_page(t)
         with closing(self.state()) as repo:

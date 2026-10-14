@@ -413,6 +413,7 @@ WEB = {
     "web.count": ("{total} row(s)", "{total} ligne(s)"),
     "web.truncated": ("first {limit} shown; use the exported file for the rest",
                       "les {limit} premières ; le fichier exporté contient le reste"),
+    "web.tab.docs": ("Documentation", "Documentation"),
     "web.tab.files": ("Files", "Fichiers"),
     "web.no_devices": ("No device yet. Run a collect, then reload this page.",
                        "Aucun équipement. Lancez une collecte, puis rechargez cette page."),

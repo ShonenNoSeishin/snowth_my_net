@@ -397,3 +397,14 @@ main { padding-top: 26px; }
   th.col-hostname_manual, td.col-hostname_manual, th.col-hostname_dns, td.col-hostname_dns,
   th.col-hostname_probe, td.col-hostname_probe, th.col-description, td.col-description { display: none; }
 }
+
+/* Documentation tab: a readable column, not a table. */
+.doctoc { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0 0 18px; }
+.doctoc a { color: var(--accent); text-decoration: none; font-size: 13px; }
+.doctoc a:hover { text-decoration: underline; }
+section.doc { max-width: 72ch; margin: 0 0 26px; }
+section.doc h2 { font-size: 17px; margin: 0 0 8px; }
+section.doc p, section.doc li { line-height: 1.55; margin: 0 0 8px; }
+section.doc ul { padding-left: 20px; margin: 0 0 8px; }
+section.doc code { font-family: var(--mono, ui-monospace, monospace); font-size: .92em;
+  background: var(--stripe); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }

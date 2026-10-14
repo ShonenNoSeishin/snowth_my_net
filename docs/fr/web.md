@@ -28,6 +28,7 @@ SNOWTH_HTTPS_PORT=9443 docker compose up -d
 | Inaccessibles | ce qui ne peut pas être interrogé en SNMP, quels voisins ne le sont pas, quels nœuds n'annoncent aucun nom — chacun avec ce qui a été essayé et pourquoi pas |
 | Collectes | les 50 dernières exécutions, leur état et le nombre d'équipements qui ont répondu |
 | Fichiers | les fichiers exportés présents dans le répertoire de sortie, à télécharger |
+| Documentation | l'essentiel dans l'interface, dans sa langue : lire le tableau Nœuds, MAC locaux, adresses qui changent, ce que contient l'export, les limites. Les manuels complets sont dans `docs/` |
 
 Les heures sont affichées dans le fuseau de la machine qui sert la page (`TZ`, réglé dans
 `.env` pour la pile Compose), et le pied de page dit lequel ; survoler une heure montre la valeur
