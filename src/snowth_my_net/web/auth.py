@@ -9,6 +9,7 @@ keeps a hash of each token (mode 0600), never the token.
 from __future__ import annotations
 
 import base64
+import contextlib
 import hashlib
 import hmac
 import json
@@ -119,7 +120,7 @@ class Sessions:
 
     def _why(self, key: str, found: list) -> str | None:
         """``idle`` / ``cap`` when a session is over, ``None`` while it holds."""
-        _user, created, last = found
+        _user, created, last, _binding = found
         now = self.clock()
         if self.max_lifetime is not None and now >= created + self.max_lifetime:
             return "cap"
@@ -133,11 +134,12 @@ class Sessions:
             del self._gone[next(iter(self._gone))]
 
     @_locked
-    def open(self, user: str) -> str:
+    def open(self, user: str, binding: str = "") -> str:
+        """``binding`` ties the session to the credential it was opened with (see ``bind``)."""
         self.purge()
         token = secrets.token_urlsafe(TOKEN_BYTES)
         now = self.clock()
-        self._open[self._key(token)] = [user, now, now]
+        self._open[self._key(token)] = [user, now, now, binding]
         self._save()
         return token
 
@@ -201,6 +203,31 @@ class Sessions:
             self._save()
         return len(gone)
 
+    @staticmethod
+    def bind(stored_hash: str) -> str:
+        """What a session remembers of the password it was opened with."""
+        return hashlib.sha256(stored_hash.encode()).hexdigest()[:16]
+
+    @_locked
+    def rebind(self, token: str, binding: str) -> None:
+        """The session that changed the password follows its new credential."""
+        found = self._open.get(self._key(token))
+        if found is not None:
+            found[3] = binding
+            self._save()
+
+    @_locked
+    def revoke_unbound(self, current: dict[str, str]) -> int:
+        """Close the sessions of an account that is gone or whose password changed since, for
+        instance by ``web passwd`` in a shell while the interface was stopped: surviving a
+        restart must not let a revoked credential's session live on."""
+        stale = [k for k, found in self._open.items() if current.get(found[0]) != found[3]]
+        for key in stale:
+            self._forget(key, "closed")
+        if stale:
+            self._save()
+        return len(stale)
+
     @_locked
     def purge(self) -> None:
         over = [(k, why) for k, found in self._open.items() if (why := self._why(k, found))]
@@ -221,7 +248,8 @@ class Sessions:
             return
         try:
             rows = json.loads(self.path.read_text("utf-8"))["sessions"]
-            self._open = {k: [str(u), float(c), float(last)] for k, (u, c, last) in rows.items()}
+            self._open = {k: [str(u), float(c), float(last), str(b)]
+                          for k, (u, c, last, b) in rows.items()}      # an old file: all stale
         except (OSError, ValueError, KeyError, TypeError):
             self._open = {}                    # missing or damaged: everybody signs in again
         self.purge()
@@ -237,8 +265,13 @@ class Sessions:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 handle.write(payload)
             os.replace(tmp, self.path)
-        except OSError as exc:                 # read-only disk: sessions stay in memory
-            log.warning("sessions not persisted (%s)", exc)
+        except OSError as exc:
+            # A file that no longer matches memory could bring a closed session back after a
+            # restart: better no file at all, everybody signs in again.
+            log.warning("sessions not persisted (%s); the stale file is removed", exc)
+            for leftover in (tmp, self.path):
+                with contextlib.suppress(OSError):
+                    leftover.unlink()
 
 
 @dataclass

@@ -119,6 +119,11 @@ class Site:
         self.logins = LoginLimiter()
         self.proxies = list(loaded.cfg.web.trusted_proxies)
         self.bootstrap()
+        gone = self.sessions.revoke_unbound(
+            {name: Sessions.bind(account.hash) for name in self.names
+             if (account := self.account_of(name))})
+        if gone:
+            log.info("%d session(s) closed: their account or password changed", gone)
 
     def log_refusal(self, token: str | None, path: str) -> None:
         """Say why a visitor with a cookie is sent to the login page (no cookie is just a visit)."""
@@ -243,7 +248,8 @@ class Site:
         self.logins.succeeded(address)
         log.info("%s signed in from %s", user, address)
         where = "/password" if account.must_change else target
-        return HTTPStatus.SEE_OTHER, where, b"", self.sessions.open(user)
+        return (HTTPStatus.SEE_OTHER, where, b"",
+                self.sessions.open(user, Sessions.bind(account.hash)))
 
     # ----------------------------------------------------------------- password
 
@@ -303,6 +309,9 @@ class Site:
         if address:
             self.logins.succeeded(address)
         closed = self.sessions.close_user(user, keep=token)    # a stolen session ends here
+        renewed = self.account_of(user)
+        if token and renewed:
+            self.sessions.rebind(token, Sessions.bind(renewed.hash))
         log.info("%s changed their password (%d other session(s) closed)", user, closed)
         return HTTPStatus.SEE_OTHER, "/", b""
 

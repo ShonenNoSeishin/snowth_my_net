@@ -456,7 +456,7 @@ def test_the_failure_limiter_counts_the_reader_not_the_proxy(tmp_path):
 def test_a_restarted_site_keeps_the_session_and_logs_why_one_is_refused(tmp_path, caplog):
     loaded = guarded_config(tmp_path)
     first = Site(loaded, FixedClock())
-    token = first.sessions.open("alice")
+    token = first.sessions.open("alice", auth.Sessions.bind(first.account_of("alice").hash))
     restarted = Site(loaded, FixedClock())                  # a redeploy, a Docker restart
     assert restarted.sessions.user_of(token) == "alice"
     with caplog.at_level("INFO"):
@@ -467,3 +467,29 @@ def test_a_restarted_site_keeps_the_session_and_logs_why_one_is_refused(tmp_path
     with caplog.at_level("INFO"):
         restarted.respond("/nodes", {}, None)               # a plain visit says nothing
     assert "session refused" not in caplog.text
+
+
+def test_a_session_does_not_outlive_its_credential_across_a_restart(tmp_path):
+    loaded = guarded_config(tmp_path)
+    first = Site(loaded, FixedClock())
+    account = first.account_of("alice")
+    token = first.sessions.open("alice", auth.Sessions.bind(account.hash))
+    assert Site(loaded, FixedClock()).sessions.user_of(token) == "alice"   # same password: kept
+    (loaded.paths.secrets_dir / "web_alice").write_text(auth.hash_password("un-autre-mot-de-passe"))
+    assert Site(loaded, FixedClock()).sessions.user_of(token) is None     # `web passwd` closed it
+    kept = Site(loaded, FixedClock())
+    other = kept.sessions.open("alice", auth.Sessions.bind(kept.account_of("alice").hash))
+    loaded.cfg.web.auth.users = []                                        # the account is gone
+    assert Site(loaded, FixedClock()).sessions.user_of(other) is None
+
+
+def test_a_failed_write_never_leaves_a_closed_session_to_come_back(tmp_path, monkeypatch):
+    path = tmp_path / "sessions.json"
+    sessions = auth.Sessions(lifetime=60, clock=lambda: 0, path=path)
+    token = sessions.open("alice")
+    assert path.exists()
+    monkeypatch.setattr(auth.os, "replace", lambda *a: (_ for _ in ()).throw(OSError("ro")))
+    sessions.close(token)                                   # memory says closed, disk cannot
+    monkeypatch.undo()
+    assert not path.exists()                                # so no file: everybody signs in again
+    assert auth.Sessions(lifetime=60, clock=lambda: 0, path=path).user_of(token) is None

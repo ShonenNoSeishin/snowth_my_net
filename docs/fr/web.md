@@ -266,7 +266,9 @@ le restent.
   quand la requête arrive par un proxy TLS). Elle se termine après `session_hours` sans requête
   (l'usage la renouvelle) et au plus tard `session_max_hours` après la connexion. Le dossier d'état
   garde une empreinte de chaque jeton dans `web_sessions.json` (mode 0600) : un redémarrage ou un
-  redéploiement ne déconnecte personne. Le journal dit pourquoi un cookie est refusé : `idle`,
+  redéploiement ne déconnecte personne, sauf si le compte a disparu ou si son mot de passe a changé
+  entre-temps (`web passwd` à l'arrêt) : ces sessions sont closes au démarrage, et un fichier qui
+  ne peut pas être écrit est supprimé pour qu'une session fermée ne revienne jamais. Le journal dit pourquoi un cookie est refusé : `idle`,
   `cap`, `closed` ou `unknown` (émis avant l'existence du fichier).
 * Après cinq échecs, une adresse patiente une minute, bon mot de passe ou non ; les échecs sont
   journalisés avec l'adresse et leur raison — `no such account` ou `wrong password` — alors que
