@@ -215,7 +215,7 @@ ligne à nommer, la réponse vient d'autre chose et le nom est écarté.
 | `export.allow_empty` | `[]` | Fichiers CSV autorisés à n'avoir aucune ligne de données. Sinon un CSV vide n'écrase pas le précédent, n'est pas poussé, et la commande sort avec le code 1. |
 | `export.csv.line_terminator` | `crlf` | `crlf` (RFC 4180) ou `lf`. |
 | `export.csv.formula_safe` | `true` | Une cellule de texte qui commence par `=`, `+`, `-` ou `@` (un nom annoncé par un hôte) reçoit une apostrophe devant, pour qu'un tableur ne l'exécute jamais. `false` pour un importeur qui ne la supporte pas. |
-| `export.nodes.random_macs` | `keep` | `skip` retire de `nodes.csv` et de la carte les MAC administrés localement (aléatoires). Rien n'est fusionné dans les deux cas : un MAC qui tourne est un autre nœud. |
+| `export.nodes.local_macs` | `keep` | `skip` retire de `nodes.csv` et de la carte les MAC administrés localement (l'adresse privée d'un téléphone, mais aussi conteneurs et VM). Rien n'est fusionné dans les deux cas : un MAC qui tourne est un autre nœud. |
 | `export.nodes.live_only` | `true` | `nodes.csv` et la carte portent les nœuds vus à la dernière collecte complète, pas la mémoire gardée `nodes.retention_days`. `false` ramène la mémoire. |
 | `export.devices.include_type` | `true` | Colonne finale `"Device Type"`. |
 | `export.nodes.include_name` | `false` | Ajouter une première colonne `Name` à `nodes.csv` avec les noms donnés à la main (`node name`). Désactivé par défaut pour qu'un importateur continue de lire les mêmes colonnes. |

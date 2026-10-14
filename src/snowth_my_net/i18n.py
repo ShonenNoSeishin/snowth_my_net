@@ -445,8 +445,8 @@ WEB = {
                       "Vues à la dernière collecte ({count})"),
     "web.view.all": ("Everything, history included ({count})",
                      "Tout, historique compris ({count})"),
-    "web.view.norandom": ("Without random MACs ({count})", "Sans MAC aléatoires ({count})"),
-    "web.view.random": ("Random MACs only ({count})", "MAC aléatoires seulement ({count})"),
+    "web.view.norandom": ("Without local MACs ({count})", "Sans MAC locaux ({count})"),
+    "web.view.random": ("Local MACs only ({count})", "MAC locaux seulement ({count})"),
     "web.view.churn": ("Address changes often ({count})", "Change souvent d'adresse ({count})"),
     "web.churn.note": ("{count} or more IPv4 addresses seen for the same MAC within {days} days. "
                        "The address moves; this does not say why (DHCP, several interfaces, "
@@ -454,16 +454,21 @@ WEB = {
                        "{count} adresses IPv4 ou plus vues pour un même MAC en {days} jours. "
                        "L'adresse bouge ; cela ne dit pas pourquoi (DHCP, plusieurs interfaces, "
                        "proxy-ARP)."),
-    "web.random.badge": ("random MAC", "MAC aléatoire"),
-    "web.random.title": ("Locally administered MAC: phones and laptops rotate it, so one device "
-                         "can appear as several nodes. Nothing here says they are the same "
-                         "device.",
-                         "MAC administré localement : les téléphones et portables le changent, "
-                         "un même appareil peut donc apparaître en plusieurs nœuds. Rien ici "
-                         "ne dit que c'est le même appareil."),
-    "web.random.note": ("Sorted by where they were heard. Two random MACs on one port are a "
+    "web.random.badge": ("local MAC", "MAC local"),
+    "web.random.title": ("Locally administered MAC (second bit of the first byte set). Phones and "
+                         "laptops use one to hide their real MAC and rotate it, so one device "
+                         "can appear as several nodes; containers, virtual machines and software "
+                         "interfaces use them too. The tool cannot tell which, and nothing here "
+                         "says two such MACs are the same device.",
+                         "MAC administré localement (deuxième bit du premier octet à 1). Les "
+                         "téléphones et portables en utilisent un pour masquer leur vrai MAC et "
+                         "le changent : un même appareil peut donc apparaître en plusieurs "
+                         "nœuds ; les conteneurs, machines virtuelles et interfaces logicielles "
+                         "en utilisent aussi. L'outil ne sait pas lequel, et rien ici ne dit que "
+                         "deux de ces MAC sont le même appareil."),
+    "web.random.note": ("Sorted by where they were heard. Two local MACs on one port are a "
                         "coincidence of place, not proof of one device; nothing is merged.",
-                        "Triés par lieu d'écoute. Deux MAC aléatoires sur un même port sont une "
+                        "Triés par lieu d'écoute. Deux MAC locaux sur un même port sont une "
                         "coïncidence de lieu, pas la preuve d'un seul appareil ; rien n'est "
                         "fusionné."),
     "web.view.stale": ("{count} row(s) are memory: last seen before the last collect.",
@@ -548,10 +553,11 @@ WEB = {
         "d'un routeur ou d'un pare-feu. « 2 positions » signale une MAC présente sur plusieurs "
         "lignes : son historique d'itinérance, la plus récente d'abord."),
     "hint.nodes.vendor": (
-        "IEEE registry, from the first half of the MAC. Empty for a randomised (locally "
-        "administered) address, which phones and laptops now use by default.",
-        "Registre IEEE, d'après la première moitié de la MAC. Vide pour une adresse aléatoire "
-        "(administrée localement), ce que font aujourd'hui téléphones et portables par défaut."),
+        "IEEE registry, from the first half of the MAC. Empty for a locally administered "
+        "address, which phones and laptops now use by default (so do containers and VMs).",
+        "Registre IEEE, d'après la première moitié de la MAC. Vide pour une adresse "
+        "administrée localement, ce que font aujourd'hui téléphones et portables par défaut "
+        "(et aussi conteneurs et VM)."),
     "hint.nodes.ip": (
         "The elected address, then the other addresses known for that MAC behind a '+n'. The "
         "elected one is the most recent seen in an ARP/NDP cache, IPv4 preferred, dropped when "

@@ -39,7 +39,7 @@ fails without it. "Done" items are in commit `1a07b93`.
 - 11 (part). A polled neighbour whose local port was guessed from its number
   (`port_num_ifindex`, `port_num_bridge_port`) is a soft uplink reason, not proof.
 - 12. Random MACs: badge, "without / only" views on Nodes (sorted by port, never merged),
-  `export.nodes.random_macs: skip`. Not done: the same filter in the TUI.
+  `export.nodes.local_macs: skip`. Not done: the same filter in the TUI.
 - 13. Sessions: idle expiry renewed by use (`session_hours`) with an absolute cap
   (`session_max_hours`), persisted as token hashes in `web_sessions.json`, bound to the account's
   current password (checked at every request), cookie `Max-Age`, refusal reason logged.
@@ -47,7 +47,7 @@ fails without it. "Done" items are in commit `1a07b93`.
 
 ## Open
 11. Left: `is_live` and long ARP caches (an entry kept for weeks keeps a node live).
-12. The random-MAC filter in the TUI; grouping by announced hostname was not done (a guess).
+12. The local-MAC filter in the TUI; grouping by announced hostname was not done (a guess).
 13. Several worker processes would not share `web_sessions.json` writes (one process today).
     The refusal reason `unknown` after a redeploy means a cookie issued before the file existed.
 - Wording: the scan refusal reason (`outside discovery.allowed`) is still an English config key.

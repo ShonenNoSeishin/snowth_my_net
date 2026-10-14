@@ -53,7 +53,7 @@ Une ligne par adresse MAC et par endroit où elle a été vue.
 | Nom d'hôte NetBIOS | ce que l'hôte a répondu quand on lui a demandé son propre nom | `names.probe`, désactivé par défaut ; se remplit aussi avec les réponses LLMNR et mDNS | non demandé, l'hôte est muet, ou la MAC qu'il annonce n'est pas celle de la ligne |
 | Description | une ligne que vous avez écrite : à quoi ça sert, où c'est accroché, qui appeler | vous, dans la case ou avec `node describe` ; conservée avec la MAC | rien n'a été écrit |
 | MAC | l'adresse | la table MAC d'un switch, ou le cache ARP/NDP d'un routeur ou d'un pare-feu | jamais vide |
-| Constructeur | qui a fabriqué l'adaptateur | le registre IEEE, d'après la première moitié de la MAC | une adresse aléatoire, comme en utilisent par défaut les téléphones et portables |
+| Constructeur | qui a fabriqué l'adaptateur | le registre IEEE, d'après la première moitié de la MAC | une adresse administrée localement, comme en utilisent par défaut les téléphones et portables (et conteneurs, VM) |
 | IP | l'adresse élue | les caches ARP/NDP, voir plus bas | aucune adresse utilisable n'a été vue |
 | Switch | l'équipement dont la table MAC contient cette adresse sur un port d'accès | les tables MAC | la MAC n'est connue que d'un cache ARP, chaque port qui l'a vue est un uplink, ou le switch qui la porte n'est pas interrogé |
 | Port | le port de ce switch | les tables MAC | comme Switch |

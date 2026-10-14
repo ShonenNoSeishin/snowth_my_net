@@ -133,8 +133,8 @@ def _devices_and_names(loaded: LoadedConfig, repo: Repo, now: int):
 
 def nodes(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int,
           live_only: bool = False, disagreeing_only: bool = False,
-          random_macs: str = "", churn_only: bool = False) -> Table:
-    """``random_macs``: ``hide`` or ``only`` filters the locally administered MACs; nodes are
+          local_macs: str = "", churn_only: bool = False) -> Table:
+    """``local_macs``: ``hide`` or ``only`` filters the locally administered MACs; nodes are
     never grouped or merged on a guess, a rotated MAC is just another MAC."""
     view = build_view(loaded, repo, now)
     cfg = loaded.cfg.nodes
@@ -148,8 +148,8 @@ def nodes(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int,
             continue
         if churn_only and not view.ip_churn(node):
             continue
-        if (random_macs == "hide" and node.random_mac) or (
-                random_macs == "only" and not node.random_mac):
+        if (local_macs == "hide" and node.random_mac) or (
+                local_macs == "only" and not node.random_mac):
             continue
         vendor = view.vendor(node)
         if node.random_mac:
@@ -178,7 +178,7 @@ def nodes(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int,
                          "", When(node.last_seen)])
     rows.sort(key=lambda row: (str(row[10]), text_of(row[4]), str(row[7]), str(row[8])))
     rows.sort(key=lambda row: str(row[10]), reverse=True)
-    if random_macs == "only":      # read side by side, by where they were heard
+    if local_macs == "only":      # read side by side, by where they were heard
         rows.sort(key=lambda row: (str(row[7]), str(row[8]), str(row[9])))
     columns = [(t("col.hostname.manual"), "text"), (t("col.hostname.dns"), "text"),
                (t("col.hostname.probe"), "text"), (t("col.description"), "text"),
@@ -190,18 +190,18 @@ def nodes(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int,
     live = len(view.nodes) - stale
     randoms = sum(1 for node in view.nodes if node.random_mac)
     churning = sum(1 for node in view.nodes if view.ip_churn(node))
-    plain = not random_macs and not churn_only
+    plain = not local_macs and not churn_only
     views = [(t("web.view.live", count=live), "/nodes?live=1", live_only and plain),
              (t("web.view.all", count=len(view.nodes)), "/nodes", not live_only and plain)]
     if churning:
         views.append((t("web.view.churn", count=churning), "/nodes?churn=1", churn_only))
     if randoms:
-        views += [(t("web.view.norandom", count=len(view.nodes) - randoms), "/nodes?random=hide",
-                   random_macs == "hide"),
-                  (t("web.view.random", count=randoms), "/nodes?random=only",
-                   random_macs == "only")]
+        views += [(t("web.view.norandom", count=len(view.nodes) - randoms), "/nodes?local=hide",
+                   local_macs == "hide"),
+                  (t("web.view.random", count=randoms), "/nodes?local=only",
+                   local_macs == "only")]
     note = t("web.view.stale", count=stale) if stale and not live_only else ""
-    if random_macs == "only":
+    if local_macs == "only":
         note = t("web.random.note")
     if churn_only:
         note = t("web.churn.note", days=cfg.ip_churn_days // 86400, count=cfg.ip_churn_min)

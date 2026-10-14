@@ -51,7 +51,7 @@ One row per MAC address and per place it was seen.
 | NetBIOS hostname | what the host answered when asked its own name | `names.probe`, off by default; also fills with LLMNR and mDNS answers | not asked, the host is silent, or the MAC it stated is not this row's |
 | Description | a line you wrote: what it is for, where it hangs, whom to call | you, in the cell or with `node describe`; kept with the MAC | nothing written |
 | MAC | the address | the MAC table of a switch, or the ARP/NDP cache of a router or firewall | never empty |
-| Vendor | who made the adapter | the IEEE registry, from the first half of the MAC | a randomised address, which phones and laptops now use by default |
+| Vendor | who made the adapter | the IEEE registry, from the first half of the MAC | a locally administered address, which phones and laptops now use by default (containers and VMs too) |
 | IP | the elected address | the ARP/NDP caches, see below | no usable address was seen |
 | Switch | the device whose MAC table holds that address on an access port | the MAC tables | the MAC is only known from an ARP cache, every port that saw it is an uplink, or the switch holding it is not polled |
 | Port | the port of that switch | the MAC tables | same as Switch |

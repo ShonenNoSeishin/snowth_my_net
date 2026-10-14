@@ -48,7 +48,7 @@ historique d'itinérance.
 | Name | Seulement avec `export.nodes.include_name: true` : le nom donné à la main à cette MAC (`node name`), vide sinon. La colonne est absente par défaut, pour ne pas changer les colonnes que lit un importateur. |
 | Description | Seulement avec `export.nodes.include_description: true` : la description donnée à la main (`node describe`). |
 | MAC Address | En minuscules avec deux-points. Les MAC de broadcast, multicast, nulles, virtuelles VRRP/HSRP, celles des équipements interrogés, et celles connues par rien d'autre qu'une adresse lien-local (`nodes.include_link_local_only`) sont exclues. |
-| Vendor | Registre IEEE (MA-L/MA-M/MA-S), nettoyé ; vide pour les MAC administrées localement (aléatoires). |
+| Vendor | Registre IEEE (MA-L/MA-M/MA-S), nettoyé ; vide pour les MAC administrées localement. |
 | IP Address | IP courante de la MAC : parmi les adresses qu'aucune autre MAC n'a revendiquées depuis, celles vues dans les `nodes.current_ip_window` (24 h) suivant la plus récente, l'IPv4 d'abord. Les adresses lien-local (`fe80::`) ne sont jamais élues (`nodes.elect_link_local`). Une IPv6 globale seule signifie qu'aucune IPv4 récente n'est connue : augmentez `current_ip_window` (par exemple `30d`) pour qu'une IPv4 gagne dès qu'il en existe une dans la rétention. Toutes les adresses d'une MAC restent dans `snapshot.json`. |
 | DNS Name | Avec `export.nodes.merge_hostnames` (par défaut) : le meilleur nom d'hôte connu — écrit à la main, sinon le PTR de l'IP, sinon ce que l'hôte a annoncé sur lui-même (`names.probe`). `snapshot.json` enregistre lequel des trois. Clé désactivée : le PTR seul. |
 | Switch | Exactement un `Device Name` de `devices.csv` ; vide quand aucun port d'accès n'est connu. |

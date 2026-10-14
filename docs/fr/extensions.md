@@ -120,7 +120,7 @@ avec leur type et s'ils sont affichés par défaut.
 |---|---|
 | `devices` | équipement dans la fenêtre de rétention (comme `devices.csv`, plus règle et raison du type, sysObjectID, nom de l'identifiant, uptime, nombres d'interfaces, dernière collecte…) |
 | `interfaces` | interface : nom du port, alias, état, vitesse, PVID, rôle (`access`/`uplink`, tel qu'utilisé pour `nodes.csv`) et pourquoi, nombre de MAC, voisins LLDP/CDP |
-| `nodes` | position d'un nœud (comme `nodes.csv`), plus `current`, verdict, MAC aléatoire, nombre d'IP |
+| `nodes` | position d'un nœud (comme `nodes.csv`), plus `current`, verdict, MAC administré localement, nombre d'IP |
 | `ip_history` | adresse IP vue pour un nœud, avec `current` et `superseded_by` |
 | `vlans` | VLAN déclaré sur un équipement |
 | `links` | lien (comme `links.csv`, extrémités incluses, avec `endpoint`) |

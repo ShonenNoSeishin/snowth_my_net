@@ -43,7 +43,7 @@ def _random_fixture(tmp_path):
     return loaded, Repo(open_db(tmp_path / "state" / "state.sqlite", readonly=True))
 
 
-def test_random_macs_can_be_left_out_of_the_export_and_are_never_merged(tmp_path):
+def test_local_macs_can_be_left_out_of_the_export_and_are_never_merged(tmp_path):
     from snowth_my_net.merge.view import build_view
     from tests.unit.test_cov_views import NOW, RANDOM
 
@@ -52,14 +52,14 @@ def test_random_macs_can_be_left_out_of_the_export_and_are_never_merged(tmp_path
     view = build_view(loaded, repo, NOW)
     assert RANDOM in [n.mac for n in view.exported_nodes()]          # kept by default
     before = len(view.nodes)
-    loaded.cfg.export.nodes.random_macs = "skip"
+    loaded.cfg.export.nodes.local_macs = "skip"
     kept = view.exported_nodes()
     assert RANDOM not in [n.mac for n in kept] and not any(n.random_mac for n in kept)
     assert len(view.nodes) == before                                  # nothing merged or dropped
     repo.conn.close()
 
 
-def test_the_nodes_page_filters_and_labels_random_macs(tmp_path):
+def test_the_nodes_page_filters_and_labels_local_macs(tmp_path):
     from snowth_my_net.i18n import Translator
     from snowth_my_net.web import pages
     from tests.unit.test_cov_views import NOW, RANDOM
@@ -67,15 +67,15 @@ def test_the_nodes_page_filters_and_labels_random_macs(tmp_path):
     loaded, repo = _random_fixture(tmp_path)
     t = Translator("en")
     everything = pages.nodes(loaded, repo, NOW, t, 2000)
-    only = pages.nodes(loaded, repo, NOW, t, 2000, random_macs="only")
-    hidden = pages.nodes(loaded, repo, NOW, t, 2000, random_macs="hide")
+    only = pages.nodes(loaded, repo, NOW, t, 2000, local_macs="only")
+    hidden = pages.nodes(loaded, repo, NOW, t, 2000, local_macs="hide")
     macs = lambda table: {pages.text_of(row[4]) for row in table.rows}   # noqa: E731
     assert macs(only) == {RANDOM}
     assert RANDOM not in macs(hidden) and macs(hidden) | macs(only) == macs(everything)
     for row in only.rows:
         assert row[5].note == t("web.random.badge") and row[5].text == ""
     assert only.note == t("web.random.note")
-    assert [label for label, _href, _on in only.views if "Random" in label]
+    assert [label for label, _href, _on in only.views if "Local MACs" in label]
     repo.conn.close()
 
 

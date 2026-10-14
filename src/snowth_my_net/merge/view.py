@@ -333,7 +333,7 @@ class NodeView:
         The web page keeps showing the memory, with its own filter."""
         cfg = self.loaded.cfg.export.nodes
         return [n for n in self.nodes
-                if (n.live or not cfg.live_only) and not (cfg.random_macs == "skip"
+                if (n.live or not cfg.live_only) and not (cfg.local_macs == "skip"
                                                            and n.random_mac)]
 
     @staticmethod

@@ -402,7 +402,7 @@ class NodesExportCfg:
     include_description: bool = False
     merge_hostnames: bool = True     # "DNS Name" carries the best of the three, in that order
     live_only: bool = True           # nodes.csv and the map: nodes seen at the last full collect
-    random_macs: Literal["keep", "skip"] = "keep"   # skip: no locally administered MAC exported
+    local_macs: Literal["keep", "skip"] = "keep"   # skip: no locally administered MAC exported
 
 
 @dataclass

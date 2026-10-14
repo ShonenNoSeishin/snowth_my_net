@@ -53,11 +53,11 @@ font la différence :
 |---|---|
 | Vues à la dernière collecte | ce qui était encore là au dernier passage sur tous les équipements |
 | Change souvent d'adresse | les MAC vus avec `nodes.ip_churn_min` adresses IPv4 ou plus dans `nodes.ip_churn_days` : l'adresse bouge (DHCP, plusieurs interfaces, proxy-ARP — l'outil ne dit pas lequel) |
-| Sans MAC aléatoires / MAC aléatoires seulement | les MAC administrés localement (les téléphones et portables les changent), écartés ou seuls ; ils portent une pastille « MAC aléatoire » et, seuls, sont triés par port |
+| Sans MAC locaux / MAC locaux seulement | les MAC administrés localement (l'adresse privée d'un téléphone, mais aussi conteneurs, VM et interfaces logicielles : l'outil ne sait pas lequel), écartés ou seuls ; ils portent une pastille « MAC local » et, seuls, sont triés par port |
 
 Un MAC qui tourne est un autre nœud : rien n'est fusionné sur une supposition, et deux MAC
-aléatoires entendus sur un même port sont une coïncidence de lieu, pas un seul appareil.
-`export.nodes.random_macs: skip` les retire de `nodes.csv` et de la carte.
+locaux entendus sur un même port sont une coïncidence de lieu, pas un seul appareil.
+`export.nodes.local_macs: skip` les retire de `nodes.csv` et de la carte.
 | Tout, historique compris | la même chose, plus ce que le réseau ne montre plus |
 
 La référence est la dernière collecte **complète** — tester une seule adresse ne fait jamais

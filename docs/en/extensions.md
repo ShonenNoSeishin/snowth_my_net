@@ -117,7 +117,7 @@ fields with their type and whether they are shown by default.
 |---|---|
 | `devices` | device within the retention window (as `devices.csv`, plus type rule and reason, sysObjectID, credential name, uptime, interface counts, last collect…) |
 | `interfaces` | interface: port name, alias, status, speed, PVID, role (`access`/`uplink`, as used for `nodes.csv`) and why, MAC count, LLDP/CDP neighbours |
-| `nodes` | position of a node (as `nodes.csv`), plus `current`, verdict, randomised MAC, IP count |
+| `nodes` | position of a node (as `nodes.csv`), plus `current`, verdict, locally administered MAC, IP count |
 | `ip_history` | IP address seen for a node, with `current` and `superseded_by` |
 | `vlans` | VLAN declared on a device |
 | `links` | link (as `links.csv`, endpoints included, with `endpoint`) |
