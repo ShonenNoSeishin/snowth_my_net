@@ -168,7 +168,8 @@ schedule:
 #   node_limit: 2000               # rows sent to the browser on the Nodes page
 #   nmap: false                    # true: scan one address's ports from its page (needs an account)
 #   auth:                          # without users: no login (loopback only)
-#     session_hours: 12
+#     session_hours: 12            # idle time before a session ends (use renews it)
+#     session_max_hours: 168       # absolute cap since the login
 #     users:
 #       - name: alice
 #         password_file: web_alice  # snowth_my_net web --hash-password > secrets/web_alice

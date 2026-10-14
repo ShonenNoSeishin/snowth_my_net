@@ -61,6 +61,7 @@ from snowth_my_net.web.auth import (
     COOKIE,
     DUMMY_HASH,
     SCHEME,
+    SESSIONS_NAME,
     LoginLimiter,
     Sessions,
     hash_password,
@@ -111,10 +112,19 @@ class Site:
         self.labels = store_for(loaded.paths)      # MAC -> name given by hand
         self.jobs = Runner(str(loaded.paths.config_file), loaded.cfg.general.run_timeout)
         self.writing = threading.Lock()
-        self.sessions = Sessions(lifetime=loaded.cfg.web.auth.session_hours * 3600)
+        auth_cfg = loaded.cfg.web.auth
+        self.sessions = Sessions(lifetime=auth_cfg.session_hours * 3600,
+                                 max_lifetime=auth_cfg.session_max_hours * 3600,
+                                 path=loaded.paths.state_dir / SESSIONS_NAME)
         self.logins = LoginLimiter()
         self.proxies = list(loaded.cfg.web.trusted_proxies)
         self.bootstrap()
+
+    def log_refusal(self, token: str | None, path: str) -> None:
+        """Say why a visitor with a cookie is sent to the login page (no cookie is just a visit)."""
+        why = self.sessions.refusal(token)
+        if why != "none":
+            log.info("session refused on %s: %s", path, why)
 
     def caller(self, peer: str, forwarded: str | None) -> str:
         """The reader's address: the peer, unless a trusted proxy stated another one.
@@ -815,6 +825,7 @@ class Site:
         if path == "/healthz":
             return HTTPStatus.OK, "text/plain; charset=utf-8", b"ok\n"
         if self.guarded and self.sessions.user_of(token) is None:
+            self.log_refusal(token, path)
             if path == "/login":
                 return HTTPStatus.OK, html_type, self.login_page(t=t)
             target = path + (("?" + "&".join(f"{k}={v[0]}" for k, v in query.items()))
@@ -1039,6 +1050,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path in ("/name", "/action", "/scan", *IMPORT_POSTS) and (
                 site.sessions.user_of(token) is None):
+            site.log_refusal(token, parsed.path)
             if "application/json" in (self.headers.get("Accept") or ""):
                 self.finish_response(HTTPStatus.UNAUTHORIZED, JSON,
                                      json.dumps({"error": "sign in again"}).encode())
@@ -1152,7 +1164,8 @@ class Handler(BaseHTTPRequestHandler):
             flags = "Path=/; HttpOnly; SameSite=Strict"
             if self.secure_request():
                 flags += "; Secure"        # behind a TLS proxy the cookie never leaves it
-            value = f"{COOKIE}={set_cookie}; {flags}" if set_cookie else (
+            age = self.server.site.sessions.cookie_age
+            value = f"{COOKIE}={set_cookie}; Max-Age={age}; {flags}" if set_cookie else (
                 f"{COOKIE}=; Max-Age=0; {flags}")
             self.send_header("Set-Cookie", value)
         if lang_cookie:

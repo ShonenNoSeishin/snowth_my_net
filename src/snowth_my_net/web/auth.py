@@ -2,8 +2,8 @@
 
 The configuration never holds a password, not even hashed by accident: it points at a file (or
 an environment variable) containing a hash produced by ``snowth_my_net web --hash-password``.
-Sessions live in the process, so restarting the interface logs everybody out — there is no
-session store to secure and nothing to clean up.
+Sessions are renewed by use up to an absolute cap and survive a restart: the state directory
+keeps a hash of each token (mode 0600), never the token.
 """
 
 from __future__ import annotations
@@ -11,16 +11,24 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import json
+import logging
+import os
 import secrets
 import threading
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 SCHEME = "scrypt"
 COST, BLOCK, PARALLEL = 2 ** 14, 8, 1      # ~100 ms and 16 MB per attempt on a small server
 SALT_BYTES, TOKEN_BYTES = 16, 32
 COOKIE = "snowth_session"
+SESSIONS_NAME = "web_sessions.json"
 MAX_FAILURES, LOCKOUT_SECONDS = 5, 60.0
+RENEW_SAVE_SECONDS = 300            # a renewal reaches the file at most this often
 CONFIRM_SECONDS = 15 * 60          # how long a re-typed password unlocks the SNMP page
 
 
@@ -76,70 +84,161 @@ def _locked(method):
 
 @dataclass
 class Sessions:
-    """Opaque session tokens with an expiry, kept in memory."""
+    """Opaque session tokens, kept in memory and, when ``path`` is given, in a file.
 
-    lifetime: float                                    # seconds
-    clock: object = time.monotonic
-    _open: dict[str, tuple[str, float]] = field(default_factory=dict)   # token -> (user, until)
-    _confirmed: dict[str, float] = field(default_factory=dict)          # token -> when
+    A session ends when it has been idle for ``lifetime`` seconds (every request renews that) or
+    when ``max_lifetime`` seconds have passed since the login, whatever the activity. The file
+    holds a hash of each token, never the token itself, so reading it signs nobody in; it lets a
+    restart or a redeploy keep the people who were working. The clock is the wall clock for that
+    reason: a monotonic clock means nothing after a restart.
+    """
+
+    lifetime: float                                    # idle seconds
+    clock: object = time.time
+    max_lifetime: float | None = None                  # absolute cap, None: no cap
+    path: Path | None = None                           # None: nothing is persisted
+    _open: dict[str, list] = field(default_factory=dict)    # hash -> [user, created, last seen]
+    _confirmed: dict[str, float] = field(default_factory=dict)          # hash -> when
+    _gone: dict[str, str] = field(default_factory=dict)     # hash -> why it ended (bounded)
+    _saved_at: float = 0.0                             # when the file last recorded a renewal
     _lock: threading.RLock = field(default_factory=threading.RLock)     # one thread per request
+
+    def __post_init__(self) -> None:
+        if self.max_lifetime is not None:
+            self.max_lifetime = max(self.max_lifetime, self.lifetime)
+        self._load()
+
+    @property
+    def cookie_age(self) -> int:
+        """``Max-Age`` of the cookie: the cap, so a closed browser keeps the session it may keep."""
+        return int(self.max_lifetime if self.max_lifetime is not None else self.lifetime)
+
+    @staticmethod
+    def _key(token: str) -> str:
+        return hashlib.sha256(token.encode()).hexdigest()
+
+    def _why(self, key: str, found: list) -> str | None:
+        """``idle`` / ``cap`` when a session is over, ``None`` while it holds."""
+        _user, created, last = found
+        now = self.clock()
+        if self.max_lifetime is not None and now >= created + self.max_lifetime:
+            return "cap"
+        return "idle" if now >= last + self.lifetime else None
+
+    def _forget(self, key: str, why: str) -> None:
+        self._open.pop(key, None)
+        self._confirmed.pop(key, None)
+        self._gone[key] = why
+        while len(self._gone) > 256:
+            del self._gone[next(iter(self._gone))]
 
     @_locked
     def open(self, user: str) -> str:
         self.purge()
         token = secrets.token_urlsafe(TOKEN_BYTES)
-        self._open[token] = (user, self.clock() + self.lifetime)
+        now = self.clock()
+        self._open[self._key(token)] = [user, now, now]
+        self._save()
         return token
 
     @_locked
     def confirm(self, token: str) -> None:
         """The password was typed again: what it unlocks stays open for a while, not forever."""
-        self._confirmed[token] = self.clock()
+        self._confirmed[self._key(token)] = self.clock()
 
     @_locked
     def confirmed(self, token: str | None, within: float = CONFIRM_SECONDS) -> bool:
-        when = self._confirmed.get(token or "")
+        when = self._confirmed.get(self._key(token or ""))
         return when is not None and self.clock() - when < within
 
     @_locked
     def user_of(self, token: str | None) -> str | None:
         if not token:
             return None
-        found = self._open.get(token)
+        key = self._key(token)
+        found = self._open.get(key)
         if found is None:
             return None
-        user, until = found
-        if self.clock() >= until:
-            del self._open[token]
+        why = self._why(key, found)
+        if why:
+            self._forget(key, why)
+            self._save()
             return None
-        return user
+        now = self.clock()
+        found[2] = now
+        if now - self._saved_at >= RENEW_SAVE_SECONDS:      # not one write per request
+            self._save()
+        return found[0]
+
+    @_locked
+    def refusal(self, token: str | None) -> str:
+        """Why a token is not a session: ``none`` (no cookie), ``unknown`` (never issued, or
+        issued before a restart that kept no file), ``idle``, ``cap`` or ``closed``."""
+        if not token:
+            return "none"
+        key = self._key(token)
+        found = self._open.get(key)
+        if found is not None:
+            return self._why(key, found) or "valid"
+        return self._gone.get(key, "unknown")
 
     @_locked
     def close(self, token: str | None) -> None:
         if token:
-            self._open.pop(token, None)
-            self._confirmed.pop(token, None)
+            key = self._key(token)
+            if key in self._open:
+                self._forget(key, "closed")
+                self._save()
 
     @_locked
     def close_user(self, user: str, keep: str | None = None) -> int:
         """Close every session of an account but one (the one that just changed the password)."""
-        gone = [t for t, (who, _until) in self._open.items() if who == user and t != keep]
-        for token in gone:
-            del self._open[token]
-            self._confirmed.pop(token, None)
+        spared = self._key(keep) if keep else None
+        gone = [k for k, found in self._open.items() if found[0] == user and k != spared]
+        for key in gone:
+            self._forget(key, "closed")
+        if gone:
+            self._save()
         return len(gone)
 
     @_locked
     def purge(self) -> None:
-        now = self.clock()
-        for token in [t for t, (_user, until) in self._open.items() if now >= until]:
-            del self._open[token]
-            self._confirmed.pop(token, None)
+        over = [(k, why) for k, found in self._open.items() if (why := self._why(k, found))]
+        for key, why in over:
+            self._forget(key, why)
+        if over:
+            self._save()
 
     @property
     def count(self) -> int:
         self.purge()
         return len(self._open)
+
+    # ------------------------------------------------------------- persistence
+
+    def _load(self) -> None:
+        if self.path is None:
+            return
+        try:
+            rows = json.loads(self.path.read_text("utf-8"))["sessions"]
+            self._open = {k: [str(u), float(c), float(last)] for k, (u, c, last) in rows.items()}
+        except (OSError, ValueError, KeyError, TypeError):
+            self._open = {}                    # missing or damaged: everybody signs in again
+        self.purge()
+
+    def _save(self) -> None:
+        self._saved_at = self.clock()
+        if self.path is None:
+            return
+        payload = json.dumps({"sessions": self._open})
+        tmp = self.path.with_name(self.path.name + ".tmp")
+        try:
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(payload)
+            os.replace(tmp, self.path)
+        except OSError as exc:                 # read-only disk: sessions stay in memory
+            log.warning("sessions not persisted (%s)", exc)
 
 
 @dataclass

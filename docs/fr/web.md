@@ -228,6 +228,7 @@ Déclarer un nom suffit — produire le mot de passe n'est pas votre travail :
 web:
   auth:
     session_hours: 12
+    session_max_hours: 168
     users:
       - name: alice
 ```
@@ -257,8 +258,11 @@ donc `web passwd` atteint une interface qui tourne sans redémarrage — les ses
 le restent.
 
 * La session est un jeton opaque dans un témoin (`HttpOnly`, `SameSite=Strict`, et `Secure`
-  quand la requête arrive par un proxy TLS). Elle dure `session_hours` et vit dans le processus :
-  redémarrer l'interface déconnecte tout le monde.
+  quand la requête arrive par un proxy TLS). Elle se termine après `session_hours` sans requête
+  (l'usage la renouvelle) et au plus tard `session_max_hours` après la connexion. Le dossier d'état
+  garde une empreinte de chaque jeton dans `web_sessions.json` (mode 0600) : un redémarrage ou un
+  redéploiement ne déconnecte personne. Le journal dit pourquoi un cookie est refusé : `idle`,
+  `cap`, `closed` ou `unknown` (émis avant l'existence du fichier).
 * Après cinq échecs, une adresse patiente une minute, bon mot de passe ou non ; les échecs sont
   journalisés avec l'adresse et leur raison — `no such account` ou `wrong password` — alors que
   la page, elle, reste volontairement vague.

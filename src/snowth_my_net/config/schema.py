@@ -588,10 +588,12 @@ class WebUserCfg:
 @dataclass
 class WebAuthCfg:
     users: list[WebUserCfg] = field(default_factory=list)   # empty: no login at all
-    session_hours: int = 12
+    session_hours: int = 12          # idle time before a session ends; use renews it
+    session_max_hours: int = 168     # absolute cap since the login (7 days)
 
     def check(self) -> list[str]:
         errs = _positive("web.auth.session_hours", self.session_hours)
+        errs += _positive("web.auth.session_max_hours", self.session_max_hours)
         names = [u.name for u in self.users if u]
         for name in sorted({n for n in names if names.count(n) > 1}):
             errs.append(f"web.auth: duplicate user name '{name}'")

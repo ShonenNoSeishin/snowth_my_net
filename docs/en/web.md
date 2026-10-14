@@ -221,6 +221,7 @@ name is all it takes — the password is not your business to produce:
 web:
   auth:
     session_hours: 12
+    session_max_hours: 168
     users:
       - name: alice
 ```
@@ -249,8 +250,11 @@ ones and logs them. The file is re-read at every sign-in, so `web passwd` reache
 interface without a restart — the sessions already open stay open.
 
 * The session is an opaque token in a cookie (`HttpOnly`, `SameSite=Strict`, and `Secure` when
-  the request arrived through a TLS proxy). It lasts `session_hours` and lives in the process:
-  restarting the interface signs everybody out.
+  the request arrived through a TLS proxy). It ends after `session_hours` without a
+  request (use renews it) and at the latest `session_max_hours` after the login. The state
+  directory keeps a hash of each token in `web_sessions.json` (mode 0600), so a restart or a
+  redeploy signs nobody out. The log says why a cookie was refused: `idle`, `cap`, `closed` or
+  `unknown` (issued before the file existed).
 * After five failures an address waits a minute, right password or not; failures are logged with
   the address and their reason — `no such account` or `wrong password` — while the page itself
   stays vague on purpose.

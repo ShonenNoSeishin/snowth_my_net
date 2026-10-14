@@ -59,6 +59,44 @@ def test_sessions_expire_and_can_be_closed():
     assert fresh.user_of(other) is None and fresh.count == 0
 
 
+def test_use_renews_a_session_up_to_the_absolute_cap():
+    now = [0.0]
+    sessions = auth.Sessions(lifetime=60, max_lifetime=300, clock=lambda: now[0])
+    token = sessions.open("alice")
+    for moment in (50, 100, 150, 200, 250):                 # always used within the idle window
+        now[0] = moment
+        assert sessions.user_of(token) == "alice"
+    now[0] = 300
+    assert sessions.user_of(token) is None                  # active, but the cap is absolute
+    assert sessions.refusal(token) == "cap"
+
+
+def test_an_idle_session_says_why_it_was_refused():
+    now = [0.0]
+    sessions = auth.Sessions(lifetime=60, max_lifetime=300, clock=lambda: now[0])
+    token, other = sessions.open("a"), sessions.open("b")
+    assert sessions.refusal(None) == "none" and sessions.refusal("nope") == "unknown"
+    sessions.close(other)
+    assert sessions.refusal(other) == "closed"
+    now[0] = 61
+    assert sessions.user_of(token) is None and sessions.refusal(token) == "idle"
+
+
+def test_sessions_survive_a_restart_without_the_token_on_disk(tmp_path):
+    path = tmp_path / "sessions.json"
+    now = [1000.0]
+    first = auth.Sessions(lifetime=60, max_lifetime=300, clock=lambda: now[0], path=path)
+    token = first.open("alice")
+    assert token not in path.read_text() and path.stat().st_mode & 0o777 == 0o600
+    now[0] = 1030
+    second = auth.Sessions(lifetime=60, max_lifetime=300, clock=lambda: now[0], path=path)
+    assert second.user_of(token) == "alice"                  # the restart did not sign out
+    second.close(token)
+    assert auth.Sessions(lifetime=60, clock=lambda: now[0], path=path).user_of(token) is None
+    path.write_text("{ not json")
+    assert auth.Sessions(lifetime=60, clock=lambda: now[0], path=path).count == 0
+
+
 def test_purging_drops_every_expired_session():
     now = [0.0]
     sessions = auth.Sessions(lifetime=60, clock=lambda: now[0])
@@ -178,6 +216,7 @@ def test_a_page_asks_for_a_login_and_then_shows_itself(guarded):
     assert cookie.name == auth.COOKIE and cookie.value
     assert "HttpOnly" in str(cookie._rest) and cookie._rest.get("SameSite") == "Strict"
     assert site.sessions.user_of(cookie.value) == "alice"
+    assert cookie.expires is not None                      # a closed browser keeps the session
 
     with opener.open(base + "/") as response:
         assert response.status == 200 and "sw1" in response.read().decode()
@@ -412,3 +451,19 @@ def test_the_failure_limiter_counts_the_reader_not_the_proxy(tmp_path):
     other = site.sign_in({"user": ["alice"], "password": [PASSWORD]},
                          site.caller("172.18.0.5", "10.1.50.122"))
     assert other[0] == HTTPStatus.SEE_OTHER          # another reader is not locked out
+
+
+def test_a_restarted_site_keeps_the_session_and_logs_why_one_is_refused(tmp_path, caplog):
+    loaded = guarded_config(tmp_path)
+    first = Site(loaded, FixedClock())
+    token = first.sessions.open("alice")
+    restarted = Site(loaded, FixedClock())                  # a redeploy, a Docker restart
+    assert restarted.sessions.user_of(token) == "alice"
+    with caplog.at_level("INFO"):
+        status, _where, _body = restarted.respond("/nodes", {}, "never-issued")
+    assert status == HTTPStatus.SEE_OTHER
+    assert "session refused on /nodes: unknown" in caplog.text
+    caplog.clear()
+    with caplog.at_level("INFO"):
+        restarted.respond("/nodes", {}, None)               # a plain visit says nothing
+    assert "session refused" not in caplog.text

@@ -283,7 +283,8 @@ Interface web en lecture seule (`snowth_my_net web`, ou le service `web` de Comp
 | `web.actions` | `true` | Les boutons de la page Collectes qui lancent une collecte, une découverte, un export ou un envoi. `false` les retire et refuse les requêtes. Sans compte, ces boutons n'existent pas. |
 | `web.nmap` | `false` | Un scan de ports d'une adresse depuis l'interface : l'IP d'un équipement ouvre sa page de scan, avec un profil à choisir et le résultat conservé. Demande un compte et `web.actions`. Seul ce que `discovery.allowed` permet et que `discovery.exclude` épargne est scanné. |
 | `web.trusted_proxies` | `[]` | Réseaux des proxys inverses autorisés à annoncer l'adresse du lecteur dans `X-Forwarded-For` (et `X-Forwarded-Proto`). Tout autre est ignoré. `--trusted-proxy CIDR` prime pour une exécution. |
-| `web.auth.session_hours` | `12` | Durée d'une session ; les sessions vivent dans le processus et sont perdues au redémarrage. |
+| `web.auth.session_hours` | `12` | Inactivité avant la fin d'une session ; chaque requête la renouvelle. |
+| `web.auth.session_max_hours` | `168` | Plafond absolu depuis la connexion (7 jours), quelle que soit l'activité. Les sessions survivent à un redémarrage (`web_sessions.json`, empreintes de jetons seulement). |
 
 ## `hooks`
 
