@@ -312,7 +312,7 @@ The Nodes page sends at most `node_limit` rows and says so when it truncates; th
   the session cookie travel in clear over plain HTTP, so put a TLS reverse proxy in front.
 * **No secret is ever rendered**: the state holds credential names, never their values.
 * Answers carry `X-Content-Type-Options: nosniff`, a `Content-Security-Policy` that allows only
-  the page's own stylesheet and script, and `Referrer-Policy: no-referrer`. There is no form,
+  the page's own stylesheet and script, and `Referrer-Policy: same-origin`. There is no form,
   no cookie, no external resource, no telemetry.
 * Downloads are limited to the known exported file names (`devices.csv`, `nodes.csv`,
   `links.csv`, `snapshot.json`, `map.html`, `map.dot`, `map.mmd`): no path from a request ever

@@ -98,6 +98,13 @@ def test_the_real_server_refuses_cross_site_writes_and_foreign_hosts(tmp_path):
                        body)[0] == HTTPStatus.FORBIDDEN
         assert request(base, "POST", "/name", {**form, "Origin": "null"},
                        body)[0] == HTTPStatus.FORBIDDEN
+        assert request(base, "POST", "/name", {**form, "Origin": "null",
+                                               "Sec-Fetch-Site": "cross-site"},
+                       body)[0] == HTTPStatus.FORBIDDEN
+        firefox = request(base, "POST", "/name", {**form, "Origin": "null",
+                                                  "Sec-Fetch-Site": "same-origin"}, body)
+        assert firefox[0] == HTTPStatus.SEE_OTHER               # no-referrer made it say null
+        assert firefox[1].getheader("Referrer-Policy") == "same-origin"
         same = request(base, "POST", "/name", {**form, "Origin": f"http://{host}"}, body)[0]
         assert same == HTTPStatus.SEE_OTHER                      # the site's own form still works
         assert request(base, "POST", "/name", form, body)[0] == HTTPStatus.SEE_OTHER

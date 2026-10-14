@@ -325,7 +325,7 @@ pour une exécution.
 * **Aucun secret n'est jamais affiché** : l'état ne garde que le nom des identifiants, jamais
   leur valeur.
 * Les réponses portent `X-Content-Type-Options: nosniff`, une `Content-Security-Policy` qui
-  n'autorise que la feuille de style et le script de la page, et `Referrer-Policy: no-referrer`.
+  n'autorise que la feuille de style et le script de la page, et `Referrer-Policy: same-origin`.
   Aucun formulaire, aucun témoin, aucune ressource externe, aucune télémétrie.
 * Les téléchargements sont limités aux noms de fichiers exportés connus (`devices.csv`,
   `nodes.csv`, `links.csv`, `snapshot.json`, `map.html`, `map.dot`, `map.mmd`) : aucun chemin

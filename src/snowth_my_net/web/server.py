@@ -1012,8 +1012,13 @@ class Handler(BaseHTTPRequestHandler):
         if writing:
             origin = self.headers.get("Origin")
             site = self.headers.get("Sec-Fetch-Site")
+            # ``Origin: null`` is what a browser sends under ``Referrer-Policy: no-referrer``,
+            # even for the site's own form (Firefox does): believed only when the browser itself
+            # states, with a header a page cannot forge, that the request is same-origin.
+            own_null = origin == "null" and site == "same-origin"
             if (site and site not in ("same-origin", "none")) or (
-                    origin is not None and urlparse(origin).hostname != host):
+                    origin is not None and not own_null
+                    and urlparse(origin).hostname != host):
                 self.send_error(HTTPStatus.FORBIDDEN, "cross-site request refused")
                 return True
         return False
@@ -1191,7 +1196,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def send_security_headers(self) -> None:
-        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Referrer-Policy", "same-origin")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Security-Policy",
