@@ -83,6 +83,18 @@ def body(t, address: str, stored: dict | None, job, message: str, can_scan: bool
     return "".join(parts)
 
 
+def address_form(t, text: str = "", message: str = "") -> str:
+    """No address yet (or one that is not an address): ask for it, with the reason if any."""
+    error = f'<p class="error">{esc(message)}</p>' if message else ""
+    return (f'<p><a class="back" href="/">← {esc(t("web.back"))}</a></p>'
+            f'<form class="actions" method="get" action="/scan">'
+            f'<label for="address">{esc(t("web.scan.address"))}</label>'
+            f'<input id="address" name="address" value="{esc(text)}" autocomplete="off" '
+            f'inputmode="decimal" spellcheck="false" placeholder="192.0.2.10" autofocus required>'
+            f'<button type="submit">{esc(t("web.scan.open"))}</button>'
+            f'<span class="note">{esc(t("web.scan.address_hint"))}</span>{error}</form>')
+
+
 def _result(t, stored: dict | None) -> str:
     if stored is None:
         return f'<p class="empty">{esc(t("web.scan.none"))}</p>'

@@ -517,25 +517,25 @@ class Site:
                   status: int = HTTPStatus.OK) -> tuple[int, str, bytes]:
         t = t or self.t
         address = scanpage.parse_address(address_text)
-        if address is None:
-            message, status = t("web.scan.bad", text=address_text[:60]), HTTPStatus.BAD_REQUEST
-            address = ""
+        if address is None:                    # nothing typed yet is a question, not an error
+            typed = address_text.strip()
+            message = t("web.scan.bad", text=typed[:60]) if typed else ""
+            return (HTTPStatus.BAD_REQUEST if typed else HTTPStatus.OK, "text/html; charset=utf-8",
+                    self.shell("/", t("web.scan.title.none"),
+                               scanpage.address_form(t, typed[:60], message), t=t))
         reason = scanpage.refusal(self.loaded.cfg, address) if address else ""
         if reason:
             message = t("web.scan.refused", reason=reason)
         job = self.jobs.current or self.jobs.last
         if job is None or job.what != "scan" or job.extra[:1] != (address,):
             job = None
-        if address:
-            with closing(self.state()) as repo:
-                stored = repo.scans(address).get(address)
-            body = scanpage.body(t, address, stored, job, message, not reason,
-                                 self.clock.now(), self.jobs.current is not None)
-        else:
-            body = f'<p class="error">{esc(message)}</p>'
+        with closing(self.state()) as repo:
+            stored = repo.scans(address).get(address)
+        body = scanpage.body(t, address, stored, job, message, not reason,
+                             self.clock.now(), self.jobs.current is not None)
         refresh = 5 if job is not None and job.running else 0
         return (status, "text/html; charset=utf-8",
-                self.shell("/", t("web.scan.title", address=address or "?"), body, t=t,
+                self.shell("/", t("web.scan.title", address=address), body, t=t,
                            refresh=refresh))
 
     def start_scan(self, form: dict, user: str, t=None) -> tuple[int, str, bytes]:

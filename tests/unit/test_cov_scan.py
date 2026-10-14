@@ -332,6 +332,19 @@ def test_the_page_says_when_nmap_is_missing_and_when_the_address_is_not_scannabl
     assert "<form class=\"actions\"" not in body.decode()           # nothing to press
     status, _t, body = site.respond("/scan", {"address": ["printer; ls"]}, token, lang="en")
     assert status == 400 and "is not an IP address" in body.decode()
+    page = body.decode()                        # the field stays, with what was typed
+    assert 'name="address"' in page and 'value="printer; ls"' in page
+
+
+def test_the_scan_page_without_an_address_asks_for_one_instead_of_failing(tmp_path):
+    site = managed(tmp_path)
+    token = signed_in(site)
+    for query in ({}, {"address": [""]}, {"address": ["   "]}):
+        status, _t, body = site.respond("/scan", query, token, lang="en")
+        page = body.decode()
+        assert status == 200 and 'method="get" action="/scan"' in page
+        assert 'name="address"' in page and "required" in page
+        assert 'class="error"' not in page and "Scan ?" not in page
 
 
 def test_pressing_the_button_starts_one_scan_and_shows_it_running_then_done(tmp_path):
