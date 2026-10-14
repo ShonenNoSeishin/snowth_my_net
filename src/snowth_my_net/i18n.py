@@ -757,8 +757,8 @@ WEB = {
         "Non fiable : ces ports ne sont pas présentés comme ceux de l'hôte."),
     "web.scan.nothing_open": ("Nothing open was found", "Aucun port ouvert n'a été trouvé"),
     "web.scan.bad": ("{text} is not an IP address.", "{text} n'est pas une adresse IP."),
-    "web.scan.refused": ("This address is {reason}: it is never scanned.",
-                         "Cette adresse est {reason} : elle n'est jamais scannée."),
+    "web.scan.refused": ("This address is never scanned ({reason}).",
+                         "Cette adresse n'est jamais scannée ({reason})."),
     "web.snmp.refused": (
         "{address} is {reason}: the interface does not send SNMP there. Add it from a shell "
         "(snowth_my_net device add) if it is meant.",
