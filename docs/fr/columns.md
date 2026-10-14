@@ -87,7 +87,10 @@ enregistre sa source.
 L'adresse élue vient en premier, et les autres adresses connues pour cette MAC sont derrière un
 `+n` qui ouvre une liste. L'élection se fait en quatre étapes :
 
-1. les adresses qu'aucune autre MAC n'a revendiquées depuis ;
+1. les adresses qu'aucune autre MAC n'a revendiquées depuis — seulement quand le même équipement
+   a listé les deux MAC pour cette adresse : le VRF d'une entrée ARP n'est pas collecté, deux
+   routeurs qui donnent une adresse à deux MAC peuvent être deux contextes de routage, et on ne
+   dit pas que l'un a remplacé l'autre ;
 2. parmi elles, celles vues dans les `nodes.current_ip_window` (24 heures) suivant la plus
    récente ;
 3. l'IPv4 d'abord (`nodes.prefer_ipv4`) ;

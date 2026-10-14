@@ -82,7 +82,9 @@ source.
 The elected address comes first, and the other addresses known for that MAC are behind a `+n`
 that opens a list. The election goes in four steps:
 
-1. addresses that no other MAC claimed later;
+1. addresses that no other MAC claimed later — only when the same device listed both MACs for
+   that address: the VRF of an ARP entry is not collected, so two routers giving one address to
+   two MACs may be two routing contexts, and nobody is said to have replaced anybody;
 2. among them, those seen within `nodes.current_ip_window` (24 hours) of the most recent;
 3. IPv4 first (`nodes.prefer_ipv4`);
 4. then the most recent.

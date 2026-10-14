@@ -219,10 +219,12 @@ class MergeContext:
 
         self.arp_by_mac: dict[str, list[ArpObs]] = defaultdict(list)
         self.latest_by_ip: dict[str, tuple[int, str]] = {}
+        self.arp_devices: dict[tuple[str, str], set[int]] = defaultdict(set)   # (ip, mac) -> who
         for a in inputs.arp:
             if a.last_seen < horizon:
                 continue
             self.arp_by_mac[a.mac].append(a)
+            self.arp_devices[(a.ip, a.mac)].add(a.device_id)
             best = self.latest_by_ip.get(a.ip)
             if best is None or a.last_seen > best[0]:
                 self.latest_by_ip[a.ip] = (a.last_seen, a.mac)
@@ -362,7 +364,11 @@ def resolve_mac(ctx: MergeContext, mac: str) -> Node:
         ip.sources.append((a.device_id, a.table, a.last_seen))
     for ip in by_ip.values():
         latest_seen, latest_mac = ctx.latest_by_ip[ip.ip]
-        if latest_mac != mac and latest_seen > ip.last_seen:
+        # The VRF of an ARP entry is not collected: the same address in two VRFs is two hosts,
+        # not one that replaced the other. Only a table that listed both MACs for the address
+        # (one device, one routing context in practice) is evidence of a replacement.
+        shared = ctx.arp_devices[(ip.ip, latest_mac)] & {d for d, _t, _s in ip.sources}
+        if latest_mac != mac and latest_seen > ip.last_seen and shared:
             ip.superseded_by = latest_mac
         ip.sources.sort(key=lambda src: -src[2])
     node.ips = sorted(by_ip.values(), key=lambda i: -i.last_seen)

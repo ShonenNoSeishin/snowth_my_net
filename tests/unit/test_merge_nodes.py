@@ -234,3 +234,16 @@ def test_hsrp_ipv6_and_glbp_virtual_macs_are_not_nodes():
     cfg = NodesCfg(ignore_mac_prefixes=list(DEFAULT_IGNORED_PREFIXES))
     for mac in ("00:05:73:a0:00:0a", "00:07:b4:00:01:02"):
         assert node(inputs([fdb(mac, 1, 3)]), mac=mac, cfg=cfg).excluded is not None
+
+
+def test_an_address_heard_from_another_device_is_not_declared_taken_over():
+    """The VRF of an ARP entry is unknown: two routers listing one address for two MACs may be
+    two routing contexts, so neither host is said to have replaced the other."""
+    other = "00:00:5e:00:53:ff"
+    apart = inputs(arps=[arp(HOST, "192.0.2.77", seen=NOW - 3600, dev=9),
+                         arp(other, "192.0.2.77", seen=NOW - 60, dev=8)])
+    first = next(i for i in node(apart).ips if i.ip == "192.0.2.77")
+    assert first.superseded_by is None
+    together = inputs(arps=[arp(HOST, "192.0.2.77", seen=NOW - 3600, dev=9),
+                            arp(other, "192.0.2.77", seen=NOW - 60, dev=9)])
+    assert next(i for i in node(together).ips if i.ip == "192.0.2.77").superseded_by == other
