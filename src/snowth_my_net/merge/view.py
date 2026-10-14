@@ -156,6 +156,17 @@ def inherit_lag_reasons(inputs: MergeInputs, port_name) -> None:
         inputs.neighbor_reasons.setdefault((device_id, lag), []).extend(inherited)
 
 
+NETBIOS_LENGTH = 15
+
+
+def same_name(a: str, b: str) -> bool:
+    """Two hostnames name one machine: the domain and the case are ignored, and a NetBIOS name,
+    cut at 15 characters by the protocol, agrees with the longer name it starts."""
+    a, b = a.split(".")[0].casefold(), b.split(".")[0].casefold()
+    short, long = sorted((a, b), key=len)
+    return a == b or (len(short) == NETBIOS_LENGTH and long.startswith(short))
+
+
 @dataclass
 class NodeView:
     loaded: LoadedConfig
@@ -269,9 +280,10 @@ class NodeView:
         ``poste-julie`` and ``poste-julie.example.net`` agree."""
         manual = self.given_name(node.mac)
         resolved = self.dns_name(node.current_ip.ip) if node.current_ip else ""
-        if not manual or not resolved:
+        if not resolved:
             return False
-        return manual.split(".")[0].casefold() != resolved.split(".")[0].casefold()
+        probed = self.probed_name(node)
+        return any(other and not same_name(resolved, other) for other in (manual, probed))
 
     def given_description(self, mac: str) -> str:
         return self.given.get(mac, {}).get("description", "")

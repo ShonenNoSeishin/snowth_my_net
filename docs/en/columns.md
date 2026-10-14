@@ -71,7 +71,7 @@ the table and are merged only where a single value is needed, in the order of tr
 4. **The host's own claim** — what a machine says about itself is the weakest evidence, and a
    NetBIOS answer is dropped when the adapter address it states is not the MAC of the row.
 
-When the hand-written name and the DNS one disagree, a banner above the table counts the rows and
+When the DNS name differs from the hand-written one or from the one the host states about itself (NetBIOS cut at 15 characters still matches the longer name it starts), a banner above the table counts the rows and
 offers to show only those. Case and domain are ignored, so `poste-julie` and
 `poste-julie.example.net` agree. One of the two is wrong and which one is not for the tool to
 decide. `explain <mac>` lists the three and names the one it kept, and `snapshot.json` records its

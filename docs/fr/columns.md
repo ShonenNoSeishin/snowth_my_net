@@ -75,7 +75,8 @@ confiance :
 4. **Ce que l'hôte dit de lui-même** — la preuve la plus faible, et une réponse NetBIOS est
    écartée quand l'adresse d'adaptateur qu'elle annonce n'est pas la MAC de la ligne.
 
-Quand le nom écrit à la main et celui du DNS diffèrent, un bandeau au-dessus du tableau compte les
+Quand le nom du DNS diffère de celui écrit à la main ou de celui que l'hôte annonce de lui-même
+(un nom NetBIOS coupé à 15 caractères concorde avec le nom plus long qu'il commence), un bandeau au-dessus du tableau compte les
 lignes et propose de n'afficher que celles-là. La casse et le domaine sont ignorés : `poste-julie`
 et `poste-julie.example.net` concordent. L'un des deux est faux, et ce n'est pas à l'outil de dire
 lequel. `explain <mac>` liste les trois et nomme celui qu'il a retenu, et `snapshot.json`

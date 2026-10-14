@@ -296,3 +296,18 @@ def test_when_several_probes_answer_one_address_the_order_is_fixed(tmp_path):
     repo.conn.execute("DELETE FROM name_probe WHERE source = 'netbios'")
     assert repo.probe_names(1001)["10.0.0.7"] == ("from-mdns", "mdns")
     repo.conn.close()
+
+
+@pytest.mark.parametrize(("stated", "resolved", "clashes"), [
+    ("ACME-FRANK", "poste-julie.example.net", True),      # the host and the zone differ
+    ("POSTE-JULIE", "poste-julie.example.net", False),
+    ("DESKTOP-ABCDEFG", "desktop-abcdefghijk.example.net", False),   # NetBIOS cut at 15
+    ("DESKTOP-ABCDEF", "desktop-abcdefghijk.example.net", True),     # 14: not a truncation
+    ("ACME-FRANK", "", False),
+])
+def test_the_name_a_host_states_is_compared_with_the_zone(tmp_path, stated, resolved, clashes):
+    loaded = lab(tmp_path)
+    remember(loaded, stated)
+    view = view_of(loaded)
+    view.dns = {ADDRESS: resolved} if resolved else {}
+    assert view.hostnames_disagree(node_of(view)) is clashes

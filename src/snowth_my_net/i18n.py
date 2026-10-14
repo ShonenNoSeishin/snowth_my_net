@@ -433,12 +433,12 @@ WEB = {
     "web.how": ("How to read this table", "Comment lire ce tableau"),
     "web.columns": ("Columns", "Colonnes"),
     "web.columns.reset": ("Reset the widths", "Réinitialiser les largeurs"),
-    "web.disagree": ("{count} row(s): the hostname written by hand and the one DNS gives "
-                     "disagree. One of them is wrong, and which one is not for this tool to "
-                     "decide.",
-                     "{count} ligne(s) : le nom d'hôte écrit à la main et celui que rend le DNS "
-                     "diffèrent. L'un des deux est faux, et ce n'est pas à cet outil de dire "
-                     "lequel."),
+    "web.disagree": ("{count} row(s): the names given by hand, by DNS and by the host itself "
+                     "do not all agree. One of them is wrong, and which one is not for this "
+                     "tool to decide.",
+                     "{count} ligne(s) : les noms donnés à la main, par le DNS et par la "
+                     "machine elle-même ne concordent pas tous. L'un d'eux est faux, et ce "
+                     "n'est pas à cet outil de dire lequel."),
     "web.disagree.show": ("Show only those", "N'afficher que celles-là"),
     "web.disagree.all": ("Show every row", "Afficher toutes les lignes"),
     "web.view.live": ("Seen at the last collect ({count})",
