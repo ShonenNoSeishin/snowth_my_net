@@ -48,6 +48,7 @@ qu'elles s'impriment :
 | Raison | Ce que ça veut dire | Quoi faire |
 |---|---|---|
 | `neighbor …` avec un switch interrogé | LLDP ou CDP montre un switch interrogé sur ce port : une preuve | rien : la MAC est derrière lui, et son vrai port est sur ce switch |
+| `neighbor … local port guessed from its number` | le voisin est un switch interrogé, mais LLDP n'a donné le port local que comme un numéro égal par hasard à un ifIndex ou à un port bridge : une supposition | rien à faire ; un équipement qui nomme ses ports locaux (ou LLDP-V2) en fait une preuve |
 | `neighbor …` avec un bridge ou un routeur | un voisin LLDP ou CDP qui n'est pas interrogé est sur ce port : une supposition | interroger cet équipement, ou accepter `nodes.uplink_fallback` |
 | `61 MACs > 50` | le port porte plus que `nodes.uplink_mac_threshold` : une supposition | le relever pour cet équipement, ou lister le port dans `devices[].access_ports` |
 | `declared in uplinks` | vous l'avez dit | `devices[].uplinks` |

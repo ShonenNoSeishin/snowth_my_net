@@ -158,3 +158,18 @@ def test_a_wireless_controller_platform_is_not_an_access_point():
     assert CISCO_AP_PLATFORM.match("AIR-CAP3702I-E-K9")
     assert not CISCO_AP_PLATFORM.match("cisco AIR-CT5520-K9")
     assert not CISCO_AP_PLATFORM.match("AIR-WLC2504-K9")
+
+
+def test_a_local_port_guessed_from_its_number_is_only_a_soft_uplink_reason():
+    from dataclasses import replace
+
+    idx = index()
+    (managed,) = resolve_neighbors([
+        obs(2, 1, {"bridge"}, name="whatever", address=["10.0.0.1"], port="Te1/1/1")], idx, names)
+    for method in ("port_id_name", "port_id_mac", "port_desc", "lldpv2_ifindex", ""):
+        assert uplink_reason(replace(managed, obs=replace(managed.obs, local_method=method)),
+                             idx, True)[2] == "hard"
+    for method in ("port_num_ifindex", "port_num_bridge_port"):
+        code, detail, strength = uplink_reason(
+            replace(managed, obs=replace(managed.obs, local_method=method)), idx, True)
+        assert (code, strength) == ("neighbor_managed", "soft") and "guessed" in detail

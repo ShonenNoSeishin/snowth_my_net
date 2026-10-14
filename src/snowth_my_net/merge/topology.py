@@ -36,6 +36,12 @@ class NeighborObs:
     platform: str
     first_seen: int
     last_seen: int
+    local_method: str = ""             # how the local port was found (collect/tables/neighbors)
+
+
+# A local port found only because its LLDP number equals an ifIndex or a bridge port number is a
+# coincidence of numbering, not a statement by the device.
+GUESSED_LOCAL_PORTS = frozenset({"port_num_ifindex", "port_num_bridge_port"})
 
 
 @dataclass
@@ -144,6 +150,9 @@ def uplink_reason(rn: ResolvedNeighbor, index: DeviceIndex,
     if "telephone" in caps:
         return None
     if rn.remote_device_id is not None and index.devices[rn.remote_device_id].has_fdb:
+        if rn.obs.local_method in GUESSED_LOCAL_PORTS:
+            return ("neighbor_managed",
+                    f"{rn.remote_name} ({proto}, local port guessed from its number)", SOFT)
         return "neighbor_managed", f"{rn.remote_name} ({proto})", HARD
     if "wlan_ap" in caps and "router" not in caps and ap_ports_are_access:
         return None

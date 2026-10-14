@@ -46,6 +46,7 @@ and gives the reason for each port it set aside. The reasons, as printed:
 | Reason | What it means | What to do |
 |---|---|---|
 | `neighbor …` with a polled switch | LLDP or CDP shows a polled switch on that port: proof | nothing: the MAC is behind it, and its real port is on that switch |
+| `neighbor … local port guessed from its number` | the neighbour is a polled switch, but LLDP gave the local port only as a number that happens to equal an ifIndex or a bridge port: a guess | none needed; a device that names its local ports (or LLDP-V2) makes it proof |
 | `neighbor …` with a bridge or a router | an LLDP or CDP neighbour that is not polled sits on that port: a guess | poll that device, or accept `nodes.uplink_fallback` |
 | `61 MACs > 50` | the port carries more than `nodes.uplink_mac_threshold`: a guess | raise it for that device, or list the port in `devices[].access_ports` |
 | `declared in uplinks` | you said so | `devices[].uplinks` |

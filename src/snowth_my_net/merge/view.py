@@ -123,7 +123,8 @@ def load_topology(loaded: LoadedConfig, repo: Repo, inputs: MergeInputs, names: 
                     r["remote_port_id"] or "", r["remote_port_desc"] or "",
                     tuple(a for a in (r["remote_mgmt_address"] or "").split(",") if a),
                     frozenset(c for c in (r["remote_caps"] or "").split(",") if c),
-                    r["remote_platform"] or "", r["first_seen"], r["last_seen"])
+                    r["remote_platform"] or "", r["first_seen"], r["last_seen"],
+                    r["local_port_method"] or "")
         for r in conn.execute(ACTIVE_NEIGHBORS) if r["device_id"] in keys]
     resolved = resolve_neighbors(observations, index, port_name)
     for rn in resolved:
