@@ -52,6 +52,7 @@ font la différence :
 | | |
 |---|---|
 | Vues à la dernière collecte | ce qui était encore là au dernier passage sur tous les équipements |
+| Change souvent d'adresse | les MAC vus avec `nodes.ip_churn_min` adresses IPv4 ou plus dans `nodes.ip_churn_days` : l'adresse bouge (DHCP, plusieurs interfaces, proxy-ARP — l'outil ne dit pas lequel) |
 | Sans MAC aléatoires / MAC aléatoires seulement | les MAC administrés localement (les téléphones et portables les changent), écartés ou seuls ; ils portent une pastille « MAC aléatoire » et, seuls, sont triés par port |
 
 Un MAC qui tourne est un autre nœud : rien n'est fusionné sur une supposition, et deux MAC

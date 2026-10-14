@@ -167,6 +167,7 @@ class Node:
     last_seen: int = 0
     live: bool = False                   # seen during the last walk of a device that saw it
     ip_ambiguous: str = ""               # why no address was elected though some are known
+    ipv4_recent: int = 0                 # distinct IPv4 within ip_churn_days of the newest
 
     @property
     def current(self) -> Sighting | None:
@@ -372,6 +373,9 @@ def resolve_mac(ctx: MergeContext, mac: str) -> Node:
             ip.superseded_by = latest_mac
         ip.sources.sort(key=lambda src: -src[2])
     node.ips = sorted(by_ip.values(), key=lambda i: -i.last_seen)
+    v4 = [i for i in node.ips if i.family == 4]
+    if v4:
+        node.ipv4_recent = sum(1 for i in v4 if i.last_seen >= v4[0].last_seen - cfg.ip_churn_days)
     candidates = [i for i in node.ips if i.superseded_by is None]
     if not cfg.elect_link_local:
         # A link-local address is never the answer to "which address is this?": it is not

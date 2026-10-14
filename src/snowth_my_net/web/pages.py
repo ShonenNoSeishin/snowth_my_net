@@ -133,7 +133,7 @@ def _devices_and_names(loaded: LoadedConfig, repo: Repo, now: int):
 
 def nodes(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int,
           live_only: bool = False, disagreeing_only: bool = False,
-          random_macs: str = "") -> Table:
+          random_macs: str = "", churn_only: bool = False) -> Table:
     """``random_macs``: ``hide`` or ``only`` filters the locally administered MACs; nodes are
     never grouped or merged on a guess, a rotated MAC is just another MAC."""
     view = build_view(loaded, repo, now)
@@ -145,6 +145,8 @@ def nodes(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int,
         if live_only and not node.live:
             continue
         if disagreeing_only and not view.hostnames_disagree(node):
+            continue
+        if churn_only and not view.ip_churn(node):
             continue
         if (random_macs == "hide" and node.random_mac) or (
                 random_macs == "only" and not node.random_mac):
@@ -187,9 +189,12 @@ def nodes(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int,
             "ip", "switch", "port", "vlan", "seen"]
     live = len(view.nodes) - stale
     randoms = sum(1 for node in view.nodes if node.random_mac)
-    views = [(t("web.view.live", count=live), "/nodes?live=1", live_only and not random_macs),
-             (t("web.view.all", count=len(view.nodes)), "/nodes",
-              not live_only and not random_macs)]
+    churning = sum(1 for node in view.nodes if view.ip_churn(node))
+    plain = not random_macs and not churn_only
+    views = [(t("web.view.live", count=live), "/nodes?live=1", live_only and plain),
+             (t("web.view.all", count=len(view.nodes)), "/nodes", not live_only and plain)]
+    if churning:
+        views.append((t("web.view.churn", count=churning), "/nodes?churn=1", churn_only))
     if randoms:
         views += [(t("web.view.norandom", count=len(view.nodes) - randoms), "/nodes?random=hide",
                    random_macs == "hide"),
@@ -198,6 +203,8 @@ def nodes(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int,
     note = t("web.view.stale", count=stale) if stale and not live_only else ""
     if random_macs == "only":
         note = t("web.random.note")
+    if churn_only:
+        note = t("web.churn.note", days=cfg.ip_churn_days // 86400, count=cfg.ip_churn_min)
     return Table(columns, rows[:limit], len(rows), t("web.no_nodes"),
                  help_for(t, "nodes", columns, keys,
                           extra=["hint.nodes.live", "hint.nodes.click"]), keys, views, note,

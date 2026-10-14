@@ -154,6 +154,8 @@ How MAC and ARP observations become node positions (see `explain`).
 | `nodes.elect_link_local` | `false` | May a link-local (`fe80::`) address be the current IP? Off: it stays in the list of addresses, in `explain` and in `snapshot.json`, but is never elected — nothing routes to it, no name resolves it, and no importer can use it. Whether it repeats the MAC (`fe80::1e0b:8bff:fec0:eb62` for `1c:0b:8b:c0:eb:62`) or carries a random identifier, as Windows makes them, an empty IP then honestly means no usable address was seen. |
 | `nodes.current_ip_window` | `86400` | Candidates for the current IP: seen within this window of the newest one. |
 | `nodes.current_ip_max_age` | `604800` | An address seen longer ago than this before the node's own freshest sighting is not elected (an ARP cache that kept one for weeks). |
+| `nodes.ip_churn_min` | `3` | A MAC seen with this many distinct IPv4 addresses within `nodes.ip_churn_days` is flagged "address changes often" (Nodes view, `ip_churn` report field). It says the address moves, never why. |
+| `nodes.ip_churn_days` | `604800` | The window, counted back from the MAC's own freshest address. |
 | `nodes.max_ips_per_mac` | `3` | A MAC with more distinct addresses than this (proxy-ARP, gateway, hypervisor), or two addresses seen at the same instant, is given none: the cell stays empty rather than naming the wrong one. |
 | `nodes.transit_window` | `1800` | A MAC seen on two access ports within this window stays on the port with the fewest MACs; the other is transit. |
 | `nodes.ignore_macs` | `[]` | MACs never reported. |

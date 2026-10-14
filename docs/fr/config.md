@@ -158,6 +158,8 @@ Comment les observations MAC et ARP deviennent des positions de nœuds (voir `ex
 | `nodes.elect_link_local` | `false` | Une adresse lien-local (`fe80::`) peut-elle être l'IP courante ? Désactivé : elle reste dans la liste des adresses, dans `explain` et dans `snapshot.json`, mais n'est jamais élue — rien ne route vers elle, aucun nom ne la résout, aucun importateur ne peut s'en servir. Qu'elle reprenne la MAC (`fe80::1e0b:8bff:fec0:eb62` pour `1c:0b:8b:c0:eb:62`) ou qu'elle porte un identifiant aléatoire, comme Windows les fabrique, une IP vide signifie alors honnêtement qu'aucune adresse utilisable n'a été vue. |
 | `nodes.current_ip_window` | `86400` | Candidates à l'IP courante : vues dans cette fenêtre par rapport à la plus récente. |
 | `nodes.current_ip_max_age` | `604800` | Une adresse vue plus longtemps avant la dernière observation du nœud lui-même n'est pas élue (un cache ARP qui en a gardé une des semaines). |
+| `nodes.ip_churn_min` | `3` | Un MAC vu avec autant d'adresses IPv4 distinctes dans `nodes.ip_churn_days` est signalé « change souvent d'adresse » (vue Nœuds, champ de rapport `ip_churn`). Cela dit que l'adresse bouge, jamais pourquoi. |
+| `nodes.ip_churn_days` | `604800` | La fenêtre, comptée depuis l'adresse la plus récente du MAC. |
 | `nodes.max_ips_per_mac` | `3` | Une MAC qui a plus d'adresses distinctes que cela (proxy-ARP, passerelle, hyperviseur), ou deux adresses vues au même instant, n'en reçoit aucune : la case reste vide plutôt que de nommer la mauvaise. |
 | `nodes.transit_window` | `1800` | Une MAC vue sur deux ports d'accès dans cette fenêtre reste sur le port qui porte le moins de MAC ; l'autre est du transit. |
 | `nodes.ignore_macs` | `[]` | MAC jamais rapportées. |

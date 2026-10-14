@@ -286,6 +286,13 @@ class NodeView:
         probed = self.probed_name(node)
         return any(other and not same_name(resolved, other) for other in (manual, probed))
 
+    def ip_churn(self, node: Node) -> int:
+        """How many IPv4 addresses this MAC was seen with lately, when that is "often"
+        (``nodes.ip_churn_min``), else 0. Several addresses can also be proxy-ARP or several
+        interfaces: it says the address moves, not why."""
+        n = node.ipv4_recent
+        return n if n >= self.loaded.cfg.nodes.ip_churn_min else 0
+
     def given_description(self, mac: str) -> str:
         return self.given.get(mac, {}).get("description", "")
 

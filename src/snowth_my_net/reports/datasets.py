@@ -183,7 +183,8 @@ def _nodes(ctx: ReportContext) -> list[dict]:
         ip = node.current_ip.ip if node.current_ip else ""
         common = {"mac": node.mac, "vendor": vendor, "ip": ip,
                   "dns_name": view.dns_name(ip) if ip else "", "random_mac": node.random_mac,
-                  "ip_count": len(node.ips), "position_kind": node.position_kind,
+                  "ip_count": len(node.ips), "ip_churn": view.ip_churn(node),
+                  "position_kind": node.position_kind,
                   "node_first_seen": node.first_seen}
         for rank, p in enumerate(node.positions):
             rows.append({**common, "device": view.device_name(p.device_id),
@@ -362,6 +363,8 @@ STATIC: dict[str, Dataset] = {d.name: d for d in (
         _f("mac_count", "integer", "MAC addresses on the port", default=False),
         _f("random_mac", "bool", "locally administered (randomised) MAC", default=False),
         _f("ip_count", "integer", "IP addresses seen for this MAC", default=False),
+        _f("ip_churn", "integer", "IPv4 addresses seen lately when that is often, else 0",
+           default=False),
         _f("first_seen", "time", "first seen at this position", default=False),
         _f("last_seen", "time"),
         _f("node_first_seen", "time", "first seen anywhere", default=False),

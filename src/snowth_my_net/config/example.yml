@@ -96,6 +96,8 @@ nodes:
   retention_days: 30
   prefer_ipv4: true
   current_ip_window: 24h
+  ip_churn_min: 3                # this many IPv4 addresses for one MAC within ip_churn_days: "changes often"
+  ip_churn_days: 7d
   current_ip_max_age: 7d           # an address older than this, next to the node itself, is not elected
   max_ips_per_mac: 3               # more distinct addresses: none elected (proxy-ARP, gateway)
   transit_window: 30m             # a MAC seen on two access ports within this window stays

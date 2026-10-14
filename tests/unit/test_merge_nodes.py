@@ -247,3 +247,13 @@ def test_an_address_heard_from_another_device_is_not_declared_taken_over():
     together = inputs(arps=[arp(HOST, "192.0.2.77", seen=NOW - 3600, dev=9),
                             arp(other, "192.0.2.77", seen=NOW - 60, dev=9)])
     assert next(i for i in node(together).ips if i.ip == "192.0.2.77").superseded_by == other
+
+
+def test_a_mac_seen_with_several_ipv4_addresses_lately_is_counted_not_explained():
+    ips = [f"192.0.2.{n}" for n in (10, 11, 12)]
+    often = inputs(arps=[arp(HOST, ip, seen=NOW - 600 * i) for i, ip in enumerate(ips)]
+                   + [arp(HOST, "2001:db8::1", family=6, seen=NOW),
+                      arp(HOST, "192.0.2.99", seen=NOW - 30 * 86400)])
+    assert node(often, cfg=NodesCfg(retention_days=60)).ipv4_recent == 3   # v6 and the old one: no
+    once = inputs(arps=[arp(HOST, "192.0.2.10"), arp(HOST, "2001:db8::2", family=6)])
+    assert node(once).ipv4_recent == 1

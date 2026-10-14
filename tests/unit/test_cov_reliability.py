@@ -77,3 +77,24 @@ def test_the_nodes_page_filters_and_labels_random_macs(tmp_path):
     assert only.note == t("web.random.note")
     assert [label for label, _href, _on in only.views if "Random" in label]
     repo.conn.close()
+
+
+def test_the_nodes_page_filters_the_macs_whose_address_changes_often(tmp_path):
+    from snowth_my_net.i18n import Translator
+    from snowth_my_net.merge.view import build_view
+    from snowth_my_net.web import pages
+    from tests.unit.test_cov_views import NOW
+
+    loaded, repo = _random_fixture(tmp_path)
+    t = Translator("en")
+    view = build_view(loaded, repo, NOW)
+    loaded.cfg.nodes.ip_churn_min = 1                          # every node with an IPv4 counts
+    flagged = {n.mac for n in view.nodes if view.ip_churn(n)}
+    assert flagged
+    only = pages.nodes(loaded, repo, NOW, t, 2000, churn_only=True)
+    assert {pages.text_of(row[4]) for row in only.rows} <= flagged
+    assert only.note == t("web.churn.note", days=7, count=1)
+    assert any("changes often" in label for label, _h, _on in only.views)
+    loaded.cfg.nodes.ip_churn_min = 99
+    assert not pages.nodes(loaded, repo, NOW, t, 2000, churn_only=True).rows
+    repo.conn.close()

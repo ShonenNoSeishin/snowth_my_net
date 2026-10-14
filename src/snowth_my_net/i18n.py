@@ -447,6 +447,13 @@ WEB = {
                      "Tout, historique compris ({count})"),
     "web.view.norandom": ("Without random MACs ({count})", "Sans MAC aléatoires ({count})"),
     "web.view.random": ("Random MACs only ({count})", "MAC aléatoires seulement ({count})"),
+    "web.view.churn": ("Address changes often ({count})", "Change souvent d'adresse ({count})"),
+    "web.churn.note": ("{count} or more IPv4 addresses seen for the same MAC within {days} days. "
+                       "The address moves; this does not say why (DHCP, several interfaces, "
+                       "proxy-ARP).",
+                       "{count} adresses IPv4 ou plus vues pour un même MAC en {days} jours. "
+                       "L'adresse bouge ; cela ne dit pas pourquoi (DHCP, plusieurs interfaces, "
+                       "proxy-ARP)."),
     "web.random.badge": ("random MAC", "MAC aléatoire"),
     "web.random.title": ("Locally administered MAC: phones and laptops rotate it, so one device "
                          "can appear as several nodes. Nothing here says they are the same "

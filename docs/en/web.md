@@ -58,6 +58,7 @@ part inventory and part memory. Two pills above the table tell them apart:
 |---|---|
 | Seen at the last collect | what was still there the last time every device was polled |
 | Everything, history included | the same, plus what the network no longer shows |
+| Address changes often | MACs seen with `nodes.ip_churn_min` or more IPv4 addresses within `nodes.ip_churn_days`: the address moves (DHCP, several interfaces, proxy-ARP — the tool does not say which) |
 | Without random MACs / Random MACs only | locally administered MACs (phones and laptops rotate them) kept out or alone; they carry a "random MAC" badge and, alone, are sorted by port |
 
 A rotated MAC is another node: nothing is merged on a guess, and two random MACs heard on one

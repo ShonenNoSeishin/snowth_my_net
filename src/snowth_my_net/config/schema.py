@@ -300,6 +300,10 @@ class NodesCfg:
     # more distinct addresses than max_ips_per_mac (proxy-ARP, gateway) is given none.
     current_ip_max_age: Duration = 604800
     max_ips_per_mac: int = 3
+    # "Changes address often": this many distinct IPv4 addresses seen for one MAC within this
+    # window of its own freshest sighting. A flag to filter on, never a claim about DHCP.
+    ip_churn_min: int = 3
+    ip_churn_days: Duration = 604800
     transit_window: Duration = 1800
     ignore_macs: list[str] = field(default_factory=list)
     ignore_mac_prefixes: list[str] = field(default_factory=lambda: list(DEFAULT_IGNORED_PREFIXES))
@@ -309,6 +313,7 @@ class NodesCfg:
 
         errs = _positive("uplink_mac_threshold", self.uplink_mac_threshold)
         errs += _positive("retention_days", self.retention_days)
+        errs += _positive("ip_churn_min", self.ip_churn_min)
         errs += [f"ignore_macs: invalid MAC {m!r}" for m in self.ignore_macs
                  if normalize_mac(m) is None]
         errs += [f"ignore_mac_prefixes: invalid prefix {p!r}" for p in self.ignore_mac_prefixes
