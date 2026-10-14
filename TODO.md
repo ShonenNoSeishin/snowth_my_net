@@ -37,6 +37,21 @@ fails without it. "Done" items are in commit `1a07b93`.
     MAC left is now dropped when an uplink heard it later, see 7).
 11. Left: `is_live` and long ARP caches; LLDP guessed local-port mappings as HARD uplink reason.
 
+## To investigate (asked 2026-10-14)
+12. **Random (locally administered) MACs.** Phones and laptops rotate them, so one device shows up
+    as many nodes and `live_only` hides none of it. Decide how to treat them: a column or filter
+    (`random_mac` already exists on `Node`), grouping by port/VLAN/hostname, a separate view, an
+    export option, and what never to claim (a rotated MAC is not "the same device"). No false
+    positive: do not merge nodes on a guess.
+13. **Login TTL: being signed out in the middle of a session.** Things to check in
+    `web/auth.py` / `web/server.py`: the expiry is fixed (`session_hours`, 12 h from login), not
+    renewed by activity; sessions live in memory, so a restart, a redeploy or a Docker
+    restart signs everyone out; the clock is `time.monotonic`; `change_password` closes the other
+    sessions; the cookie's `Max-Age`/flags; several processes or workers behind nginx; the
+    "password again" confirmation window (`CONFIRM_SECONDS`). Reproduce first (log the reason a
+    token is refused: expired, unknown, closed), then choose between a sliding expiry with an
+    absolute cap and persisting sessions.
+
 ## Not audited
 `web/*`, `tui/*`, `collect/tables/entity.py`, `collect/tables/system.py`, `merge/explain.py`.
 
