@@ -493,3 +493,53 @@ def test_a_failed_write_never_leaves_a_closed_session_to_come_back(tmp_path, mon
     monkeypatch.undo()
     assert not path.exists()                                # so no file: everybody signs in again
     assert auth.Sessions(lifetime=60, clock=lambda: 0, path=path).user_of(token) is None
+
+
+def test_a_password_changed_behind_a_running_site_closes_its_sessions_at_once(tmp_path):
+    loaded = guarded_config(tmp_path)
+    site = Site(loaded, FixedClock())
+    token = site.sessions.open("alice", site.binding_of("alice"))
+    assert site.sessions.user_of(token) == "alice"
+    (loaded.paths.secrets_dir / "web_alice").write_text(auth.hash_password("un-autre-secret-ok"))
+    site.fixed = load_accounts(loaded)                      # what a re-read of the file gives
+    assert site.sessions.user_of(token) is None
+    assert site.sessions.refusal(token) == "closed"
+
+
+def test_the_session_that_changes_the_password_survives_it_and_the_others_do_not(tmp_path):
+    loaded = guarded_config(tmp_path)
+    loaded.cfg.web.auth.users[0].password_file = ""
+    loaded.cfg.web.auth.users[0].password_env = ""
+    site = Site(loaded, FixedClock())
+    form = {"current": [PASSWORD], "new": ["nouveau-mot-de-passe"],
+            "again": ["nouveau-mot-de-passe"]}
+    site.set_password("alice", PASSWORD)                     # an account kept by the interface
+    first = site.sessions.open("alice", site.binding_of("alice"))
+    other = site.sessions.open("alice", site.binding_of("alice"))
+    status, _where, _body = site.change_password("alice", form, "en", "127.0.0.1", first)
+    assert status == HTTPStatus.SEE_OTHER
+    assert site.sessions.user_of(first) == "alice" and site.sessions.user_of(other) is None
+
+
+def test_a_sign_in_made_with_the_old_password_does_not_outlive_its_change(tmp_path):
+    loaded = guarded_config(tmp_path)
+    loaded.cfg.web.auth.users[0].password_file = ""
+    loaded.cfg.web.auth.users[0].password_env = ""
+    site = Site(loaded, FixedClock())
+    site.set_password("alice", PASSWORD)
+    real = site.account_of
+    calls = []
+
+    def changed_meanwhile(name):                # the password changes right after the check
+        calls.append(name)
+        account = real(name)
+        if len(calls) == 1:
+            site.set_password("alice", "un-autre-mot-de-passe")
+        return account
+
+    site.account_of = changed_meanwhile
+    form = {"user": ["alice"], "password": [PASSWORD], "next": ["/"]}
+    status, _where, _body, token = site.sign_in(form, "127.0.0.1")
+    site.account_of = real
+    assert status == HTTPStatus.SEE_OTHER and token
+    assert site.sessions.user_of(token) is None             # the new password does not own it

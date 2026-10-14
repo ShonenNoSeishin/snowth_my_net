@@ -101,6 +101,7 @@ class Sessions:
     _open: dict[str, list] = field(default_factory=dict)    # hash -> [user, created, last seen]
     _confirmed: dict[str, float] = field(default_factory=dict)          # hash -> when
     _gone: dict[str, str] = field(default_factory=dict)     # hash -> why it ended (bounded)
+    binding_of: object = None          # user -> the binding of their credential now, or None
     _saved_at: float = 0.0                             # when the file last recorded a renewal
     _lock: threading.RLock = field(default_factory=threading.RLock)     # one thread per request
 
@@ -134,8 +135,11 @@ class Sessions:
             del self._gone[next(iter(self._gone))]
 
     @_locked
-    def open(self, user: str, binding: str = "") -> str:
-        """``binding`` ties the session to the credential it was opened with (see ``bind``)."""
+    def open(self, user: str, binding: str | None = None) -> str:
+        """The session is tied to the credential it was opened with: ``binding``, else the
+        account's current one (``binding_of``), so that nobody can forget to."""
+        if binding is None:
+            binding = (self.binding_of(user) if self.binding_of is not None else "") or ""
         self.purge()
         token = secrets.token_urlsafe(TOKEN_BYTES)
         now = self.clock()
@@ -162,6 +166,9 @@ class Sessions:
         if found is None:
             return None
         why = self._why(key, found)
+        if why is None and self.binding_of is not None and (
+                self.binding_of(found[0]) != found[3]):
+            why = "closed"          # the account is gone or its password changed, by anyone
         if why:
             self._forget(key, why)
             self._save()
@@ -203,6 +210,13 @@ class Sessions:
             self._save()
         return len(gone)
 
+    @contextlib.contextmanager
+    def exclusive(self):
+        """Hold every other request off the sessions while a credential and its sessions are
+        changed together: no request sees the new password with the old binding."""
+        with self._lock:
+            yield
+
     @staticmethod
     def bind(stored_hash: str) -> str:
         """What a session remembers of the password it was opened with."""
@@ -215,18 +229,6 @@ class Sessions:
         if found is not None:
             found[3] = binding
             self._save()
-
-    @_locked
-    def revoke_unbound(self, current: dict[str, str]) -> int:
-        """Close the sessions of an account that is gone or whose password changed since, for
-        instance by ``web passwd`` in a shell while the interface was stopped: surviving a
-        restart must not let a revoked credential's session live on."""
-        stale = [k for k, found in self._open.items() if current.get(found[0]) != found[3]]
-        for key in stale:
-            self._forget(key, "closed")
-        if stale:
-            self._save()
-        return len(stale)
 
     @_locked
     def purge(self) -> None:

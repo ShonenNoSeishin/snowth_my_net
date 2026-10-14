@@ -252,14 +252,14 @@ docker compose exec web snowth_my_net web passwd alice # the same, in the runnin
 The passwords live in `web_accounts.json`, next to the state (mode 0600), and hold scrypt
 hashes, never a password. Deleting that file forgets every password: the next start invents new
 ones and logs them. The file is re-read at every sign-in, so `web passwd` reaches a running
-interface without a restart — the sessions already open stay open.
+interface without a restart, and the sessions open on that account are closed.
 
 * The session is an opaque token in a cookie (`HttpOnly`, `SameSite=Strict`, and `Secure` when
   the request arrived through a TLS proxy). It ends after `session_hours` without a
   request (use renews it) and at the latest `session_max_hours` after the login. The state
   directory keeps a hash of each token in `web_sessions.json` (mode 0600), so a restart or a
   redeploy signs nobody out, unless the account is gone or its password changed meanwhile
-  (`web passwd` while stopped): those sessions are closed at start, and a file that cannot be
+  (`web passwd`, even while the interface runs): those sessions are closed at their next request, and a file that cannot be
   written is removed so that a closed session never comes back. The log says why a cookie was refused: `idle`, `cap`, `closed` or
   `unknown` (issued before the file existed).
 * After five failures an address waits a minute, right password or not; failures are logged with

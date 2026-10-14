@@ -119,11 +119,13 @@ class Site:
         self.logins = LoginLimiter()
         self.proxies = list(loaded.cfg.web.trusted_proxies)
         self.bootstrap()
-        gone = self.sessions.revoke_unbound(
-            {name: Sessions.bind(account.hash) for name in self.names
-             if (account := self.account_of(name))})
-        if gone:
-            log.info("%d session(s) closed: their account or password changed", gone)
+        self.sessions.binding_of = self.binding_of
+
+    def binding_of(self, name: str) -> str | None:
+        """What a session must still match to count: the password of its account, as it is now.
+        ``web passwd`` in a shell, a removed account: the next request closes the session."""
+        account = self.account_of(name)
+        return Sessions.bind(account.hash) if account else None
 
     def log_refusal(self, token: str | None, path: str) -> None:
         """Say why a visitor with a cookie is sent to the login page (no cookie is just a visit)."""
@@ -248,6 +250,9 @@ class Site:
         self.logins.succeeded(address)
         log.info("%s signed in from %s", user, address)
         where = "/password" if account.must_change else target
+        # Bound to the hash that was just verified, not to whatever the store holds by now: a
+        # password changed in between must not turn a sign-in made with the old one into a
+        # session of the new one.
         return (HTTPStatus.SEE_OTHER, where, b"",
                 self.sessions.open(user, Sessions.bind(account.hash)))
 
@@ -305,13 +310,13 @@ class Site:
         if new != again:
             return (HTTPStatus.BAD_REQUEST, "text/html; charset=utf-8",
                     self.password_page(user, t("web.password.mismatch"), t))
-        self.set_password(user, new)
+        with self.sessions.exclusive():       # no request sees the new password, old sessions
+            self.set_password(user, new)
+            closed = self.sessions.close_user(user, keep=token)    # a stolen session ends here
+            if token:
+                self.sessions.rebind(token, self.binding_of(user) or "")
         if address:
             self.logins.succeeded(address)
-        closed = self.sessions.close_user(user, keep=token)    # a stolen session ends here
-        renewed = self.account_of(user)
-        if token and renewed:
-            self.sessions.rebind(token, Sessions.bind(renewed.hash))
         log.info("%s changed their password (%d other session(s) closed)", user, closed)
         return HTTPStatus.SEE_OTHER, "/", b""
 

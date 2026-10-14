@@ -259,15 +259,15 @@ docker compose exec web snowth_my_net web passwd alice # idem, dans le conteneur
 Les mots de passe vivent dans `web_accounts.json`, à côté de l'état (mode 0600), sous forme
 d'empreintes scrypt, jamais en clair. Supprimer ce fichier oublie tous les mots de passe : le
 démarrage suivant en invente d'autres et les journalise. Le fichier est relu à chaque connexion,
-donc `web passwd` atteint une interface qui tourne sans redémarrage — les sessions déjà ouvertes
-le restent.
+donc `web passwd` atteint une interface qui tourne sans redémarrage, et les sessions ouvertes
+sur ce compte sont closes.
 
 * La session est un jeton opaque dans un témoin (`HttpOnly`, `SameSite=Strict`, et `Secure`
   quand la requête arrive par un proxy TLS). Elle se termine après `session_hours` sans requête
   (l'usage la renouvelle) et au plus tard `session_max_hours` après la connexion. Le dossier d'état
   garde une empreinte de chaque jeton dans `web_sessions.json` (mode 0600) : un redémarrage ou un
   redéploiement ne déconnecte personne, sauf si le compte a disparu ou si son mot de passe a changé
-  entre-temps (`web passwd` à l'arrêt) : ces sessions sont closes au démarrage, et un fichier qui
+  entre-temps (`web passwd`, même interface en marche) : ces sessions sont closes à leur prochaine requête, et un fichier qui
   ne peut pas être écrit est supprimé pour qu'une session fermée ne revienne jamais. Le journal dit pourquoi un cookie est refusé : `idle`,
   `cap`, `closed` ou `unknown` (émis avant l'existence du fichier).
 * Après cinq échecs, une adresse patiente une minute, bon mot de passe ou non ; les échecs sont
