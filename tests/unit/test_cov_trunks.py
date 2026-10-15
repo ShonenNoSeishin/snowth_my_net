@@ -564,3 +564,24 @@ def test_what_sits_behind_a_switch_we_do_poll_is_not_recovered_that_way(tmp_path
     loaded = lab(tmp_path)                               # LLDP on a member of the trunk
     view = view_of(loaded)
     assert view.behind_soft_uplinks() == 0
+
+
+def test_an_arp_cache_alone_does_not_keep_a_node_that_left_its_port(tmp_path):
+    from types import SimpleNamespace
+    from snowth_my_net.config.schema import NodesCfg
+    from snowth_my_net.merge.nodes import is_live
+
+    walk = NOW
+
+    def ctx(**cfg):
+        return SimpleNamespace(inputs=SimpleNamespace(last_full_walk=walk), cfg=NodesCfg(**cfg))
+
+    def node(port_age, sightings=True):
+        seen = [SimpleNamespace(last_seen=walk - port_age)] if sightings else []
+        return SimpleNamespace(last_seen=walk, sightings=seen)       # the ARP cache is fresh
+
+    assert is_live(ctx(), node(3600)) is True                  # heard on a port an hour ago
+    assert is_live(ctx(), node(8 * 86400)) is False            # a week and more: only the cache
+    assert is_live(ctx(), node(0, sightings=False)) is True    # ARP is all there is: untouched
+    assert is_live(ctx(live_port_max_age=0), node(30 * 86400)) is True      # rule off
+    assert is_live(ctx(live_port_max_age=30 * 86400), node(8 * 86400)) is True

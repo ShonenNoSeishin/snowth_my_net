@@ -157,6 +157,7 @@ How MAC and ARP observations become node positions (see `explain`).
 | `nodes.ip_churn_min` | `3` | A MAC seen with this many distinct IPv4 addresses within `nodes.ip_churn_days` is flagged "address changes often" (Nodes view, `ip_churn` report field). It says the address moves, never why. |
 | `nodes.ip_churn_days` | `604800` | The window, counted back from the MAC's own freshest address. |
 | `nodes.max_ips_per_mac` | `3` | A MAC with more distinct addresses than this (proxy-ARP, gateway, hypervisor), or two addresses seen at the same instant, is given none: the cell stays empty rather than naming the wrong one. |
+| `nodes.live_port_max_age` | `604800` | A MAC once heard on a switch port, that no switch has listed for longer than this before the last full collect while an ARP cache still holds it, is memory and not live (an ARP entry kept for weeks). `0` turns the rule off. A MAC never heard on a port is not concerned. |
 | `nodes.transit_window` | `1800` | A MAC seen on two access ports within this window stays on the port with the fewest MACs; the other is transit. |
 | `nodes.ignore_macs` | `[]` | MACs never reported. |
 | `nodes.ignore_mac_prefixes` | VRRP, HSRP, GLBP | Prefixes never reported (nibble precision): `00:00:5e:00:01`, `00:00:5e:00:02`, `00:00:0c:07:ac`, `00:00:0c:9f:f`, `00:05:73:a0`, `00:07:b4:00`. |

@@ -300,6 +300,9 @@ class NodesCfg:
     # more distinct addresses than max_ips_per_mac (proxy-ARP, gateway) is given none.
     current_ip_max_age: Duration = 604800
     max_ips_per_mac: int = 3
+    # A MAC once heard on a switch port that no switch has listed for this long, while an ARP
+    # cache still holds it, is memory and not live. 0 turns the rule off.
+    live_port_max_age: Duration = 604800
     # "Changes address often": this many distinct IPv4 addresses seen for one MAC within this
     # window of its own freshest sighting. A flag to filter on, never a claim about DHCP.
     ip_churn_min: int = 3

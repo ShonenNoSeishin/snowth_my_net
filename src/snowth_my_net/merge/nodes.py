@@ -431,9 +431,18 @@ def is_live(ctx: MergeContext, node: Node) -> bool:
     part memory. This tells the two apart. The reference is the last *full* collect, never a
     collect of one address alone, which would otherwise make the rest of the network look gone.
     """
-    if not ctx.inputs.last_full_walk:
+    walk = ctx.inputs.last_full_walk
+    if not walk:
         return True                      # nothing to compare to yet: nothing is called stale
-    return node.last_seen >= ctx.inputs.last_full_walk
+    if node.last_seen < walk:
+        return False
+    # An ARP cache may keep an entry for weeks, and refreshes its "last seen" at every collect.
+    # A MAC that was on a switch port, and that no switch lists any more, is not proven present
+    # by that cache alone. A MAC never heard on a port (ARP is all there is) is left alone.
+    limit = ctx.cfg.live_port_max_age
+    if limit and node.sightings and walk - max(s.last_seen for s in node.sightings) > limit:
+        return False
+    return True
 
 
 def resolve_nodes(inputs: MergeInputs, cfg: NodesCfg, now: int) -> list[Node]:
