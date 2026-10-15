@@ -27,6 +27,9 @@ sudo -u snowth snowth_my_net collect
 sudo -u snowth snowth_my_net tui        # or just: snowth_my_net
 ```
 
+The web interface (`snowth_my_net web`, accounts: see [web.md](web.md#login)) is a separate
+process; on a host, run it behind your own reverse proxy, or use Docker Compose, which ships one.
+
 ### cron
 
 The schedule lives in `schedule:`; generate the lines (absolute paths, since cron's `PATH` rarely
@@ -144,6 +147,10 @@ chmod 600 secrets/*
 docker compose run --rm snowth check
 docker compose up -d                          # https://<host>:8443 for the web interface
 ```
+
+The web interface asks for an account: declare `web.auth.users` (`- name: alice`) in the
+configuration, restart, read the one-time password with `docker compose logs web`, or set one with
+`docker compose exec web snowth_my_net web passwd alice`. Details in [web.md](web.md#login).
 
 In `config/snowth_my_net.yml`, secret files are referenced by name (`auth_key_file: snmp_v3_auth`):
 the container sets `SNOWTH_SECRETS_DIR=/run/secrets`, where Compose mounts them.
