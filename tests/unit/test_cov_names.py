@@ -421,3 +421,19 @@ def test_the_old_store_of_names_is_read_and_carried_over(tmp_path):
     store.set(MAC, "au fond du couloir", "description")
     assert store.read() == {MAC: {"name": "imprimante",
                                   "description": "au fond du couloir"}}
+
+
+def test_the_terminal_rows_start_with_the_mac_whatever_the_export_columns(tmp_path):
+    from snowth_my_net.merge.view import build_view
+    from snowth_my_net.state.db import open_db
+    from snowth_my_net.state.repo import Repo
+
+    loaded = named(tmp_path)
+    loaded.cfg.export.nodes.include_name = True
+    repo = Repo(open_db(loaded.paths.state_file, readonly=True))
+    try:
+        view = build_view(loaded, repo, 1_800_000_000)
+        assert view.rows()[0][0] != view.rows(given_columns=False)[0][0]    # Name comes first
+        assert all(row[0].count(":") == 5 for row in view.rows(given_columns=False))
+    finally:
+        repo.conn.close()

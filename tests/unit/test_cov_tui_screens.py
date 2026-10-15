@@ -237,6 +237,31 @@ async def test_nodes_truncation_and_explain(make_app, monkeypatch):
         assert app.screen is screen
 
 
+async def test_nodes_local_mac_filter_cycles_and_merges_nothing(make_app):
+    app = make_app()
+    async with app.run_test(size=(160, 45)) as pilot:
+        await settle(app, pilot)
+        tab(app, "nodes")
+        await settle(app, pilot)
+        screen = app.screen
+        nodes = screen.query_one("#nodes", DataTable)
+        total = nodes.row_count
+        # three more rows, one of them with the locally administered bit set (a private address)
+        screen.node_rows = [*screen.node_rows, *(
+            [mac, "", "", "", "", "", "", "2026-10-14T10:00:00Z"]
+            for mac in ("da:a1:19:00:00:01", "da:a1:19:00:00:02", "00:00:5e:00:53:99"))]
+        screen.fill_nodes()
+        assert nodes.row_count == total + 3
+        nodes.focus()                               # in a search box, "m" is a letter
+        await pilot.press("m")                      # without the local ones
+        assert nodes.row_count == total + 1
+        await pilot.press("m")                      # only the local ones, each its own row
+        assert nodes.row_count == 2
+        assert "locally administered" in str(screen.query_one("#nodes-count", Static).render())
+        await pilot.press("m")                      # all again
+        assert nodes.row_count == total + 3
+
+
 async def test_add_device_modal(make_app):
     app = make_app()
     async with app.run_test(size=(160, 45)) as pilot:

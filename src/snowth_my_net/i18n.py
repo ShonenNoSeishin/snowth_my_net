@@ -179,6 +179,11 @@ STRINGS: dict[str, tuple[str, str]] = {
                           "Chercher une MAC, IP, nom DNS, switch, port, VLAN, constructeur…"),
     "nodes.count": ("{shown} of {total} rows — ⏎ explains where a MAC is and why",
                     "{shown} lignes sur {total} — ⏎ explique où est une MAC et pourquoi"),
+    "nodes.local.hide": ("without the locally administered MACs",
+                         "sans les MAC administrées localement"),
+    "nodes.local.only": ("only the locally administered MACs (private addresses; nothing merged)",
+                         "seulement les MAC administrées localement (adresses privées ; "
+                         "rien n'est fusionné)"),
     "nodes.truncated": ("only the first {limit} rows are shown; refine the search",
                         "seules les {limit} premières lignes sont affichées ; "
                         "affinez la recherche"),
@@ -202,6 +207,7 @@ STRINGS: dict[str, tuple[str, str]] = {
     "key.add": ("Add", "Ajouter"),
     "key.remove": ("Remove", "Retirer"),
     "key.refresh": ("Refresh", "Rafraîchir"),
+    "key.local_macs": ("Local MACs", "MAC locales"),
     "key.back": ("Back", "Retour"),
     "key.save": ("Save", "Enregistrer"),
     # devices table
@@ -370,6 +376,8 @@ STRINGS: dict[str, tuple[str, str]] = {
     "help.body": (
         "[b]Everywhere[/b]\n"
         "  ?  this help        ctrl+p  command palette (themes…)        q  quit\n\n"
+        "[b]Nodes[/b]\n"
+        "  ⏎  explain a MAC    /  search    m  all · without · only the locally administered MACs\n\n"
         "[b]Devices[/b]\n"
         "  ⏎  open the device    /  filter    r  refresh\n"
         "  c  collect all        a  add       del  remove\n\n"
@@ -386,6 +394,8 @@ STRINGS: dict[str, tuple[str, str]] = {
         "  • Secrets are never shown.",
         "[b]Partout[/b]\n"
         "  ?  cette aide        ctrl+p  palette de commandes (thèmes…)        q  quitter\n\n"
+        "[b]Nœuds[/b]\n"
+        "  ⏎  expliquer une MAC    /  chercher    m  toutes · sans · seulement les MAC administrées localement\n\n"
         "[b]Équipements[/b]\n"
         "  ⏎  ouvrir la fiche    /  filtrer    r  rafraîchir\n"
         "  c  tout collecter     a  ajouter    suppr  retirer\n\n"

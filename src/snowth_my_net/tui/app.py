@@ -54,6 +54,7 @@ from snowth_my_net.lock import LockBusy, StateLock
 from snowth_my_net.logs import LOGGER_NAME, RedactingFormatter
 from snowth_my_net.snmp.client import EnginePool
 from snowth_my_net.snmp.target import AddressError, parse_target
+from snowth_my_net.snmp.values import is_locally_administered
 from snowth_my_net.state.db import open_db
 from snowth_my_net.state.repo import Repo
 from snowth_my_net.tui.data import DeviceRow, list_devices, plan_form_change
@@ -540,6 +541,7 @@ class MainScreen(Screen):
         ("x", "export_report", "key.export_report", True, False),
         ("delete", "remove", "key.remove", True, False),
         ("r", "refresh", "key.refresh", True, False),
+        ("m", "local_macs", "key.local_macs", True, False),
         ("question_mark", "help", "key.help", True, False),
         ("q", "quit", "key.quit", True, False),
     ]
@@ -548,6 +550,7 @@ class MainScreen(Screen):
         super().__init__()
         self.ctx = ctx
         self.rows: list[DeviceRow] = []
+        self.local_macs = ""          # "", "hide" or "only": the locally administered MACs
 
     def compose(self) -> ComposeResult:
         t = self.ctx.t
@@ -641,7 +644,7 @@ class MainScreen(Screen):
             from snowth_my_net.merge.view import build_view
 
             self.view = build_view(self.ctx.loaded, self.ctx.repo, self.ctx.clock.now())
-            self.node_rows = self.view.rows()
+            self.node_rows = self.view.rows(given_columns=False)
         return self.view
 
     def fill_nodes(self) -> None:
@@ -649,6 +652,8 @@ class MainScreen(Screen):
         table = self.query_one("#nodes", DataTable)
         needle = self.query_one("#node-filter", Input).value.strip().casefold()
         rows = [r for r in self.node_rows if not needle or any(needle in c.casefold() for c in r)]
+        if self.local_macs:        # a MAC whose locally administered bit is set (a private address)
+            rows = [r for r in rows if is_locally_administered(r[0]) == (self.local_macs == "only")]
         table.clear()
         for i, r in enumerate(rows[:self.NODE_LIMIT]):
             cells = [Text(r[0], style="bold"), r[1] or "—", r[2] or "—", r[3] or "—",
@@ -659,7 +664,16 @@ class MainScreen(Screen):
                           total=len(self.node_rows))
         if len(rows) > self.NODE_LIMIT:
             text += " · " + self.ctx.t("nodes.truncated", limit=self.NODE_LIMIT)
+        if self.local_macs:
+            text += " · " + self.ctx.t(f"nodes.local.{self.local_macs}")
         self.query_one("#nodes-count", Static).update(text)
+
+    def action_local_macs(self) -> None:
+        """All, then without, then only the locally administered MACs. Nothing is merged."""
+        if self.query_one("#main-tabs", TabbedContent).active != "tab-nodes":
+            return
+        self.local_macs = {"": "hide", "hide": "only", "only": ""}[self.local_macs]
+        self.fill_nodes()
 
     def collectors(self):
         from snowth_my_net.collect.custom import all_collectors

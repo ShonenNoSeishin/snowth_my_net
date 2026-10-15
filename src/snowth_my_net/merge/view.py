@@ -343,8 +343,9 @@ class NodeView:
         return str(position.vlan) if position.vlan and position.vlan_source in (
             "fdb", "context") else ""
 
-    def rows(self) -> list[list[str]]:
-        """nodes.csv rows, most recent first."""
+    def rows(self, given_columns: bool = True) -> list[list[str]]:
+        """nodes.csv rows, most recent first. ``given_columns=False`` leaves the optional Name
+        and Description columns out, so that a row always starts with the MAC."""
         cfg = self.loaded.cfg.nodes
         merge = self.loaded.cfg.export.nodes.merge_hostnames
         rows = []
@@ -362,7 +363,7 @@ class NodeView:
         rows.sort(key=lambda r: (r[7], r[0], r[4], r[5]))
         rows.sort(key=lambda r: r[7], reverse=True)
         given = self.loaded.cfg.export.nodes
-        if given.include_name or given.include_description:
+        if given_columns and (given.include_name or given.include_description):
             return [[*([self.given_name(row[0])] if given.include_name else []),
                      *([self.given_description(row[0])] if given.include_description else []),
                      *row] for row in rows]
