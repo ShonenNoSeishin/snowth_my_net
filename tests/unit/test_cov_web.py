@@ -491,3 +491,13 @@ def test_the_table_carries_what_a_browser_needs_to_let_the_reader_arrange_it(sit
     script = (site.asset("app.js")[2]).decode()
     assert "scrollWidth > cell.clientWidth" in script    # a tooltip only when really cut
     assert "localStorage" in script and "col-" in script
+
+
+def test_a_report_of_an_unexpected_shape_does_not_hide_the_exit_code():
+    import subprocess
+
+    from snowth_my_net.web.jobs import summarize
+
+    done = subprocess.CompletedProcess([], 1, stdout='{"hosts": [{"nope": 1}], "open_ports": 1}')
+    assert "unexpected" in summarize("scan", done)
+    assert "unexpected" in summarize("collect", subprocess.CompletedProcess([], 1, stdout="[]"))

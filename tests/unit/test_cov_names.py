@@ -447,3 +447,9 @@ def test_the_rename_forms_carry_a_numeric_length_limit(tmp_path):
                  site.respond("/node", {"mac": [D]})[2].decode()):
         limits = re.findall(r'maxlength="([^"]*)"', page)
         assert limits and all(value.isdigit() for value in limits)
+
+
+def test_the_import_log_quotes_a_mac_cell_that_a_spreadsheet_would_run():
+    line = mod.ImportLine(3, "=HYPERLINK(\"x\")", "x", "error", "not a MAC address")
+    log = mod.import_log([line])
+    assert "'=HYPERLINK" in log and ",=HYPERLINK" not in log

@@ -245,13 +245,13 @@ def import_log(lines: list[ImportLine]) -> str:
     """The result as a CSV, one row per line of the upload and a last row with the totals.
     A cell a spreadsheet would run as a formula is quoted with a leading apostrophe."""
     def safe(value: str) -> str:
-        return "'" + value if value[:1] in ("=", "+", "-", "@") else value
+        return "'" + value if value[:1] in ("=", "+", "-", "@", "\t", "\r") else value
 
     buffer = io.StringIO()
     writer = csv.writer(buffer, lineterminator="\r\n")
     writer.writerow(["line", "mac", "name", "before", "result", "detail"])
     for entry in lines:
-        writer.writerow([entry.line, entry.mac, safe(entry.name), safe(entry.before),
+        writer.writerow([entry.line, safe(entry.mac), safe(entry.name), safe(entry.before),
                          entry.result, safe(entry.detail)])
     total = counts(lines)
     writer.writerow(["", "", "", "", "total", ", ".join(f"{n} {k}" for k, n in total.items())])

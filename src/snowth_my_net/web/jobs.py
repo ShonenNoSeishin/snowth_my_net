@@ -75,7 +75,13 @@ class Runner:
             self.current = job
         log.info("%s%s started from the web interface by %s", what,
                  " " + " ".join(job.extra) if job.extra else "", by or "an anonymous reader")
-        threading.Thread(target=self._run, args=(job, clock), daemon=True).start()
+        try:
+            threading.Thread(target=self._run, args=(job, clock), daemon=True).start()
+        except RuntimeError:                     # no thread to be had: nothing is running
+            with self._lock:
+                self.current = None
+            log.exception("%s could not be started", what)
+            return None
         return job
 
     def argv(self, what: str, extra: tuple[str, ...] = ()) -> list[str]:
@@ -89,7 +95,8 @@ class Runner:
         try:
             done = subprocess.run(argv, capture_output=True, text=True,        # noqa: S603
                                   timeout=self.timeout + GRACE, check=False)
-            job.exit_code, job.summary = done.returncode, summarize(job.what, done)
+            job.exit_code = done.returncode           # known before anything reads its output
+            job.summary = summarize(job.what, done)
         except subprocess.TimeoutExpired:
             job.exit_code, job.summary = 124, f"stopped after {int(self.timeout + GRACE)} s"
         except OSError as exc:                   # the command could not even be started
@@ -103,6 +110,13 @@ class Runner:
 
 def summarize(what: str, done: subprocess.CompletedProcess) -> str:
     """One line for a reader: what the command reports, never a dump of its output."""
+    try:
+        return _summary(what, done)
+    except (AttributeError, KeyError, IndexError, TypeError):
+        return "the command's report has an unexpected shape"
+
+
+def _summary(what: str, done: subprocess.CompletedProcess) -> str:
     try:
         payload = json.loads(done.stdout)
     except ValueError:
