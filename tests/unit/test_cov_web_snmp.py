@@ -348,3 +348,29 @@ def test_forgetting_the_mac_memory_from_the_page(tmp_path):
         assert repo.conn.execute("SELECT COUNT(*) FROM devices").fetchone()[0] == devices
     finally:
         repo.conn.close()
+
+
+def test_the_page_does_not_write_the_state_while_a_collect_holds_the_lock(tmp_path, monkeypatch):
+    from snowth_my_net.lock import StateLock
+    from snowth_my_net.web import server as web_server
+
+    monkeypatch.setattr(web_server, "LOCK_WAIT", 0.1)
+    site = managed(tmp_path)
+    repo = writing(site)
+    try:
+        before = repo.conn.execute("SELECT COUNT(*) FROM fdb_obs").fetchone()[0]
+    finally:
+        repo.conn.close()
+    holder = StateLock(site.loaded.paths.lock_file, "collect")
+    holder.acquire(1)
+    try:
+        status, _type, body = site.manage_snmp({"do": ["forget"]}, "alice", Translator("en"))
+    finally:
+        holder.release()
+    assert status == HTTPStatus.BAD_REQUEST and "already running" in body.decode()
+    repo = writing(site)
+    try:
+        assert repo.conn.execute("SELECT COUNT(*) FROM fdb_obs").fetchone()[0] == before
+    finally:
+        repo.conn.close()
+

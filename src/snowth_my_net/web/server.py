@@ -19,6 +19,7 @@ import html
 import json
 import sys
 import threading
+from contextlib import contextmanager
 from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -33,6 +34,7 @@ from snowth_my_net.config.loader import LoadedConfig
 from snowth_my_net.config.manual import ManualError, normalize_address
 from snowth_my_net.config.schema import LOOPBACK
 from snowth_my_net.i18n import Translator, detect_language
+from snowth_my_net.lock import LockBusy, StateLock
 from snowth_my_net.logs import get_logger
 from snowth_my_net.merge.view import build_view
 from snowth_my_net.names import (
@@ -81,6 +83,7 @@ CONTENT_TYPES = {".csv": "text/csv; charset=utf-8", ".json": "application/json; 
                  ".html": "text/html; charset=utf-8", ".dot": "text/plain; charset=utf-8",
                  ".mmd": "text/plain; charset=utf-8"}
 MAX_FORM_BYTES = 4096
+LOCK_WAIT = 5.0                # seconds a change made in the browser waits for a running collect
 IMPORT_PATH = "/import"
 IMPORT_POSTS = (IMPORT_PATH, IMPORT_PATH + "/log")
 TEMPLATE_PATH = "/import/template.csv"
@@ -724,7 +727,8 @@ class Site:
                 if self.jobs.start("collect", user, extra=("--device", host)) is None:
                     return self._snmp_answer(t, t("web.do.busy"), "failed")
                 return self._snmp_answer(t, t("web.snmp.testing", address=host))
-            with closing(self.state_rw()) as repo:
+            # The state lock is the commands' own: a collect in progress is not written over.
+            with self._state_lock(what), closing(self.state_rw()) as repo:
                 now = self.clock.now()
                 if what == "add":
                     host = snmp.add_target(repo, address, now)
@@ -744,12 +748,23 @@ class Site:
                     said = f"{normalize_address(address)}: {chosen or t('web.snmp.any')}"
         except ManualError as exc:
             return self._snmp_answer(t, str(exc), "failed")
+        except LockBusy:
+            return self._snmp_answer(t, t("web.do.busy"), "failed")
         log.info("snmp: %s %s by %s", what, address, user or "an anonymous reader")
         return self._snmp_answer(t, said)
 
     def _snmp_answer(self, t, message: str, tone: str = "ok") -> tuple[int, str, bytes]:
         status = HTTPStatus.OK if tone == "ok" else HTTPStatus.BAD_REQUEST
         return status, "text/html; charset=utf-8", self.snmp_page(t, message, tone)
+
+    @contextmanager
+    def _state_lock(self, what: str):
+        lock = StateLock(self.loaded.paths.lock_file, f"web {what}")
+        lock.acquire(LOCK_WAIT)
+        try:
+            yield
+        finally:
+            lock.release()
 
     def state_rw(self) -> Repo:
         """A writing connection, for the few things this page changes (never the inventory)."""
@@ -796,7 +811,8 @@ class Site:
         return (f'<form class="rename" method="post" action="/name">'
                 f'<input type="hidden" name="mac" value="{esc(mac)}">'
                 f'<label for="given">{esc(t("web.name.title"))}</label>'
-                f'<input id="given" name="name" value="{esc(given)}" maxlength="{MAX_LENGTH}" '
+                f'<input id="given" name="name" value="{esc(given)}" '
+                f'maxlength="{MAX_LENGTH["name"]}" '
                 f'placeholder="{esc(t("web.name.placeholder"))}">'
                 f'<button type="submit">{esc(t("web.name.save"))}</button>'
                 f'<span class="note">{esc(t("web.name.hint"))} '

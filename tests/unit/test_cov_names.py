@@ -437,3 +437,13 @@ def test_the_terminal_rows_start_with_the_mac_whatever_the_export_columns(tmp_pa
         assert all(row[0].count(":") == 5 for row in view.rows(given_columns=False))
     finally:
         repo.conn.close()
+
+
+def test_the_rename_forms_carry_a_numeric_length_limit(tmp_path):
+    import re
+
+    site = SignedSite(named(tmp_path))
+    for page in (site.respond("/nodes", {})[2].decode(),
+                 site.respond("/node", {"mac": [D]})[2].decode()):
+        limits = re.findall(r'maxlength="([^"]*)"', page)
+        assert limits and all(value.isdigit() for value in limits)
