@@ -22,6 +22,12 @@ _JUNK_SERIALS = {
 }
 
 
+_JUNK_TEXT = {
+    "", "-", "--", "?", "n/a", "na", "none", "null", "unknown", "not available",
+    "not specified", "to be filled by o.e.m.", "default string",
+}
+
+
 @dataclass
 class Chassis:
     index: int
@@ -40,13 +46,31 @@ def clean_serial(value: str) -> str:
     return s
 
 
+def clean_text(value: str) -> str:
+    """A model or a software revision, or "" when it is a placeholder: "N/A" must not win over
+    the model read from sysDescr."""
+    return "" if value.strip().lower() in _JUNK_TEXT else value.strip()
+
+
+def chassis_of(index: int, classes: dict[int, int], contained: dict[int, int]) -> int | None:
+    """The chassis a row sits in, however many slots and containers lie between (a module is
+    usually in a slot, the slot in the chassis)."""
+    seen = set()
+    while index and index not in seen and len(seen) < 16:
+        seen.add(index)
+        index = contained.get(index, 0)
+        if classes.get(index) == CLASS_CHASSIS:
+            return index
+    return None
+
+
 def rows_to_fetch(classes: dict[int, int], contained: dict[int, int]) -> list[int]:
     """Chassis rows, plus a few modules per chassis (software revision fallback)."""
     chassis = sorted(i for i, c in classes.items() if c == CLASS_CHASSIS)
     wanted = list(chassis)
     for ch in chassis:
         modules = sorted(i for i, c in classes.items()
-                         if c == CLASS_MODULE and contained.get(i) == ch)
+                         if c == CLASS_MODULE and chassis_of(i, classes, contained) == ch)
         wanted += modules[:MAX_MODULES_FOR_SW_REV]
     return wanted
 
@@ -63,12 +87,13 @@ def build_chassis(
     stacks = {i for i, c in classes.items() if c == CLASS_STACK}
     result = []
     for idx in sorted(i for i, c in classes.items() if c == CLASS_CHASSIS):
-        ch = Chassis(index=idx, descr=text(idx, 2), name=text(idx, 7), sw_rev=text(idx, 10),
-                     serial=clean_serial(text(idx, 11)), model=text(idx, 13))
+        ch = Chassis(index=idx, descr=text(idx, 2), name=text(idx, 7),
+                     sw_rev=clean_text(text(idx, 10)),
+                     serial=clean_serial(text(idx, 11)), model=clean_text(text(idx, 13)))
         if not ch.sw_rev:
             for mod in sorted(i for i, c in classes.items()
-                              if c == CLASS_MODULE and contained.get(i) == idx):
-                if rev := text(mod, 10):
+                              if c == CLASS_MODULE and chassis_of(i, classes, contained) == idx):
+                if rev := clean_text(text(mod, 10)):
                     ch.sw_rev = rev
                     break
         result.append(ch)

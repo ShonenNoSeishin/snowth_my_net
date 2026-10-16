@@ -617,3 +617,14 @@ def test_explain_names_the_hostname_clash_by_what_was_compared(tmp_path):
 
     assert "hand-written" in STRINGS["xp.hostname_clash"][0]
     assert "hand-written" not in STRINGS["xp.hostname_clash_probed"][0]
+
+
+def test_entity_modules_in_slots_give_the_software_revision_and_placeholders_are_not_text():
+    from snowth_my_net.collect.tables.entity import build_chassis, rows_to_fetch
+
+    classes = {1: 3, 2: 5, 3: 9, 4: 5, 5: 9}                # chassis > slot > module
+    contained = {1: 0, 2: 1, 3: 2, 4: 1, 5: 4}
+    assert rows_to_fetch(classes, contained) == [1, 3, 5]
+    rows = {1: {13: b"N/A", 10: b"-", 11: b"FOC1234ABCD"}, 3: {10: b"n/a"}, 5: {10: b"16.12.4"}}
+    [chassis] = build_chassis(classes, contained, rows)
+    assert chassis.model == "" and chassis.sw_rev == "16.12.4" and chassis.serial == "FOC1234ABCD"

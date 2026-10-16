@@ -297,7 +297,8 @@ def test_integers_are_ascii_digits_only():
 def test_the_device_filter_finds_what_the_table_shows():
     from snowth_my_net.tui.data import DeviceRow
 
-    row = DeviceRow(target="192.0.2.1", host="192.0.2.1", device_id=1, name="sw", device_type="router",
+    row = DeviceRow(target="192.0.2.1", host="192.0.2.1", device_id=1, name="sw",
+                    device_type="router",
                     type_rule="", vendor="", model="", status="never", last_seen=0, error="")
     assert row.matches("router") and not row.matches("routeur")
     assert row.matches("routeur jamais", shown="routeur jamais interrogé")
