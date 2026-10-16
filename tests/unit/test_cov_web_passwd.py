@@ -51,7 +51,7 @@ def test_the_store_survives_anything_it_is_handed(tmp_path):
     store.set("alice", hash_password(PASSWORD), must_change=True)
     assert store.read()["alice"].must_change
     store.set("other", hash_password(PASSWORD))
-    assert sorted(store.read()) == ["other", "alice"]
+    assert sorted(store.read()) == ["alice", "other"]
     store.forget("other")
     assert sorted(store.read()) == ["alice"]
     assert not list(store.path.parent.glob("*.new"))             # no leftover temporary file

@@ -608,3 +608,65 @@ def test_a_revoked_session_is_refused_even_when_the_file_looks_unchanged(tmp_pat
     one.close(token)
     two._stat = lambda: frozen                      # the file claims to be what two last read
     assert two.user_of(token) is None
+
+
+def _raw_exchange(server, payload: bytes) -> bytes:
+    import socket
+
+    with socket.create_connection(("127.0.0.1", server.server_address[1]), timeout=5) as sock:
+        sock.sendall(payload)
+        sock.shutdown(socket.SHUT_WR)
+        data = b""
+        while chunk := sock.recv(4096):
+            data += chunk
+    return data
+
+
+def test_a_refused_request_line_and_a_failing_post_still_get_an_answer(tmp_path, monkeypatch):
+    loaded = guarded_config(tmp_path)
+    server = build(loaded, "127.0.0.1", 0, FixedClock())
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        long_line = b"GET /" + b"a" * 70000 + b" HTTP/1.1\r\nHost: x\r\n\r\n"
+        assert _raw_exchange(server, long_line).startswith(b"HTTP/1.")     # 414, not nothing
+        server.site.loaded.cfg.web.actions = True
+        monkeypatch.setattr(server.site, "start_job",
+                            lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+        token = server.site.sessions.open("alice")
+        body = b"what=collect"
+        request = (b"POST /action HTTP/1.1\r\nHost: 127.0.0.1\r\nSec-Fetch-Site: same-origin\r\n"
+                   b"Content-Type: application/x-www-form-urlencoded\r\n"
+                   + f"Cookie: {auth.COOKIE}={token}\r\nContent-Length: {len(body)}\r\n"
+                     "Connection: close\r\n\r\n".encode() + body)
+        assert b" 500 " in _raw_exchange(server, request).split(b"\r\n")[0]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_post_waits_for_the_password_to_be_chosen_like_the_pages_do(tmp_path):
+    loaded = guarded_config(tmp_path)
+    server = build(loaded, "127.0.0.1", 0, FixedClock())
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        server.site.loaded.cfg.web.actions = True
+        monkey = server.site
+        monkey.must_change = lambda user: True
+        token = monkey.sessions.open("alice")
+        body = b"what=collect"
+        request = (b"POST /action HTTP/1.1\r\nHost: 127.0.0.1\r\nSec-Fetch-Site: same-origin\r\n"
+                   b"Content-Type: application/x-www-form-urlencoded\r\n"
+                   + f"Cookie: {auth.COOKIE}={token}\r\nContent-Length: {len(body)}\r\n"
+                     "Connection: close\r\n\r\n".encode() + body)
+        answer = _raw_exchange(server, request)
+        assert b" 303 " in answer.split(b"\r\n")[0] and b"Location: /password" in answer
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_the_language_switch_never_redirects_off_site():
+    assert safe_target("/\\evil.example/x") == "/"
+    assert safe_target("//evil.example") == "/"

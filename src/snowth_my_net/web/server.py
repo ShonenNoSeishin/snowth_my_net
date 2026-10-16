@@ -858,8 +858,8 @@ class Site:
             self.log_refusal(token, path)
             if path == "/login":
                 return HTTPStatus.OK, html_type, self.login_page(t=t)
-            target = path + (("?" + "&".join(f"{k}={v[0]}" for k, v in query.items()))
-                             if query else "")
+            target = path + (("?" + urlencode([(k, v) for k, values in query.items()
+                                               for v in values])) if query else "")
             return HTTPStatus.SEE_OTHER, "/login?next=" + quote(safe_target(target), safe=""), b""
         if path == "/login":
             return HTTPStatus.SEE_OTHER, "/", b""       # already signed in
@@ -1015,6 +1015,7 @@ class Handler(BaseHTTPRequestHandler):
     server_version = f"snowth_my_net/{__version__}"
     sys_version = ""                       # do not advertise the Python version
     protocol_version = "HTTP/1.1"
+    timeout = 30                           # a client that stalls does not hold a thread forever
 
     def refused(self, writing: bool) -> bool:
         """Answer 421 or 403 and return True when the request must not be served.
@@ -1054,7 +1055,7 @@ class Handler(BaseHTTPRequestHandler):
         if chosen in LANGUAGES:            # the reader picked a language: remember it
             rest = urlencode({k: v[0] for k, v in query.items()})   # never the raw bytes back
             self.finish_response(HTTPStatus.SEE_OTHER,
-                                 parsed.path + (f"?{rest}" if rest else ""), b"",
+                                 safe_target(parsed.path) + (f"?{rest}" if rest else ""), b"",
                                  lang_cookie=chosen)
             return
         try:
@@ -1072,7 +1073,19 @@ class Handler(BaseHTTPRequestHandler):
                              if parsed.path == TEMPLATE_PATH and status == HTTPStatus.OK else "")
 
     def do_POST(self) -> None:             # name imposed by BaseHTTPRequestHandler
-        """Only the login and logout forms; every page itself stays a GET."""
+        """Only the login and logout forms; every page itself stays a GET. A failure answers
+        the reader instead of killing the thread and leaving the connection empty."""
+        try:
+            self.post()
+        except StateError as exc:
+            self.finish_response(HTTPStatus.SERVICE_UNAVAILABLE, "text/plain; charset=utf-8",
+                                 f"{exc}\n".encode())
+        except Exception:                  # a bug must not kill the server thread
+            log.exception("POST %s failed", urlparse(self.path).path)
+            self.finish_response(HTTPStatus.INTERNAL_SERVER_ERROR, "text/plain; charset=utf-8",
+                                 b"internal error; see the logs\n")
+
+    def post(self) -> None:
         if self.refused(True):
             return
         site = self.server.site
@@ -1096,6 +1109,10 @@ class Handler(BaseHTTPRequestHandler):
                                      json.dumps({"error": "sign in again"}).encode())
                 return
             self.finish_response(HTTPStatus.SEE_OTHER, "/login", b"")
+            return
+        if parsed.path in ("/name", "/action", "/scan", *IMPORT_POSTS) and site.must_change(
+                site.sessions.user_of(token)):
+            self.finish_response(HTTPStatus.SEE_OTHER, "/password", b"")   # as the pages do
             return
         if parsed.path in IMPORT_POSTS:
             self.import_upload(site, parsed.path)
@@ -1143,6 +1160,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if user is None:
             self.finish_response(HTTPStatus.SEE_OTHER, "/login", b"")
+            return
+        if site.must_change(user):
+            self.finish_response(HTTPStatus.SEE_OTHER, "/password", b"")
             return
         form = self.read_form()
         if path == "/confirm":
@@ -1226,7 +1246,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def caller(self) -> str:
         site = self.server.site
-        return site.caller(self.address_string(), self.headers.get("X-Forwarded-For"))
+        headers = getattr(self, "headers", None)       # absent when the request line was refused
+        return site.caller(self.address_string(),
+                           headers.get("X-Forwarded-For") if headers is not None else None)
 
     def secure_request(self) -> bool:
         """True when the reader's own connection was TLS, as a trusted proxy states it."""
