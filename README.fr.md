@@ -42,7 +42,7 @@ Pas à pas, d'un répertoire vide au premier scan :
 ### Avec pipx (cron ou systemd de l'hôte)
 
 ```bash
-pipx install git+ssh://git@github.com/ShonenNoSeishin/snowth_my_net.git
+pipx install git+https://github.com/ShonenNoSeishin/snowth_my_net.git
 snowth_my_net init --output snowth_my_net.yml     # exemple commenté, à adapter
 mkdir -p secrets && printf '%s' 'la-clé-auth-v3' > secrets/snmp_v3_auth && chmod 600 secrets/*
 snowth_my_net check                               # le diagnostic à lancer en premier

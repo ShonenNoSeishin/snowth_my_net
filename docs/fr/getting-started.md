@@ -7,7 +7,7 @@ lectures SNMP.
 ## 1. Installer
 
 ```bash
-pipx install git+ssh://git@github.com/ShonenNoSeishin/snowth_my_net.git
+pipx install git+https://github.com/ShonenNoSeishin/snowth_my_net.git
 snowth_my_net version
 ```
 

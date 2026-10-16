@@ -10,6 +10,7 @@ readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
+authors = [{ name = "ShonenNoSeishin" }]
 keywords = ["snmp", "network", "inventory", "topology", "lldp", "arp", "fdb"]
 classifiers = [
     "Environment :: Console",
@@ -35,6 +36,10 @@ dependencies = [
 # snmpsim imports pysmi at start-up without declaring it.
 test = ["pytest>=8", "pytest-asyncio>=0.23", "pytest-cov>=5", "snmpsim>=1.2,<2", "pysmi>=1.5"]
 dev = ["snowth-my-net[test]", "ruff>=0.6"]
+
+[project.urls]
+Homepage = "https://github.com/ShonenNoSeishin/snowth_my_net"
+Issues = "https://github.com/ShonenNoSeishin/snowth_my_net/issues"
 
 [project.scripts]
 snowth_my_net = "snowth_my_net.cli:entry"

@@ -15,7 +15,7 @@ sudo install -d -o snowth -g snowth -m 0750 /var/lib/snowth_my_net
 sudo install -d -o root -g snowth -m 0750 /etc/snowth_my_net /etc/snowth_my_net/secrets
 
 # From the git repository (PyPI later):
-sudo PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install git+ssh://git@github.com/ShonenNoSeishin/snowth_my_net.git
+sudo PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install git+https://github.com/ShonenNoSeishin/snowth_my_net.git
 #   or: pipx install ./snowth_my_net   (a local clone)
 
 sudo -u snowth snowth_my_net init --output /etc/snowth_my_net/config.yml   # then edit it
@@ -133,7 +133,7 @@ terminates TLS in front of it — the interface itself is published nowhere. At 
 maintain on the host — and runs one collect.
 
 ```bash
-git clone git@github.com:ShonenNoSeishin/snowth_my_net.git && cd snowth_my_net
+git clone https://github.com/ShonenNoSeishin/snowth_my_net.git && cd snowth_my_net
 cp .env.example .env                          # uncomment SNOWTH_UID/SNOWTH_GID = "id -u"/"id -g"
 mkdir -p config/extensions data output secrets
 docker compose build

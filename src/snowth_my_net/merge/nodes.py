@@ -440,9 +440,8 @@ def is_live(ctx: MergeContext, node: Node) -> bool:
     # A MAC that was on a switch port, and that no switch lists any more, is not proven present
     # by that cache alone. A MAC never heard on a port (ARP is all there is) is left alone.
     limit = ctx.cfg.live_port_max_age
-    if limit and node.sightings and walk - max(s.last_seen for s in node.sightings) > limit:
-        return False
-    return True
+    return not (limit and node.sightings
+                and walk - max(s.last_seen for s in node.sightings) > limit)
 
 
 def resolve_nodes(inputs: MergeInputs, cfg: NodesCfg, now: int) -> list[Node]:

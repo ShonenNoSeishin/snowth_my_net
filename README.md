@@ -34,7 +34,7 @@ Step by step, from an empty directory to the first scan:
 ### With pipx (host cron or systemd)
 
 ```bash
-pipx install git+ssh://git@github.com/ShonenNoSeishin/snowth_my_net.git
+pipx install git+https://github.com/ShonenNoSeishin/snowth_my_net.git
 snowth_my_net init --output snowth_my_net.yml     # commented example, then edit it
 mkdir -p secrets && printf '%s' 'the-v3-auth-key' > secrets/snmp_v3_auth && chmod 600 secrets/*
 snowth_my_net check                               # the first diagnostic to run

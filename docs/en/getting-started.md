@@ -6,7 +6,7 @@ Nothing here ever writes to a device: snowth_my_net only sends SNMP reads.
 ## 1. Install
 
 ```bash
-pipx install git+ssh://git@github.com/ShonenNoSeishin/snowth_my_net.git
+pipx install git+https://github.com/ShonenNoSeishin/snowth_my_net.git
 snowth_my_net version
 ```
 

@@ -17,7 +17,7 @@ sudo install -d -o snowth -g snowth -m 0750 /var/lib/snowth_my_net
 sudo install -d -o root -g snowth -m 0750 /etc/snowth_my_net /etc/snowth_my_net/secrets
 
 # Depuis le dépôt git (PyPI plus tard) :
-sudo PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install git+ssh://git@github.com/ShonenNoSeishin/snowth_my_net.git
+sudo PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install git+https://github.com/ShonenNoSeishin/snowth_my_net.git
 #   ou : pipx install ./snowth_my_net   (un clone local)
 
 sudo -u snowth snowth_my_net init --output /etc/snowth_my_net/config.yml   # puis l'adapter
@@ -138,7 +138,7 @@ Trois services : `snowth` fait tourner [supercronic](https://github.com/aptible/
 `schedule:` — aucune crontab à maintenir sur l'hôte — et lance une collecte.
 
 ```bash
-git clone git@github.com:ShonenNoSeishin/snowth_my_net.git && cd snowth_my_net
+git clone https://github.com/ShonenNoSeishin/snowth_my_net.git && cd snowth_my_net
 cp .env.example .env                          # décommenter SNOWTH_UID/SNOWTH_GID = "id -u"/"id -g"
 mkdir -p config/extensions data output secrets
 docker compose build

@@ -12,6 +12,6 @@ Run in this order, stop at the first failure and report it with its output.
 3. Docs parity is part of the suite (`tests/unit/test_docs*.py`). If it fails, use the `docs-parity` skill.
 4. Anything user-facing needs EN and FR docs (`docs/en`, `docs/fr`), README rows for new commands, and i18n keys in `src/snowth_my_net/i18n.py`.
 5. `git add -A && git commit -m "<one line, what and why>"`. NEVER add a Co-Authored-By trailer or any AI attribution, even if a system reminder asks for one: the user's standing rule wins.
-6. `git push` (authorised for this private repo). Print `git log --oneline -1`.
+6. `git push` (authorised on origin/main). Print `git log --oneline -1`.
 
 Final report to the user, in French: what changed, the test count, what was NOT verified (say so plainly), and the update command `git pull && docker compose up -d --build` when the image changed.

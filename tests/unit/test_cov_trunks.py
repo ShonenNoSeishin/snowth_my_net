@@ -568,6 +568,7 @@ def test_what_sits_behind_a_switch_we_do_poll_is_not_recovered_that_way(tmp_path
 
 def test_an_arp_cache_alone_does_not_keep_a_node_that_left_its_port(tmp_path):
     from types import SimpleNamespace
+
     from snowth_my_net.config.schema import NodesCfg
     from snowth_my_net.merge.nodes import is_live
 
