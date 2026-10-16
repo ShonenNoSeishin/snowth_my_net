@@ -34,12 +34,14 @@ class DeviceRow:
             return "?"
         return {"manual": "✎", "config": "⚙"}.get(self.type_rule, "")
 
-    def matches(self, text: str) -> bool:
+    def matches(self, text: str, shown: str = "") -> bool:
+        """``shown``: the type and status as the table writes them (translated), which a reader
+        types as well as the internal words."""
         needle = text.strip().casefold()
         if not needle:
             return True
         haystack = " ".join((self.name, self.target, self.device_type, self.vendor, self.model,
-                             self.status))
+                             self.status, shown))
         return needle in haystack.casefold()
 
 

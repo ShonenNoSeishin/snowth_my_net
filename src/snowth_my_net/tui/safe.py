@@ -8,6 +8,8 @@ never through markup.
 
 from __future__ import annotations
 
+import re
+
 from rich.text import Text
 from textual.widgets import DataTable
 
@@ -20,8 +22,20 @@ def escape(text: object) -> str:
 class SafeTable(DataTable):
     """A table whose text cells are text, never markup."""
 
+    def add_column(self, label, *, width=None, key=None, default=None):
+        """A header is text too: a report column named ``[/x]`` must not raise."""
+        if isinstance(label, str):
+            label = Text(label)
+        return super().add_column(label, width=width, key=key, default=default)
+
     def add_row(self, *cells, height=1, key=None, label=None):
         shown = [Text(cell) if isinstance(cell, str) else cell for cell in cells]
         if isinstance(label, str):
             label = Text(label)
         return super().add_row(*shown, height=height, key=key, label=label)
+
+
+def is_int(raw: str) -> bool:
+    """ASCII digits with an optional minus sign: ``str.isdigit`` also accepts "²", which
+    ``int`` refuses."""
+    return re.fullmatch(r"-?[0-9]+", raw) is not None

@@ -1100,3 +1100,18 @@ async def test_filter_row_outside_the_builder_just_removes_itself():
         row.query_one(".f-remove", Button).press()
         await pilot.pause()
         assert not app.query(FilterRow)
+
+
+async def test_delete_on_another_tab_does_not_offer_to_remove_a_device(make_app):
+    app = make_app()
+    async with app.run_test(size=(160, 45)) as pilot:
+        await settle(app, pilot)
+        screen = app.screen
+        tab(app, "nodes")
+        await settle(app, pilot)
+        screen.query_one("#nodes", DataTable).focus()
+        await pilot.press("delete")
+        for _ in range(8):
+            await pilot.pause()
+        assert app.screen is screen                 # no confirmation about a hidden device
+        assert ctx_repo(app).device(1) is not None

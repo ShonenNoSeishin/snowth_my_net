@@ -285,3 +285,19 @@ def test_run_tui_closes_the_state(tmp_path, monkeypatch):
     monkeypatch.setattr(tui_app.SnowthApp, "run", boom)
     with pytest.raises(RuntimeError):
         tui_app.run_tui(load_config(write_cfg(tmp_path)))
+
+
+def test_integers_are_ascii_digits_only():
+    from snowth_my_net.tui.safe import is_int
+
+    assert is_int("50") and is_int("-5")
+    assert not is_int("²") and not is_int("--5") and not is_int("") and not is_int("5 ")
+
+
+def test_the_device_filter_finds_what_the_table_shows():
+    from snowth_my_net.tui.data import DeviceRow
+
+    row = DeviceRow(target="192.0.2.1", host="192.0.2.1", device_id=1, name="sw", device_type="router",
+                    type_rule="", vendor="", model="", status="never", last_seen=0, error="")
+    assert row.matches("router") and not row.matches("routeur")
+    assert row.matches("routeur jamais", shown="routeur jamais interrogé")

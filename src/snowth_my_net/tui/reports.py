@@ -36,7 +36,7 @@ from snowth_my_net.reports.service import (
     report_definition,
 )
 from snowth_my_net.tui.safe import SafeTable as DataTable
-from snowth_my_net.tui.safe import escape
+from snowth_my_net.tui.safe import escape, is_int
 
 SQL_SOURCE = "__sql__"
 PREVIEW_ROWS = 200
@@ -259,7 +259,7 @@ class ReportScreen(Screen):
                 data["sort"] = sort
         limit = self.query_one("#b-limit", Input).value.strip()
         if limit:
-            data["limit"] = int(limit) if limit.lstrip("-").isdigit() else limit
+            data["limit"] = int(limit) if is_int(limit) else limit
         data["format"] = str(self.query_one("#b-format", Select).value)
         schedule = self.query_one("#b-schedule", Input).value.strip()
         if schedule:

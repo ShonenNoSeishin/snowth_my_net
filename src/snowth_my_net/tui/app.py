@@ -60,7 +60,7 @@ from snowth_my_net.state.repo import Repo
 from snowth_my_net.tui.data import DeviceRow, list_devices, plan_form_change
 from snowth_my_net.tui.i18n import Translator, detect_language
 from snowth_my_net.tui.safe import SafeTable as DataTable
-from snowth_my_net.tui.safe import escape
+from snowth_my_net.tui.safe import escape, is_int
 
 DEVICE_TYPES = ("switch", "router", "firewall", "wireless", "server", "printer", "facility",
                 "other")
@@ -496,8 +496,9 @@ class CollectModal(ModalScreen[bool]):
         handler = TuiLogHandler(log_widget)
         logger = logging.getLogger(LOGGER_NAME)
         logger.addHandler(handler)
-        conn = open_db(ctx.loaded.paths.state_file)
+        conn = None
         try:
+            conn = open_db(ctx.loaded.paths.state_file)
             report = await Collector(ctx.loaded, Repo(conn), ctx.credentials, ctx.clock).run(
                 self.only)
             s = report.stats
@@ -512,8 +513,9 @@ class CollectModal(ModalScreen[bool]):
             status.update(f"[$error]{escape(repr(exc))}[/]")
         finally:
             logger.removeHandler(handler)
-            conn.close()
-            lock.release()
+            if conn is not None:
+                conn.close()
+            lock.release()          # also when the state could not be opened
             self._done()
 
     def _done(self) -> None:
@@ -806,7 +808,8 @@ class MainScreen(Screen):
         needle = self.query_one("#filter", Input).value
         selected = self.selected_row()
         table.clear()
-        shown = [r for r in self.rows if r.matches(needle)]
+        shown = [r for r in self.rows if r.matches(needle, " ".join((
+            self.ctx.type_label(r.device_type), self.ctx.t("st." + r.status))))]
         for r in shown:
             type_cell = Text(self.ctx.type_label(r.device_type) or "?",
                              style="" if r.device_type else "dim")
@@ -914,6 +917,8 @@ class MainScreen(Screen):
                 self.notify(t("ext.deleted", name=loaded.cfg.name))
                 self.fill_extensions()
             return
+        if self.query_one("#main-tabs", TabbedContent).active != "tab-devices":
+            return          # Delete means "remove the device" on the Devices tab only
         row = self.selected_row()
         if row is None:
             return
@@ -1183,7 +1188,7 @@ class DeviceScreen(Screen):
             values[f"features.{feature}"] = self.query_one(f"#f-features-{feature}", Select).value
         for key in ("snmp.max_repetitions", "snmp.pace_ms"):
             raw = text(key)
-            values[key] = int(raw) if raw.lstrip("-").isdigit() else (raw or None)
+            values[key] = int(raw) if is_int(raw) else (raw or None)
         return values
 
     def load_presets(self) -> None:
@@ -1273,6 +1278,7 @@ class DeviceScreen(Screen):
                           self.ctx.local_time(rn.obs.last_seen))
 
     def refresh_all(self) -> None:
+        self.effective_type()       # first: it replaces the row (a first collect gives it an id)
         self.load_custom()
         self.load_neighbors()
         self.load_identity()
@@ -1333,7 +1339,7 @@ class DeviceScreen(Screen):
 
     def limit(self) -> int:
         raw = self.query_one("#limit", Input).value
-        return max(1, min(10_000, int(raw))) if raw.isdigit() else 50
+        return max(1, min(10_000, int(raw))) if is_int(raw) else 50
 
     @work(exclusive=True, group="probe")
     async def run_probe(self, item: str) -> None:
