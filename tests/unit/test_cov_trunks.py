@@ -586,3 +586,34 @@ def test_an_arp_cache_alone_does_not_keep_a_node_that_left_its_port(tmp_path):
     assert is_live(ctx(), node(0, sightings=False)) is True    # ARP is all there is: untouched
     assert is_live(ctx(live_port_max_age=0), node(30 * 86400)) is True      # rule off
     assert is_live(ctx(live_port_max_age=30 * 86400), node(8 * 86400)) is True
+
+
+def test_explain_does_not_call_a_left_port_an_uplink_only_sighting(tmp_path):
+    """The access switch was walked again without the phone, and the trunk heard it later:
+    the explanation says the access port no longer lists it, never "seen only on uplinks"."""
+    from snowth_my_net.merge.explain import explain
+
+    loaded = lab(tmp_path)
+    repo = Repo(open_db(loaded.paths.state_file))
+    try:
+        access_id = repo.conn.execute(
+            "SELECT id FROM devices WHERE mgmt_address = '192.0.2.10'").fetchone()[0]
+        run = repo.start_run("collect", NOW - 3600)
+        again = device("192.0.2.10", "SW-Access-01", "00:00:5e:00:53:10",
+                       interfaces={1: Interface(1, "0/1")}, fdb=[fdb("00:00:5e:00:61:01", 1)])
+        again.device_id = access_id
+        repo.save_device(again, NOW - 3600, run)
+        repo.finish_run(run, "ok", NOW - 3600, {"devices": 1})
+    finally:
+        repo.conn.close()
+    view = view_of(loaded)
+    text = "\n".join(line for line, _kind in explain(view, PHONE))
+    assert "seen only on uplinks" not in text
+    assert "no longer list it" in text
+
+
+def test_explain_names_the_hostname_clash_by_what_was_compared(tmp_path):
+    from snowth_my_net.i18n import STRINGS
+
+    assert "hand-written" in STRINGS["xp.hostname_clash"][0]
+    assert "hand-written" not in STRINGS["xp.hostname_clash_probed"][0]

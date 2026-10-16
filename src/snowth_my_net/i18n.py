@@ -920,6 +920,9 @@ EXPLAIN = {
     "xp.hostname_clash": (
         "The hand-written hostname and the DNS one disagree: one of them is wrong",
         "Le nom d'hôte écrit à la main et celui du DNS diffèrent : l'un des deux est faux"),
+    "xp.hostname_clash_probed": (
+        "The name the host states about itself and the DNS one disagree: one of them is wrong",
+        "Le nom que l'hôte donne de lui-même et celui du DNS diffèrent : l'un des deux est faux"),
     "xp.src.manual": ("written by hand", "écrit à la main"),
     "xp.src.dns": ("reverse DNS", "DNS inverse"),
     "xp.src.snmp": ("sysName, reported by the polled device",
@@ -944,10 +947,12 @@ EXPLAIN = {
     "xp.rule": ("Rule", "Règle"),
     "xp.rule_access": ("access port ({count} MAC(s) on the port)",
                        "port d'accès ({count} MAC sur le port)"),
-    "xp.rule_transit": ("; {count} simultaneous sighting(s) on ports with more MACs treated as "
-                        "transit (window {minutes} min)",
-                        " ; {count} observation(s) simultanée(s) sur des ports avec plus de MAC "
-                        "traitées comme du transit (fenêtre {minutes} min)"),
+    "xp.rule_transit": ("; {count} simultaneous sighting(s) set aside as transit, in favour of "
+                        "the port that still lists the MAC, else the one with the fewest MACs "
+                        "(window {minutes} min)",
+                        " ; {count} observation(s) simultanée(s) écartée(s) comme transit, au "
+                        "profit du port qui liste encore la MAC, sinon de celui qui porte le "
+                        "moins de MAC (fenêtre {minutes} min)"),
     "xp.rule_uplinks": ("; {count} uplink sighting(s) discarded",
                         " ; {count} observation(s) sur uplink écartée(s)"),
     "xp.rule_fallback": ("seen only on soft uplinks: placed on the one with the fewest MACs "
@@ -958,6 +963,15 @@ EXPLAIN = {
                              "declare the port in access_ports)",
                              "vue seulement sur des uplinks : pas de position (activez "
                              "nodes.uplink_fallback, ou déclarez le port dans access_ports)"),
+    "xp.rule_left": ("no position: the access port(s) it was on no longer list it, and an "
+                     "uplink heard it later",
+                     "pas de position : le ou les ports d'accès où elle était ne la listent "
+                     "plus, et un uplink l'a entendue depuis"),
+    "xp.rule_uplinks_hard": ("seen only on uplinks, at least one of them certain: no position "
+                             "(declare the port in access_ports if it is an access port)",
+                             "vue seulement sur des uplinks, dont l'un au moins est certain : "
+                             "pas de position (déclarez le port dans access_ports si c'est un "
+                             "port d'accès)"),
     "xp.rule_arp_only": ("never seen in a MAC table: known from ARP only",
                          "jamais vue dans une table MAC : connue par l'ARP seulement"),
     "xp.fdb_title": ("MAC table sightings (retention {days} d)",
@@ -967,8 +981,8 @@ EXPLAIN = {
     "xp.verdict_previous": ("previous position (roaming)", "position précédente (itinérance)"),
     "xp.verdict_fallback": ("behind soft uplink: {reasons}",
                             "derrière un uplink souple : {reasons}"),
-    "xp.verdict_transit": ("transit (same time on {where}, fewer MACs)",
-                           "transit (au même moment sur {where}, moins de MAC)"),
+    "xp.verdict_transit": ("transit (same time on {where}, which the rule prefers)",
+                           "transit (au même moment sur {where}, que la règle préfère)"),
     "xp.verdict_left": ("left: the device no longer lists it here, and an uplink heard it later",
                         "quitté : l'équipement ne le liste plus ici et un uplink l'a vu depuis"),
     "xp.verdict_uplink": ("uplink: {reasons}", "uplink : {reasons}"),

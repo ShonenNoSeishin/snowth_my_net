@@ -62,6 +62,10 @@ def explain_node(view: NodeView, node: Node, t: Text = ENGLISH) -> list[Line]:
             rule += t("xp.rule_uplinks", count=len(uplinks))
     elif node.position_kind == "behind_uplink":
         rule = t("xp.rule_fallback")
+    elif any(s.verdict == "left" for s in node.sightings):
+        rule = t("xp.rule_left")
+    elif node.sightings and cfg.uplink_fallback:
+        rule = t("xp.rule_uplinks_hard")        # the option is on: a certain uplink prevents it
     elif node.sightings:
         rule = t("xp.rule_uplinks_only")
     else:
@@ -120,7 +124,8 @@ def explain_node(view: NodeView, node: Node, t: Text = ENGLISH) -> list[Line]:
     if used:
         lines.append((t("xp.hostname", name=used, source=t(f"xp.src.{source}")), "ok"))
     if view.hostnames_disagree(node):
-        lines.append((t("xp.hostname_clash"), "bad"))
+        by_hand = bool(view.given_name(node.mac))
+        lines.append((t("xp.hostname_clash" if by_hand else "xp.hostname_clash_probed"), "bad"))
     return lines
 
 
