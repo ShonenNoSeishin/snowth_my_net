@@ -99,7 +99,7 @@ def test_explain_trunk_transit_and_arp(lab_cfg, capsys):
 
     assert main(["--config", str(lab_cfg), "explain", A0]) == 0
     text = capsys.readouterr().out
-    assert "transit (same time on sw-access-01 1/1/3, fewer MACs)" in text
+    assert "transit (same time on sw-access-01 1/1/3, which the rule prefers)" in text
 
 
 def test_cisco_per_vlan_instances_over_snmpv3_and_v2c(lab, tmp_path, capsys):

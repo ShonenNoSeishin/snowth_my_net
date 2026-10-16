@@ -453,3 +453,9 @@ def test_the_import_log_quotes_a_mac_cell_that_a_spreadsheet_would_run():
     line = mod.ImportLine(3, "=HYPERLINK(\"x\")", "x", "error", "not a MAC address")
     log = mod.import_log([line])
     assert "'=HYPERLINK" in log and ",=HYPERLINK" not in log
+
+
+def test_vlans_sort_as_numbers():
+    from snowth_my_net.web.pages import vlan_key
+
+    assert sorted(["100", "20", "", "x", "3"], key=vlan_key) == ["3", "20", "100", "", "x"]

@@ -45,16 +45,42 @@ fails without it. "Done" items are in commit `1a07b93`.
   current password (checked at every request), cookie `Max-Age`, refusal reason logged.
 - `/scan` without an address asks for one; the scan refusal reads as one sentence.
 
+## Done (fifth batch, 2026-10-16)
+- 11. `nodes.live_port_max_age` (7 d): a MAC once heard on a port that no switch has listed for that
+  long before the last full collect is memory even when an ARP cache still holds it. A MAC never
+  heard on a port is not concerned.
+- 12. The Nodes tab of the TUI cycles all / without / only the locally administered MACs (`m`).
+  Grouping by announced hostname is abandoned: it is a guess, and nodes are never merged on one.
+  Found on the way: with `include_name` the TUI rows started with the name, not the MAC.
+- 13. Several web processes can share `web_sessions.json` (file lock, read again before each change,
+  every authorization decision reads the file). The login limiter and the log's refusal reason stay
+  per process, documented.
+- Audit of the zones listed below (read by three independent reviewers, each finding checked in the
+  code before any fix, each fix pinned by a test): explain no longer states a cause the merge did not
+  use; POST /snmp waits for the state lock; a failing POST answers 500; POSTs wait for the chosen
+  password; socket timeout; off-site redirect and login redirect; the import log quotes the MAC cell;
+  TUI Delete only on the Devices tab; ENTITY-MIB modules in slots and placeholder models; and smaller
+  items (maxlength, VLAN sort, link times, translated status).
+- Open-source preparation: https install, no site-specific names or addresses, project URLs,
+  copyright line.
+
+## Known, decided not to change
+- `decode_text`: six bytes that are not UTF-8 are read as a MAC (a device puts one in a name field);
+  a six-byte Latin-1 name such as `Hôtel1` is shown as a MAC. The two cannot be told apart.
+- `decode_text`: one control character sends the whole OctetString to hex (a sysDescr with a stray
+  `\x01` is not identified). Rare; a hex string is at least honest.
+- ENTITY-MIB with no class-3 (chassis) row records nothing (stack-only or container-only roots) and
+  for a stack the lowest-index member gives the serial. Not seen on a real device; unverified.
+- TUI: heavy work (a full merge when a device is opened, report previews) runs on the UI thread; a
+  device screen keeps the connection it first opened until a collect. Fine at the sizes seen so far.
+- Web: a scan stopped by its timeout may leave its `nmap` child running.
+
 ## Open
-11. Left: `is_live` and long ARP caches (an entry kept for weeks keeps a node live).
-12. The local-MAC filter in the TUI; grouping by announced hostname was not done (a guess).
-13. Several worker processes would not share `web_sessions.json` writes (one process today).
-    The refusal reason `unknown` after a redeploy means a cookie issued before the file existed.
 - Wording: the scan refusal reason (`outside discovery.allowed`) is still an English config key.
 
 ## Not audited
-`web/*`, `tui/*`, `collect/tables/entity.py`, `collect/tables/system.py`, `merge/explain.py`.
+Nothing left in the list of 2026-10-09 (`web/*`, `tui/*`, `entity.py`, `system.py`, `explain.py` were
+read on 2026-10-16). `snmp/values.py` was read where those files lead to it.
 
 ## Next axes
-Security scan (`/claude-security`), then the UI/UX rework with `frontend-design` and
-`ui-screenshot`.
+The UI/UX rework with `frontend-design` and `ui-screenshot`; making the repository public.

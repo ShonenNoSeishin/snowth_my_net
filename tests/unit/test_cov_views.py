@@ -238,7 +238,7 @@ def test_explain_every_kind_of_node(tmp_path, state):
     assert "previous position (roaming)" in d and "superseded (now 00:00:5e:00:53:aa)" in d
     assert "fe80::60" in d
     f = text_of(view, F)
-    assert "1 simultaneous sighting(s) on ports with more MACs treated as transit" in f
+    assert "1 simultaneous sighting(s) set aside as transit" in f
     assert "↷ sw1 Gi1/0/2" in f
     b = text_of(view, B)
     assert "1 uplink sighting(s) discarded" in b and "neighbor sw2 (LLDP)" in b

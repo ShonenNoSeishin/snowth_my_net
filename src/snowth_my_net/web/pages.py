@@ -6,6 +6,8 @@ interface offers no action. Use the CLI or the terminal interface to collect or 
 
 from __future__ import annotations
 
+import calendar
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -179,7 +181,7 @@ def nodes(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int,
     rows.sort(key=lambda row: (str(row[10]), text_of(row[4]), str(row[7]), str(row[8])))
     rows.sort(key=lambda row: str(row[10]), reverse=True)
     if local_macs == "only":      # read side by side, by where they were heard
-        rows.sort(key=lambda row: (str(row[7]), str(row[8]), str(row[9])))
+        rows.sort(key=lambda row: (str(row[7]), str(row[8]), vlan_key(row[9])))
     columns = [(t("col.hostname.manual"), "text"), (t("col.hostname.dns"), "text"),
                (t("col.hostname.probe"), "text"), (t("col.description"), "text"),
                (t("col.mac"), "text"), (t("col.vendor"), "text"), (t("col.ip"), "text"),
@@ -215,8 +217,16 @@ def text_of(value) -> str:
     return value.text if isinstance(value, Cell) else str(value)
 
 
+def vlan_key(value) -> tuple[int, int, str]:
+    """VLAN 20 before VLAN 100; what is not a number, then nothing, after."""
+    text = str(value.text if isinstance(value, Cell) else value)
+    return (0, int(text), "") if text.isdigit() else (1, 0, text)
+
+
 def links(loaded: LoadedConfig, repo: Repo, now: int, t) -> Table:
     rows = build_view(loaded, repo, now).link_rows()
+    for row in rows:                       # the same local time as every other page
+        row[5] = When(calendar.timegm(time.strptime(row[5], "%Y-%m-%dT%H:%M:%SZ")))
     columns = [(t("col.local_device"), "text"), (t("col.local_port"), "text"),
                (t("col.remote_device"), "text"), (t("col.remote_port"), "text"),
                (t("col.protocol"), "text"), (t("col.seen"), "text")]
@@ -366,7 +376,8 @@ def summary(loaded: LoadedConfig, repo: Repo, now: int, t) -> str:
 
     stats = json.loads(last["stats"] or "{}")
     return t("status.last", when=local_time(last["finished_at"] or last["started_at"]),
-             status=last["status"] or "?", ok=stats.get("reachable", "—"),
+             status=t("st." + last["status"]) if last["status"] in ("ok", "partial", "failed")
+             else (last["status"] or "?"), ok=stats.get("reachable", "—"),
              total=stats.get("devices", "—"))
 
 
