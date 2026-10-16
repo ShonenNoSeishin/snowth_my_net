@@ -79,13 +79,14 @@ def verify_password(password: str, stored: str) -> bool:
 
 def _locked(method):
     """The sessions are shared by every request thread: one at a time touches them. What another
-    process wrote since is read first (one ``stat`` when nothing changed)."""
+    process wrote since is read first, whatever the file's stamp says: a revoked session must
+    never survive because two writes left the same inode, size and (coarse) mtime."""
     import functools
 
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         with self._lock:
-            self._refresh()
+            self._refresh(force=True)
             return method(self, *args, **kwargs)
     return wrapper
 

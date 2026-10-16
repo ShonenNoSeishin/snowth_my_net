@@ -594,3 +594,17 @@ def test_a_renewal_in_one_process_is_not_overwritten_by_another(tmp_path):
     two.open("anna")                                         # a write by the other process
     now[0] = 150                                             # 150 s after login, 60 after use
     assert one.user_of(token) == "alice"
+
+
+def test_a_revoked_session_is_refused_even_when_the_file_looks_unchanged(tmp_path):
+    """Same inode, size and mtime after two writes (a coarse clock, a reused inode): the stamp
+    alone would leave the other process believing in a session that was closed."""
+    path = tmp_path / "sessions.json"
+    one = auth.Sessions(lifetime=3600, path=path)
+    two = auth.Sessions(lifetime=3600, path=path)
+    token = one.open("alice")
+    assert two.user_of(token) == "alice"
+    frozen = two._stat()
+    one.close(token)
+    two._stat = lambda: frozen                      # the file claims to be what two last read
+    assert two.user_of(token) is None
