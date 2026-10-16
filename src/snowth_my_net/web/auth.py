@@ -21,6 +21,11 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+try:
+    import fcntl
+except ImportError:          # not a POSIX system: one process only
+    fcntl = None
+
 log = logging.getLogger(__name__)
 
 SCHEME = "scrypt"
@@ -73,12 +78,25 @@ def verify_password(password: str, stored: str) -> bool:
 
 
 def _locked(method):
-    """The sessions are shared by every request thread: one at a time touches them."""
+    """The sessions are shared by every request thread: one at a time touches them. What another
+    process wrote since is read first (one ``stat`` when nothing changed)."""
     import functools
 
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         with self._lock:
+            self._refresh()
+            return method(self, *args, **kwargs)
+    return wrapper
+
+
+def _writes(method):
+    """A change to the sessions: made on what the other processes left, one process at a time."""
+    import functools
+
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._writing():
             return method(self, *args, **kwargs)
     return wrapper
 
@@ -92,6 +110,12 @@ class Sessions:
     holds a hash of each token, never the token itself, so reading it signs nobody in; it lets a
     restart or a redeploy keep the people who were working. The clock is the wall clock for that
     reason: a monotonic clock means nothing after a restart.
+
+    Several processes may share the file (two workers behind one proxy): the file is the truth.
+    Every change is made while holding a lock on a sibling file, after reading what the others
+    wrote, and the file is replaced atomically, so a login, a logout or a password change made by
+    one process is seen by the others at their next request. What stays per process: the log's
+    reason for a refusal and the login limiter (see ``LoginLimiter``).
     """
 
     lifetime: float                                    # idle seconds
@@ -103,12 +127,15 @@ class Sessions:
     _gone: dict[str, str] = field(default_factory=dict)     # hash -> why it ended (bounded)
     binding_of: object = None          # user -> the binding of their credential now, or None
     _saved_at: float = 0.0                             # when the file last recorded a renewal
+    _stamp: tuple | None = None                        # (inode, mtime, size) of the file we read
+    _depth: int = 0                                    # > 0 while the file lock is held
     _lock: threading.RLock = field(default_factory=threading.RLock)     # one thread per request
 
     def __post_init__(self) -> None:
         if self.max_lifetime is not None:
             self.max_lifetime = max(self.max_lifetime, self.lifetime)
-        self._load()
+        with self._writing():
+            self.purge()
 
     @property
     def cookie_age(self) -> int:
@@ -134,7 +161,7 @@ class Sessions:
         while len(self._gone) > 256:
             del self._gone[next(iter(self._gone))]
 
-    @_locked
+    @_writes
     def open(self, user: str, binding: str | None = None) -> str:
         """The session is tied to the credential it was opened with: ``binding``, else the
         account's current one (``binding_of``), so that nobody can forget to."""
@@ -147,10 +174,13 @@ class Sessions:
         self._save()
         return token
 
-    @_locked
+    @_writes
     def confirm(self, token: str) -> None:
         """The password was typed again: what it unlocks stays open for a while, not forever."""
-        self._confirmed[self._key(token)] = self.clock()
+        key = self._key(token)
+        if key in self._open:
+            self._confirmed[key] = self.clock()
+            self._save()
 
     @_locked
     def confirmed(self, token: str | None, within: float = CONFIRM_SECONDS) -> bool:
@@ -170,13 +200,20 @@ class Sessions:
                 self.binding_of(found[0]) != found[3]):
             why = "closed"          # the account is gone or its password changed, by anyone
         if why:
-            self._forget(key, why)
-            self._save()
+            with self._writing():
+                if key in self._open:
+                    self._forget(key, why)
+                    self._save()
             return None
         now = self.clock()
         found[2] = now
         if now - self._saved_at >= RENEW_SAVE_SECONDS:      # not one write per request
-            self._save()
+            with self._writing():
+                again = self._open.get(key)
+                if again is None:
+                    return None             # closed by another process in the meantime
+                again[2] = max(again[2], now)
+                self._save()
         return found[0]
 
     @_locked
@@ -191,7 +228,7 @@ class Sessions:
             return self._why(key, found) or "valid"
         return self._gone.get(key, "unknown")
 
-    @_locked
+    @_writes
     def close(self, token: str | None) -> None:
         if token:
             key = self._key(token)
@@ -199,7 +236,7 @@ class Sessions:
                 self._forget(key, "closed")
                 self._save()
 
-    @_locked
+    @_writes
     def close_user(self, user: str, keep: str | None = None) -> int:
         """Close every session of an account but one (the one that just changed the password)."""
         spared = self._key(keep) if keep else None
@@ -212,9 +249,10 @@ class Sessions:
 
     @contextlib.contextmanager
     def exclusive(self):
-        """Hold every other request off the sessions while a credential and its sessions are
-        changed together: no request sees the new password with the old binding."""
-        with self._lock:
+        """Hold every other request, in this process and in the others, off the sessions while a
+        credential and its sessions are changed together: no request sees the new password with
+        the old binding."""
+        with self._writing():
             yield
 
     @staticmethod
@@ -222,7 +260,7 @@ class Sessions:
         """What a session remembers of the password it was opened with."""
         return hashlib.sha256(stored_hash.encode()).hexdigest()[:16]
 
-    @_locked
+    @_writes
     def rebind(self, token: str, binding: str) -> None:
         """The session that changed the password follows its new credential."""
         found = self._open.get(self._key(token))
@@ -230,7 +268,7 @@ class Sessions:
             found[3] = binding
             self._save()
 
-    @_locked
+    @_writes
     def purge(self) -> None:
         over = [(k, why) for k, found in self._open.items() if (why := self._why(k, found))]
         for key, why in over:
@@ -245,28 +283,87 @@ class Sessions:
 
     # ------------------------------------------------------------- persistence
 
-    def _load(self) -> None:
+    @contextlib.contextmanager
+    def _writing(self):
+        """The thread lock and, for a file shared with other processes, an exclusive lock on a
+        sibling file; the file is read again under it, so that a change is made on what the others
+        left and never over it. Re-entrant."""
+        with self._lock:
+            if self._depth:
+                yield
+                return
+            handle = self._lock_file()
+            self._depth += 1
+            try:
+                self._refresh(force=True)
+                yield
+            finally:
+                self._depth -= 1
+                if handle is not None:
+                    with contextlib.suppress(OSError):
+                        fcntl.flock(handle, fcntl.LOCK_UN)
+                    handle.close()
+
+    def _lock_file(self):
+        if self.path is None or fcntl is None:
+            return None
+        try:
+            fd = os.open(self.path.with_name(self.path.name + ".lock"),
+                         os.O_WRONLY | os.O_CREAT, 0o600)
+            handle = os.fdopen(fd, "w")
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            return handle
+        except OSError as exc:
+            log.debug("sessions lock unavailable (%s): this process works alone", exc)
+            return None
+
+    def _stat(self) -> tuple | None:
+        try:
+            st = self.path.stat()
+        except OSError:
+            return None
+        return (st.st_ino, st.st_mtime_ns, st.st_size)
+
+    def _refresh(self, force: bool = False) -> None:
+        """Adopt what another process wrote. A renewal not written yet is kept (the latest wins);
+        a session the file no longer holds was closed elsewhere."""
         if self.path is None:
             return
+        stamp = self._stat()
+        if stamp == self._stamp and not (force and stamp is not None):
+            return
+        if stamp is None and self._stamp is None:
+            return                          # no file, and none was ever read: memory is all
+        sessions, confirmed = {}, {}
         try:
-            rows = json.loads(self.path.read_text("utf-8"))["sessions"]
-            self._open = {k: [str(u), float(c), float(last), str(b)]
-                          for k, (u, c, last, b) in rows.items()}      # an old file: all stale
-        except (OSError, ValueError, KeyError, TypeError):
-            self._open = {}                    # missing or damaged: everybody signs in again
-        self.purge()
+            payload = json.loads(self.path.read_text("utf-8"))
+            sessions = {k: [str(u), float(c), float(last), str(b)]
+                        for k, (u, c, last, b) in payload["sessions"].items()}
+            confirmed = {k: float(v) for k, v in payload.get("confirmed", {}).items()}
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            sessions, confirmed = {}, {}    # missing or damaged: everybody signs in again
+        for key, row in sessions.items():
+            mine = self._open.get(key)
+            if mine is not None and mine[2] > row[2]:
+                row[2] = mine[2]
+        for key in self._open.keys() - sessions.keys():
+            self._gone.setdefault(key, "closed")
+        self._open = sessions
+        self._confirmed = {k: v for k, v in confirmed.items() if k in sessions}
+        self._stamp = stamp
 
     def _save(self) -> None:
         self._saved_at = self.clock()
         if self.path is None:
             return
-        payload = json.dumps({"sessions": self._open})
+        payload = json.dumps({"sessions": self._open, "confirmed": self._confirmed})
         tmp = self.path.with_name(self.path.name + ".tmp")
         try:
             fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 handle.write(payload)
             os.replace(tmp, self.path)
+            self._stamp = self._stat()
         except OSError as exc:
             # A file that no longer matches memory could bring a closed session back after a
             # restart: better no file at all, everybody signs in again.
@@ -274,6 +371,7 @@ class Sessions:
             for leftover in (tmp, self.path):
                 with contextlib.suppress(OSError):
                     leftover.unlink()
+            self._stamp = None
 
 
 @dataclass

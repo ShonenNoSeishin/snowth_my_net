@@ -264,6 +264,7 @@ interface without a restart, and the sessions open on that account are closed.
   (`web passwd`, even while the interface runs): those sessions are closed at their next request, and a file that cannot be
   written is removed so that a closed session never comes back. The log says why a cookie was refused: `idle`, `cap`, `closed` or
   `unknown` (issued before the file existed).
+* Several interface processes may share one state directory (two containers behind one proxy): `web_sessions.json` is the truth, changed under a file lock (`web_sessions.json.lock`) and read again before each change, so a login, a logout or a `web passwd` in one is seen by the others at their next request. The failure counter above is per process: with N processes an address gets N times five attempts. The log's refusal reason is per process too (`closed` stands for a session another process ended).
 * After five failures an address waits a minute, right password or not; failures are logged with
   the address and their reason — `no such account` or `wrong password` — while the page itself
   stays vague on purpose.

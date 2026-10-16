@@ -543,3 +543,54 @@ def test_a_sign_in_made_with_the_old_password_does_not_outlive_its_change(tmp_pa
     site.account_of = real
     assert status == HTTPStatus.SEE_OTHER and token
     assert site.sessions.user_of(token) is None             # the new password does not own it
+
+
+def _open_many(path, count, queue):
+    sessions = auth.Sessions(lifetime=3600, path=path)
+    queue.put([sessions.open("alice") for _ in range(count)])
+
+
+def test_processes_sharing_the_file_lose_no_login(tmp_path):
+    import multiprocessing
+
+    path = tmp_path / "sessions.json"
+    queue = multiprocessing.Queue()
+    workers = [multiprocessing.Process(target=_open_many, args=(path, 15, queue))
+               for _ in range(4)]
+    for worker in workers:
+        worker.start()
+    tokens = [t for _ in workers for t in queue.get(timeout=60)]
+    for worker in workers:
+        worker.join(30)
+    reader = auth.Sessions(lifetime=3600, path=path)
+    assert len(tokens) == 60 and reader.count == 60
+    assert all(reader.user_of(t) == "alice" for t in tokens)
+
+
+def test_a_logout_or_password_change_in_one_process_reaches_the_other(tmp_path):
+    path = tmp_path / "sessions.json"
+    one = auth.Sessions(lifetime=3600, path=path)
+    two = auth.Sessions(lifetime=3600, path=path)
+    mine, theirs = one.open("alice"), one.open("alice")
+    assert two.user_of(mine) == "alice"                       # opened elsewhere, seen here
+    one.close(mine)
+    assert two.user_of(mine) is None and two.refusal(mine) == "closed"
+    other = two.open("anna")
+    assert one.user_of(other) == "anna"
+    assert two.close_user("alice") == 1                       # a password change, over there
+    assert one.user_of(theirs) is None
+    one.confirm(other)
+    assert two.confirmed(other)                              # the re-typed password too
+
+
+def test_a_renewal_in_one_process_is_not_overwritten_by_another(tmp_path):
+    now = [0.0]
+    path = tmp_path / "sessions.json"
+    one = auth.Sessions(lifetime=100, clock=lambda: now[0], path=path)
+    two = auth.Sessions(lifetime=100, clock=lambda: now[0], path=path)
+    token = one.open("alice")
+    now[0] = 90
+    assert one.user_of(token) == "alice"                      # kept in memory, written later
+    two.open("anna")                                         # a write by the other process
+    now[0] = 150                                             # 150 s after login, 60 after use
+    assert one.user_of(token) == "alice"

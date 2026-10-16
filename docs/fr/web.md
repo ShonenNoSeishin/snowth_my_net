@@ -272,6 +272,7 @@ sur ce compte sont closes.
   entre-temps (`web passwd`, même interface en marche) : ces sessions sont closes à leur prochaine requête, et un fichier qui
   ne peut pas être écrit est supprimé pour qu'une session fermée ne revienne jamais. Le journal dit pourquoi un cookie est refusé : `idle`,
   `cap`, `closed` ou `unknown` (émis avant l'existence du fichier).
+* Plusieurs processus de l'interface peuvent partager un même dossier d'état (deux conteneurs derrière un proxy) : `web_sessions.json` fait foi, modifié sous un verrou de fichier (`web_sessions.json.lock`) et relu avant chaque modification ; une connexion, une déconnexion ou un `web passwd` dans l'un est vu des autres à leur prochaine requête. Le compteur d'échecs ci-dessous est par processus : avec N processus, une adresse a N fois cinq essais. La raison de refus du journal l'est aussi (`closed` désigne une session qu'un autre processus a terminée).
 * Après cinq échecs, une adresse patiente une minute, bon mot de passe ou non ; les échecs sont
   journalisés avec l'adresse et leur raison — `no such account` ou `wrong password` — alors que
   la page, elle, reste volontairement vague.
