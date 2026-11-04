@@ -59,6 +59,28 @@ docker compose logs -f snowth
 
 Details, systemd units, hardening and networking: [docs/en/deployment.md](docs/en/deployment.md).
 
+### Web interface password
+
+Declare the account in `config/snowth_my_net.yml` (a name is enough), then restart the web service:
+
+```yaml
+web:
+  auth:
+    users:
+      - name: alice
+```
+
+```bash
+docker compose restart web
+docker compose logs web | grep "no password yet"      # one-time password, to sign in once
+docker compose exec web snowth_my_net web passwd alice   # set your own (asked twice, hidden; no restart)
+```
+
+`web passwd` also resets a forgotten password. Use the real container name with
+`docker exec -it <project>-web-1 snowth_my_net web passwd alice` (note the `snowth_my_net` before
+`web`). For a password managed outside the tool: `snowth_my_net web --hash-password`, then
+`password_file:` / `password_env:`. Details: [docs/en/web.md](docs/en/web.md#login).
+
 ## Terminal interface
 
 `snowth_my_net` (or `snowth_my_net tui`, `docker compose run --rm snowth tui`):
