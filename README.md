@@ -66,13 +66,13 @@ Details, systemd units, hardening and networking: [docs/en/deployment.md](docs/e
 * **Devices**: filterable list, type set by hand marked ✎. A device sheet shows its identity and
   **why it has this type**. The *Settings* tab uses guided lists for the type, the functions
   (`auto` / `force` / `off`) and SNMP tuning, and the source of every value is shown. The sheet
-  also has an *OID tester* (presets suggested for the type, or any OID), *Neighbors*, *Custom*
+  also has an *OID tester* (presets suggested for the type, or any OID), *Ports*, *Neighbors*, *Custom*
   values and *Last collect*.
 * **Nodes**: search a MAC, IP, DNS name, port… Enter explains the position, in the interface's
   language.
 * **Reports**: build a report with a live preview (dataset, columns, filters, sort, format),
   save it, export it.
-* **Links**, **Extensions** (custom collectors), **Runs**.
+* **Links**, **Topology** (the network as a tree), **Extensions** (custom collectors), **Runs**.
 * Collect a device or everything with a live log. Nothing ever shows a secret.
 
 ## Commands

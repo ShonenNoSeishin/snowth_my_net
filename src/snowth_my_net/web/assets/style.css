@@ -408,3 +408,102 @@ section.doc p, section.doc li { line-height: 1.55; margin: 0 0 8px; }
 section.doc ul { padding-left: 20px; margin: 0 0 8px; }
 section.doc code { font-family: var(--mono, ui-monospace, monospace); font-size: .92em;
   background: var(--stripe); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
+
+/* Ports: the device chooser, and a value that is there but unremarkable. */
+td.dim { color: var(--muted); }
+form.chooser { margin: 0 0 14px; flex-wrap: wrap; }
+form.chooser label, form.topobar label, .topobar label { color: var(--muted); font-size: 12.5px; }
+form.chooser .back { margin-left: 8px; font-size: 12.5px; }
+form.chooser select { min-width: 16ch; max-width: 100%; }
+td .note { white-space: nowrap; }
+
+/* Topology: the drawing is the page. Colours follow the theme through the variables above. */
+.topobar form.inline { margin: 0; }
+.topobar select { max-width: 22ch; }
+.topobar input[type=search] { min-width: 24ch; }
+.topo {
+  --band: var(--muted);
+  position: relative; height: clamp(420px, 70vh, 920px); overflow: hidden;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  touch-action: none; outline-offset: -2px;
+}
+.topo:focus-visible { outline: 2px solid var(--accent); }
+.topo svg { width: 100%; height: 100%; display: block; cursor: grab; user-select: none; }
+.topo.dragging svg { cursor: grabbing; }
+.topo .rule { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 2 6; }
+.topo .rule-label { fill: var(--muted); font-size: 12px; }
+.topo .wire { fill: none; stroke: var(--muted); stroke-width: 1.8; opacity: .75; cursor: pointer; }
+.topo .wire:hover { stroke: var(--accent); opacity: 1; stroke-width: 3; }
+.topo .wire.lit { stroke: var(--accent); opacity: 1; stroke-width: 2.6; }
+.topo .wire.dim { opacity: .12; }
+.topo .port {
+  fill: var(--text); font-size: 10.5px; pointer-events: none; opacity: 0;
+  paint-order: stroke; stroke: var(--panel); stroke-width: 3px; stroke-linejoin: round;
+}
+.topo .port.show { opacity: 1; }
+.topo .node { cursor: pointer; outline: none; }
+.topo .node .box { fill: var(--bg); stroke: var(--line); stroke-width: 1.5; }
+.topo .node .band { fill: var(--band); }
+.topo .node .name { fill: var(--text); font-size: 13px; font-weight: 650; pointer-events: none; }
+.topo .node .sub { fill: var(--muted); font-size: 11px; pointer-events: none; }
+.topo .node:hover .box, .topo .node:focus-visible .box { stroke: var(--accent); }
+.topo .node.sel .box { stroke: var(--accent); stroke-width: 3; }
+.topo .node.external .box { stroke-dasharray: 5 4; fill: var(--panel); }
+.topo .node.external .band { fill: var(--line); }
+.topo .node.endpoint { opacity: .85; }
+.topo .node.st-failed .box, .topo .node.st-never .box { stroke: var(--bad); }
+.topo .node.st-partial .box { stroke: var(--warn); }
+.topo .node.dim { opacity: .18; }
+.topo .node.hit .box { stroke: var(--accent); stroke-width: 3; }
+.t-switch { --band: #4c78a8; } .t-router { --band: #f58518; } .t-firewall { --band: #e45756; }
+.t-wireless { --band: #3fa7a1; } .t-server { --band: #54a24b; } .t-printer { --band: #b279a2; }
+.t-facility { --band: #9d7660; } .t-other { --band: #79706e; } .t-none { --band: var(--muted); }
+.topo-tools { position: absolute; top: 10px; left: 10px; display: flex; gap: 6px; }
+.topo-tools button, .topo-panel .close, .topo-panel .go {
+  font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 6px; cursor: pointer;
+}
+.topo-tools button { width: 32px; height: 32px; font-size: 16px; line-height: 1; padding: 0; }
+.topo-tools button:hover, .topo-tools button[aria-pressed=true] {
+  border-color: var(--accent); color: var(--accent);
+}
+.topo-tools button:focus-visible, .topo-panel button:focus-visible, .topo-panel a:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+.topo-legend {
+  position: absolute; left: 10px; bottom: 10px; max-width: calc(100% - 20px); display: flex;
+  flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); padding: 6px 10px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; opacity: .95;
+}
+.topo-legend .key { display: inline-flex; gap: 5px; align-items: center; }
+.topo-legend i { width: 10px; height: 10px; border-radius: 3px; background: var(--band); }
+.topo-legend .external i { background: none; border: 1.5px dashed var(--muted); }
+.topo-panel {
+  position: absolute; top: 10px; right: 10px; width: 300px; max-width: calc(100% - 20px);
+  max-height: calc(100% - 20px); overflow: auto; padding: 12px 14px; font-size: 13px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .18);
+}
+.topo-panel[hidden] { display: none; }
+.topo-panel h2 { margin: 0 24px 2px 0; font-size: 15px; overflow-wrap: anywhere; }
+.topo-panel h3 { margin: 12px 0 4px; font-size: 11.5px; letter-spacing: .04em; color: var(--muted); }
+.topo-panel .sub { margin: 0 0 8px; color: var(--muted); }
+.topo-panel .close { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; padding: 0; }
+.topo-panel dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 0; }
+.topo-panel dt { color: var(--muted); }
+.topo-panel dd { margin: 0; overflow-wrap: anywhere; }
+.topo-panel ul.near { list-style: none; margin: 0; padding: 0; }
+.topo-panel ul.near li { padding: 3px 0; border-bottom: 1px solid var(--line); }
+.topo-panel ul.near li:last-child { border-bottom: 0; }
+.topo-panel .go { border: 0; background: none; color: var(--accent); padding: 0; text-align: left; }
+.topo-panel .go:hover { text-decoration: underline; }
+.topo-panel .via { color: var(--muted); font-size: 12px; }
+.topo-panel .open { margin: 12px 0 0; }
+.topo-panel .open a { color: var(--accent); text-decoration: none; }
+.topo-panel .open a:hover { text-decoration: underline; }
+@media (max-width: 700px) {
+  .topo { height: 62vh; }
+  .topo-panel { top: auto; right: 0; bottom: 0; left: 0; width: auto; max-width: none;
+                max-height: 48%; border-radius: 12px 12px 0 0; }
+  .topo-legend { display: none; }
+}

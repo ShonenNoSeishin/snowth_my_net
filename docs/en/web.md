@@ -21,9 +21,11 @@ SNOWTH_HTTPS_PORT=9443 docker compose up -d
 | Page | Content |
 |---|---|
 | Devices | the inventory, as `devices.csv`: name, IP, vendor, model, OS, type, last collect — plus every address that was polled and did not answer, in red, with the reason |
+| Ports | one device at a time: every port with its state, speed, role, the MACs heard on it and the neighbour announced on it; without a device, the list of devices with how many of their ports are up |
 | Nodes | MAC addresses and where they are, as `nodes.csv`; the name and the description are written straight in the table |
 | SNMP | which addresses are polled, with which credential, and why one does not answer (an account and its password again) |
 | Links | the physical links found through LLDP/CDP, as `links.csv` |
+| Topology | the same links drawn: devices as boxes, links as lines, the best connected device on top |
 | Unreachable | what cannot be polled over SNMP, which neighbours are not polled, which nodes state no name — each with what was tried and why not |
 | Runs | the last 50 runs, their status and how many devices answered |
 | Files | the exported files present in the output directory, to download |
@@ -49,6 +51,29 @@ shows the whole of it. Those three are kept by the browser, per page, and nothin
 reaches the state. The line under the title says when the
 last collect ran and how it went. Clicking a MAC shows the same explanation as
 `snowth_my_net explain`, in the interface's language.
+
+## Ports and topology
+
+**Ports** answers "what is plugged into this port?". Pick a device (or click one in Devices or
+Links) and read its ports; a neighbour that is itself polled is a link to its own ports, so a
+cable can be followed from switch to switch. The pills filter to the ports that are up, that have
+a neighbour or that are uplinks; loopbacks and VLAN interfaces are folded away unless something
+was heard on them. The number of MACs links to the Nodes page filtered on that port. Everything
+comes from what the device itself reported: a neighbour is on a port because the device announced
+it there, never because a MAC table suggests it.
+
+**Topology** draws the Links table. The device with the most links is on top and each row is one
+hop further away; a "top of the drawing" chooser re-roots it, and a link that closes a loop is
+simply drawn. Drag the background to move, scroll or pinch to zoom, click a device for its
+details and its neighbours, hover to light up its links (`⇄` shows every port name). `/` searches
+a device, a port or an address; `0` fits the drawing, `Esc` closes the details. A dashed box is a
+neighbour that is not polled; end hosts (phones, stations) are left out until you ask. Devices
+that announced no link at all are in a block of their own under the drawing, so that a device
+with LLDP switched off is seen as such. Its URL (`#d3`) keeps the selected device. The drawing
+needs JavaScript; without it the Links table says the same thing.
+
+In the terminal, the **Ports** tab of a device sheet is the same table and the **Topology** tab
+is the network as a tree: each device under the one it was reached through, Enter opens it.
 
 ## Inventory, or memory
 

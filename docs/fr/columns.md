@@ -141,6 +141,33 @@ appuyez sur `Enter` pour enregistrer, `Escape` pour remettre ce qui y était. La
 recharge pas et garde votre filtre et votre place. Avec des comptes configurés, il faut être
 connecté. Un nom fait au plus 60 caractères, une description 200.
 
+## Ports
+
+Une ligne par port d'un équipement (`/ports?device=<nom>`). Les boucles locales, interfaces VLAN
+et autres interfaces virtuelles sont repliées, sauf si une MAC ou un voisin y a été vu.
+
+| Colonne | Ce qu'elle contient | D'où ça vient | Vide signifie |
+|---|---|---|---|
+| Port | le nom que l'équipement donne au port | `ifName`, sinon `ifDescr` | jamais vide |
+| Description | ce que quelqu'un a saisi sur l'équipement | `ifAlias` | rien n'a été saisi |
+| État | actif, inactif, ou désactivé quand il a été coupé volontairement | `ifOperStatus`, `ifAdminStatus` | l'équipement ne l'a pas rapporté |
+| Débit | le débit négocié, pour un port actif | `ifHighSpeed` | inactif, ou non rapporté |
+| VLAN | le VLAN non étiqueté du port | PVID | l'équipement n'en a pas indiqué |
+| Rôle du port | `uplink` (avec la preuve au survol, et « supposé » quand ce n'est que le nombre de MAC ou un pont non interrogé) ou accès | la fusion, comme `show uplinks` | aucune MAC ni aucun voisin dessus |
+| Agrégat | le trunk ou port-channel dont il est membre | `ifStackTable` ou la MIB LAG | pas membre |
+| MAC | les MAC que la table de l'équipement porte sur ce port ; mène à la page Nœuds filtrée sur ce port | la table MAC | aucune entendue |
+| Voisin | ce que l'équipement a annoncé dessus ; un équipement interrogé est un lien vers ses ports | LLDP ou CDP | rien d'annoncé |
+| Port distant | le port du voisin | LLDP ou CDP, nommé d'après l'interface du voisin quand il est interrogé | le voisin n'en a annoncé aucun |
+| Protocole | `LLDP`, `CDP`, ou `LLDP+CDP` | la collecte | pas de voisin |
+
+* Un voisin dont le port local n'a pas pu être identifié est listé en dernier, sur une ligne
+  nommée `?`.
+* Le nombre de MAC est ce que la table porte ; la liste Nœuds peut être plus courte, car une MAC
+  entendue sur un uplink est placée là où elle a été entendue au plus près de l'hôte.
+
+Sans équipement, la page liste chaque équipement avec son nombre de ports, de ports actifs, de
+ports avec un voisin et d'uplinks.
+
 ## Liens
 
 Une ligne par lien physique annoncé en LLDP ou en CDP.

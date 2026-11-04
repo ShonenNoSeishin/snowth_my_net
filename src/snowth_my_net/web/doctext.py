@@ -27,6 +27,10 @@ SECTIONS = (
                "adresse."),
         ("li", "Links: the neighbours devices announce to each other (LLDP, CDP).",
                "Liens : les voisins que les équipements s'annoncent entre eux (LLDP, CDP)."),
+        ("li", "Ports: for one device, each port with its state, the MACs heard on it and the "
+               "neighbour it announced there. Topology: the same links, drawn.",
+               "Ports : pour un équipement, chaque port avec son état, les MAC entendues dessus "
+               "et le voisin qu'il y a annoncé. Topologie : les mêmes liens, dessinés."),
         ("p", "The rule behind every table: when the evidence is missing, the cell stays empty. "
               "Nothing is guessed to fill a gap.",
               "La règle derrière chaque tableau : quand la preuve manque, la cellule reste vide. "

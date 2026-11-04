@@ -624,6 +624,166 @@ WEB = {
         "LLDP, CDP, ou les deux quand les deux protocoles décrivent le même lien."),
     "hint.links.seen": ("Last collect where both ends still announced each other.",
                         "Dernière collecte où les deux extrémités s'annonçaient encore."),
+    # ports and topology
+    "tab.ports": ("Ports", "Ports"),
+    "tab.topology": ("Topology", "Topologie"),
+    "col.speed": ("SPEED", "DÉBIT"),
+    "col.lag": ("AGGREGATE", "AGRÉGAT"),
+    "col.macs": ("MACS", "MAC"),
+    "col.neighbor": ("NEIGHBOR", "VOISIN"),
+    "col.ports": ("PORTS", "PORTS"),
+    "col.up": ("UP", "ACTIFS"),
+    "col.neighbors": ("NEIGHBORS", "VOISINS"),
+    "col.uplinks": ("UPLINKS", "UPLINKS"),
+    "port.up": ("up", "actif"),
+    "port.down": ("down", "inactif"),
+    "port.disabled": ("disabled", "désactivé"),
+    "port.uplink": ("uplink", "uplink"),
+    "port.access": ("access", "accès"),
+    "web.ports.title": ("Ports of {device}", "Ports de {device}"),
+    "web.ports.device": ("Device", "Équipement"),
+    "web.ports.choose": ("choose a device…", "choisir un équipement…"),
+    "web.ports.go": ("Show", "Afficher"),
+    "web.ports.all": ("All devices", "Tous les équipements"),
+    "web.ports.unknown": ("No device is called \"{device}\".",
+                          "Aucun équipement ne s'appelle « {device} »."),
+    "web.ports.totals": ("{ports} ports, {up} up, {neighbors} with a neighbor",
+                         "{ports} ports, {up} actifs, {neighbors} avec un voisin"),
+    "web.ports.none": ("This device reported no port.",
+                       "Cet équipement n'a signalé aucun port."),
+    "web.ports.nolink": ("This device announced no neighbor: LLDP or CDP is off, or nothing "
+                         "that speaks it is plugged in.",
+                         "Cet équipement n'a annoncé aucun voisin : LLDP ou CDP est coupé, ou "
+                         "rien qui le parle n'est branché."),
+    "web.ports.unplaced": ("(local port not identified)", "(port local non identifié)"),
+    "web.ports.endpoint": ("end host", "terminal"),
+    "web.ports.not_polled": ("not polled", "non interrogé"),
+    "web.ports.guess": ("guess", "supposé"),
+    "web.ports.view.all": ("Ports ({count})", "Ports ({count})"),
+    "web.ports.view.up": ("Up ({count})", "Actifs ({count})"),
+    "web.ports.view.neighbors": ("With a neighbor ({count})", "Avec un voisin ({count})"),
+    "web.ports.view.uplinks": ("Uplinks ({count})", "Uplinks ({count})"),
+    "web.ports.view.virtual": ("With virtual interfaces (+{count})",
+                               "Avec les interfaces virtuelles (+{count})"),
+    "web.nodes.on_port": ("Only the nodes whose current position is {switch}, port {port}.",
+                          "Seulement les nœuds dont la position actuelle est {switch}, "
+                          "port {port}."),
+    "hint.ports.port": ("The port name the device gives itself (ifName, else ifDescr).",
+                        "Le nom que l'équipement donne au port (ifName, sinon ifDescr)."),
+    "hint.ports.description": ("The description typed on the device (ifAlias).",
+                               "La description saisie sur l'équipement (ifAlias)."),
+    "hint.ports.status": (
+        "up or down as the port reports it (ifOperStatus); disabled when it was shut down on "
+        "purpose (ifAdminStatus).",
+        "actif ou inactif selon le port (ifOperStatus) ; désactivé quand il a été coupé "
+        "volontairement (ifAdminStatus)."),
+    "hint.ports.speed": ("Negotiated speed, shown for a port that is up.",
+                         "Débit négocié, affiché pour un port actif."),
+    "hint.ports.vlan": ("The port's untagged VLAN (PVID), when the device states it.",
+                        "Le VLAN non étiqueté du port (PVID), quand l'équipement l'indique."),
+    "hint.ports.role": (
+        "uplink when the merge treats the port as a link towards other switches, with the proof "
+        "on hover ('guess' means the MAC count or an unpolled bridge, not a polled neighbor); "
+        "access when MACs were heard on it. Empty when nothing was.",
+        "uplink quand la fusion traite le port comme un lien vers d'autres switches, avec la "
+        "preuve au survol (« supposé » : le nombre de MAC ou un pont non interrogé, pas un voisin "
+        "interrogé) ; accès quand des MAC y ont été entendues. Vide sinon."),
+    "hint.ports.lag": ("The aggregate (trunk, port-channel) this port is a member of.",
+                       "L'agrégat (trunk, port-channel) dont ce port est membre."),
+    "hint.ports.macs": (
+        "MACs the device's own table holds on this port. Click to see the nodes placed here; "
+        "that list can be shorter, because a MAC heard on an uplink is placed where it was "
+        "heard closest to the host.",
+        "MAC que la table de l'équipement porte sur ce port. Cliquez pour voir les nœuds placés "
+        "ici ; la liste peut être plus courte, car une MAC entendue sur un uplink est placée là "
+        "où elle a été entendue au plus près de l'hôte."),
+    "hint.ports.neighbor": (
+        "What the device announced on this port through LLDP or CDP. A polled device is a link "
+        "to its own ports; a '+n' folds further neighbors on the same port (a hub, a small "
+        "switch behind a phone).",
+        "Ce que l'équipement a annoncé sur ce port par LLDP ou CDP. Un équipement interrogé est "
+        "un lien vers ses propres ports ; un « +n » replie les autres voisins du même port (un "
+        "hub, un petit switch derrière un téléphone)."),
+    "hint.ports.remote_port": (
+        "The neighbor's port: its name when the neighbor is polled and the port was recognized, "
+        "else as announced.",
+        "Le port du voisin : son nom quand le voisin est interrogé et le port reconnu, sinon tel "
+        "qu'annoncé."),
+    "hint.ports.protocol": ("LLDP, CDP, or both when the two agree.",
+                            "LLDP, CDP, ou les deux quand ils concordent."),
+    "hint.portsindex.name": ("Click a device to see its ports.",
+                             "Cliquez un équipement pour voir ses ports."),
+    "hint.portsindex.ip": ("The management address that was polled.",
+                           "L'adresse de gestion interrogée."),
+    "hint.portsindex.type": ("The label of the device; it never decides what is collected.",
+                             "L'étiquette de l'équipement ; elle ne décide jamais de ce qui "
+                             "est collecté."),
+    "hint.portsindex.ports": ("Physical ports and aggregates; loopbacks, VLAN interfaces and "
+                              "other virtual ones are not counted.",
+                              "Ports physiques et agrégats ; boucles locales, interfaces VLAN "
+                              "et autres interfaces virtuelles ne sont pas comptés."),
+    "hint.portsindex.up": ("Ports reported up.", "Ports signalés actifs."),
+    "hint.portsindex.neighbors": ("Ports on which a neighbor was announced.",
+                                  "Ports sur lesquels un voisin a été annoncé."),
+    "hint.portsindex.uplinks": ("Ports treated as links towards other switches.",
+                                "Ports traités comme des liens vers d'autres switches."),
+    "hint.portsindex.seen": ("Last time the device answered.",
+                             "Dernière réponse de l'équipement."),
+    "tui.topology.hint": (
+        "Enter opens a device. Each device sits under the one it was reached through; a link "
+        "that closes a loop is listed as 'also'. From LLDP and CDP only.",
+        "Entrée ouvre un équipement. Chaque équipement est sous celui par lequel on l'a atteint ; "
+        "un lien qui ferme une boucle est indiqué « aussi ». LLDP et CDP seulement."),
+    "tui.topology.also": ("also {port} ↔ {other} {other_port}",
+                          "aussi {port} ↔ {other} {other_port}"),
+    "tui.topology.isolated": ("No link announced ({count})", "Aucun lien annoncé ({count})"),
+    "tui.topology.count": ("{devices} device(s) · {links} link(s)",
+                           "{devices} équipement(s) · {links} lien(s)"),
+    "tui.ports.none": ("This device reported no port.", "Cet équipement n'a signalé aucun port."),
+    "tui.ports.totals": ("{ports} ports, {up} up, {neighbors} with a neighbor",
+                         "{ports} ports, {up} actifs, {neighbors} avec un voisin"),
+    "web.no_topology": ("No device yet. Run a collect, then reload this page.",
+                        "Aucun équipement pour l'instant. Lancez une collecte puis rechargez."),
+    "web.topology.auto": ("best connected", "le mieux connecté"),
+    "web.topology.root": ("Top of the drawing", "Haut du dessin"),
+    "web.topology.search": ("Find a device, port or address…",
+                            "Trouver un équipement, un port ou une adresse…"),
+    "web.topology.endpoints": ("With end hosts (+{count})", "Avec les terminaux (+{count})"),
+    "web.topology.count": ("{devices} device(s) · {links} link(s)",
+                           "{devices} équipement(s) · {links} lien(s)"),
+    "web.topology.noscript": ("The drawing needs JavaScript. The same links, as a table:",
+                              "Le dessin demande JavaScript. Les mêmes liens, en tableau :"),
+    "web.topology.help": (
+        "Drawn from what the devices announced through LLDP and CDP, nothing else. Drag to move, "
+        "scroll or pinch to zoom, click a device for its details; a dashed box is a neighbor "
+        "that is not polled. Devices below the dotted line announced no link at all.",
+        "Dessiné d'après ce que les équipements ont annoncé par LLDP et CDP, rien d'autre. "
+        "Glissez pour déplacer, molette ou pincement pour zoomer, cliquez un équipement pour son "
+        "détail ; une boîte en pointillés est un voisin non interrogé. Les équipements sous la "
+        "ligne pointillée n'ont annoncé aucun lien."),
+    "web.topology.ip": ("Address", "Adresse"),
+    "web.topology.vendor": ("Vendor", "Constructeur"),
+    "web.topology.model": ("Model", "Modèle"),
+    "web.topology.os": ("System", "Système"),
+    "web.topology.type": ("Type", "Type"),
+    "web.topology.status": ("Last collect", "Dernière collecte"),
+    "web.topology.ports": ("Ports", "Ports"),
+    "web.topology.ports_up": ("{up} up of {ports}", "{up} actifs sur {ports}"),
+    "web.topology.seen": ("Last seen", "Vu le"),
+    "web.topology.links": ("Links", "Liens"),
+    "web.topology.open": ("Open its ports →", "Voir ses ports →"),
+    "web.topology.not_polled": ("Not polled: known only from what its neighbors announced.",
+                                "Non interrogé : connu seulement par ce que ses voisins "
+                                "annoncent."),
+    "web.topology.endpoint": ("End host (phone, station…)", "Terminal (téléphone, poste…)"),
+    "web.topology.close": ("Close", "Fermer"),
+    "web.topology.fit": ("Fit to window", "Ajuster à la fenêtre"),
+    "web.topology.zoom_in": ("Zoom in", "Zoomer"),
+    "web.topology.zoom_out": ("Zoom out", "Dézoomer"),
+    "web.topology.no_match": ("Nothing matches.", "Aucune correspondance."),
+    "web.topology.isolated": ("No link announced", "Aucun lien annoncé"),
+    "web.topology.neighbors": ("Neighbors", "Voisins"),
+    "web.topology.port_names": ("Show every port name", "Afficher tous les noms de port"),
     # runs and files
     "hint.runs.result": (
         "ok, partial (a device or a table failed) or failed. A tolerated device never turns a "

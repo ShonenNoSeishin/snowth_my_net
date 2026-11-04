@@ -203,7 +203,8 @@ and systemd units: [deployment](deployment.md).
 snowth_my_net tui
 ```
 
-Devices, Nodes, Links, Reports, Extensions and Runs are tabs; `?` shows the keys. You can
+Devices, Nodes, Links, Topology, Reports, Extensions and Runs are tabs (and a device sheet
+has a Ports tab); `?` shows the keys. You can
 collect one device or everything with a live log, set a type or a per-device setting by hand,
 test an OID, and build a report. Nothing there ever shows a secret.
 

@@ -131,6 +131,32 @@ The *Manual hostname* and *Description* cells are fields: type, then leave the c
 filter and your place. With accounts configured you must be signed in. A name is at most 60
 characters, a description 200.
 
+## Ports
+
+One row per port of one device (`/ports?device=<name>`). Loopbacks, VLAN interfaces and other
+virtual interfaces are folded away, unless a MAC or a neighbour was seen on them.
+
+| Column | What it holds | Where it comes from | Empty means |
+|---|---|---|---|
+| Port | the name the device gives the port | `ifName`, else `ifDescr` | never empty |
+| Description | what someone typed on the device | `ifAlias` | nothing was typed |
+| Status | up, down, or disabled when it was shut on purpose | `ifOperStatus`, `ifAdminStatus` | the device did not report it |
+| Speed | the negotiated speed, for a port that is up | `ifHighSpeed` | down, or not reported |
+| VLAN | the untagged VLAN of the port | PVID | the device did not state one |
+| Port role | `uplink` (with the proof on hover, and "guess" when it is only the MAC count or an unpolled bridge) or access | the merge, as in `show uplinks` | no MAC and no neighbour on it |
+| Aggregate | the trunk or port-channel it belongs to | `ifStackTable` or the LAG MIB | not a member |
+| MACs | MACs the device's own table holds on it; links to the Nodes page filtered on the port | the MAC table | none heard |
+| Neighbor | what the device announced on it; a polled device is a link to its ports | LLDP or CDP | nothing announced |
+| Remote port | the neighbour's port | LLDP or CDP, named after the neighbour's own interface when it is polled | the neighbour announced none |
+| Protocol | `LLDP`, `CDP`, or `LLDP+CDP` | the collect | no neighbour |
+
+* A neighbour whose local port could not be identified is listed last, on a row named `?`.
+* The count of MACs is what the table holds; the Nodes list can be shorter, because a MAC heard on
+  an uplink is placed where it was heard closest to the host.
+
+Without a device the page lists every device with its number of ports, ports up, ports with a
+neighbour and uplinks.
+
 ## Links
 
 One row per physical link announced by LLDP or CDP.

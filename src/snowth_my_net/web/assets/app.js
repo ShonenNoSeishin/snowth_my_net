@@ -260,3 +260,15 @@
   markTruncated();
   window.addEventListener("resize", markTruncated);
 })();
+
+// The device and root choosers are plain GET forms; choosing is enough to submit them.
+(function () {
+  ["device", "root"].forEach(function (id) {
+    var select = document.getElementById(id);
+    if (select && select.form) {
+      select.addEventListener("change", function () {
+        if (select.value) { select.form.submit(); }
+      });
+    }
+  });
+})();

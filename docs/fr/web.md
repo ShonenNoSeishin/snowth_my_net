@@ -22,9 +22,11 @@ SNOWTH_HTTPS_PORT=9443 docker compose up -d
 | Page | Contenu |
 |---|---|
 | Équipements | l'inventaire, comme `devices.csv` : nom, IP, constructeur, modèle, système, type, dernière collecte — plus toute adresse interrogée qui n'a pas répondu, en rouge, avec la raison |
+| Ports | un équipement à la fois : chaque port avec son état, son débit, son rôle, les MAC entendues dessus et le voisin annoncé dessus ; sans équipement, la liste des équipements avec le nombre de leurs ports actifs |
 | Nœuds | les adresses MAC et où elles se trouvent, comme `nodes.csv` ; le nom et la description s'écrivent directement dans le tableau |
 | SNMP | quelles adresses sont interrogées, avec quel identifiant, et pourquoi l'une ne répond pas (un compte et son mot de passe redemandé) |
 | Liens | les liens physiques trouvés par LLDP/CDP, comme `links.csv` |
+| Topologie | les mêmes liens dessinés : équipements en boîtes, liens en traits, l'équipement le mieux connecté en haut |
 | Inaccessibles | ce qui ne peut pas être interrogé en SNMP, quels voisins ne le sont pas, quels nœuds n'annoncent aucun nom — chacun avec ce qui a été essayé et pourquoi pas |
 | Collectes | les 50 dernières exécutions, leur état et le nombre d'équipements qui ont répondu |
 | Fichiers | les fichiers exportés présents dans le répertoire de sortie, à télécharger |
@@ -43,6 +45,32 @@ survoler une valeur qui a dû être coupée en montre l'entier. Ces trois régla
 le navigateur, par page, et rien n'en atteint l'état. La ligne sous le
 titre indique quand la dernière collecte a eu lieu et comment elle s'est passée. Cliquer sur une
 MAC affiche la même explication que `snowth_my_net explain`, dans la langue de l'interface.
+
+## Ports et topologie
+
+**Ports** répond à « qu'est-ce qui est branché sur ce port ? ». Choisissez un équipement (ou
+cliquez-en un dans Équipements ou Liens) et lisez ses ports ; un voisin qui est lui-même
+interrogé est un lien vers ses propres ports, on peut donc suivre un câble de switch en switch.
+Les pastilles filtrent sur les ports actifs, ceux qui ont un voisin ou les uplinks ; les boucles
+locales et les interfaces VLAN sont repliées sauf si quelque chose y a été entendu. Le nombre de
+MAC mène à la page Nœuds filtrée sur ce port. Tout vient de ce que l'équipement a lui-même
+rapporté : un voisin est sur un port parce que l'équipement l'y a annoncé, jamais parce qu'une
+table MAC le laisse penser.
+
+**Topologie** dessine le tableau Liens. L'équipement qui a le plus de liens est en haut et chaque
+rangée est un saut de plus ; un sélecteur « Haut du dessin » change la racine, et un lien qui
+ferme une boucle est simplement tracé. Glissez le fond pour déplacer, molette ou pincement pour
+zoomer, cliquez un équipement pour son détail et ses voisins, survolez-le pour allumer ses liens
+(`⇄` affiche tous les noms de port). `/` cherche un équipement, un port ou une adresse ; `0`
+ajuste le dessin, `Esc` ferme le détail. Une boîte en pointillés est un voisin non interrogé ;
+les terminaux (téléphones, postes) sont écartés tant qu'on ne les demande pas. Les équipements
+qui n'ont annoncé aucun lien sont dans un bloc à part sous le dessin, pour qu'un équipement dont
+LLDP est coupé se voie comme tel. Son URL (`#d3`) garde l'équipement sélectionné. Le dessin
+demande JavaScript ; sans lui, le tableau Liens dit la même chose.
+
+Dans le terminal, l'onglet **Ports** de la fiche d'un équipement est le même tableau et l'onglet
+**Topologie** montre le réseau en arbre : chaque équipement sous celui par lequel on l'a atteint,
+Entrée l'ouvre.
 
 ## Inventaire, ou mémoire
 

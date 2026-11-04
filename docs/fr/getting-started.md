@@ -209,8 +209,8 @@ Détails et unités systemd : [déploiement](deployment.md).
 snowth_my_net tui
 ```
 
-Équipements, Nœuds, Liens, Rapports, Extensions et Collectes sont des onglets ; `?` affiche les
-touches. Vous pouvez collecter un équipement ou tout le parc avec un journal en direct, régler
+Équipements, Nœuds, Liens, Topologie, Rapports, Extensions et Collectes sont des onglets (et
+la fiche d'un équipement a un onglet Ports) ; `?` affiche les touches. Vous pouvez collecter un équipement ou tout le parc avec un journal en direct, régler
 un type ou un réglage par équipement à la main, tester un OID et construire un rapport. Aucun
 secret n'y est jamais affiché.
 

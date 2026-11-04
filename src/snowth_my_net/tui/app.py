@@ -31,6 +31,7 @@ from textual.widgets import (
     Switch,
     TabbedContent,
     TabPane,
+    Tree,
 )
 from textual.widgets.option_list import Option
 
@@ -573,6 +574,9 @@ class MainScreen(Screen):
             with TabPane(t("tab.links"), id="tab-links"):
                 yield DataTable(id="links", cursor_type="row", zebra_stripes=True)
                 yield Static("", id="links-count", classes="legend")
+            with TabPane(t("tab.topology"), id="tab-topology"):
+                yield Tree(t("tab.topology"), id="topology")
+                yield Static("", id="topology-count", classes="legend")
             with TabPane(t("tab.reports"), id="tab-reports"):
                 yield DataTable(id="reports", cursor_type="row", zebra_stripes=True)
                 yield Static("", id="reports-empty", classes="empty")
@@ -633,6 +637,8 @@ class MainScreen(Screen):
             self.fill_nodes()
         elif active == "tab-links":
             self.fill_links()
+        elif active == "tab-topology":
+            self.fill_topology()
         elif active == "tab-extensions":
             self.fill_extensions()
         elif active == "tab-reports":
@@ -717,12 +723,75 @@ class MainScreen(Screen):
                           self.ctx.local_time_iso(r[5]), key=str(i))
         self.query_one("#links-count", Static).update(self.ctx.t("links.count", count=len(rows)))
 
+    def fill_topology(self) -> None:
+        """Each device under the one it was reached through (see ``merge.tree``)."""
+        from snowth_my_net.merge.tree import Edge, build_tree
+
+        t = self.ctx.t
+        view = self.ensure_view()
+        tree = self.query_one("#topology", Tree)
+        tree.clear()
+        tree.show_root = False
+        polled = set(view.names.values())
+        links = [lk for lk in view.links if not lk.endpoint]
+        edges = [Edge(lk.a_device, lk.a_port, lk.b_device, lk.b_port, lk.protocol)
+                 for lk in links]
+        names = sorted(polled | {n for lk in links for n in (lk.a_device, lk.b_device)},
+                       key=str.casefold)
+        roots, isolated = build_tree(names, edges)
+        types = {row.name: row.device_type for row in self.rows}
+
+        def label(name: str, lead: str = "", proto: str = "") -> Text:
+            text = Text()
+            if lead:
+                text.append(lead + "  ", style="dim")
+            if name in polled:
+                text.append(name, style="bold")
+                if types.get(name):
+                    text.append(f"  {t('type.' + types[name])}", style="dim")
+            else:
+                text.append(name, style="dim italic")
+                text.append(f"  ({t('web.ports.not_polled')})", style="dim")
+            if proto:
+                text.append(f"  {proto}", style="dim")
+            return text
+
+        def add(parent, node, lead: str = "") -> None:
+            branch = parent.add(label(node.name, lead, node.protocol), data=node.name,
+                                expand=True)
+            for extra in node.extras:
+                branch.add_leaf(Text(t("tui.topology.also", port=extra.port, other=extra.other,
+                                       other_port=extra.other_port), style="dim"))
+            for child in node.children:
+                add(branch, child, f"{child.parent_port} ↔ {child.port}")
+
+        for root in roots:
+            add(tree.root, root)
+        if isolated:
+            group = tree.root.add(Text(t("tui.topology.isolated", count=len(isolated)),
+                                       style="yellow"), expand=True)
+            for name in isolated:
+                group.add_leaf(label(name), data=name)
+        self.query_one("#topology-count", Static).update(
+            t("tui.topology.count", devices=len(polled), links=len(links)) + " · "
+            + t("tui.topology.hint"))
+
+    @on(Tree.NodeSelected, "#topology")
+    def topology_selected(self, event: Tree.NodeSelected) -> None:
+        """Enter on a polled device opens it, as on the Devices tab."""
+        row = next((r for r in self.rows if r.name == event.node.data), None)
+        if row is not None:
+            self.app.push_screen(self.app.device_screen(row))
+
     @on(TabbedContent.TabActivated, "#main-tabs")
     def tab_activated(self, event: TabbedContent.TabActivated) -> None:
         if event.pane.id == "tab-nodes":
             self.fill_nodes()
         elif event.pane.id == "tab-links":
             self.fill_links()
+        elif event.pane.id == "tab-topology":
+            self.fill_topology()
+            self.query_one("#topology", Tree).focus()
         elif event.pane.id == "tab-extensions":
             self.fill_extensions()
         elif event.pane.id == "tab-reports":
@@ -988,6 +1057,10 @@ class DeviceScreen(Screen):
                                      disabled=True)
                     yield Static(t("tester.hint"), id="tester-status")
                     yield DataTable(id="results", zebra_stripes=True)
+            with TabPane(t("tab.ports"), id="tab-ports"), Vertical():
+                yield Static("", id="ports-empty", classes="empty")
+                yield Static("", id="ports-totals", classes="legend")
+                yield DataTable(id="ports", zebra_stripes=True)
             with TabPane(t("tab.neighbors"), id="tab-neighbors"), Vertical():
                 yield Static("", id="neighbors-empty", classes="empty")
                 yield DataTable(id="neighbors", zebra_stripes=True)
@@ -1073,6 +1146,7 @@ class DeviceScreen(Screen):
         self.load_form()
         self.load_presets()
         self.load_last()
+        self.load_ports()
         self.load_neighbors()
         self.load_custom()
 
@@ -1248,6 +1322,49 @@ class DeviceScreen(Screen):
             for index, column, value in entry["table"]:
                 table.add_row("", index, column, value or "", self.ctx.local_time(entry["run_at"]))
 
+    def load_ports(self) -> None:
+        """Every port, with what the device announced on it (the same reading as the web page)."""
+        from snowth_my_net.merge.ports import UP, device_ports, speed_text, totals
+        from snowth_my_net.merge.view import build_view
+
+        t = self.ctx.t
+        table = self.query_one("#ports", DataTable)
+        table.clear(columns=True)
+        empty = self.query_one("#ports-empty", Static)
+        summary = self.query_one("#ports-totals", Static)
+        if self.row.device_id is None:
+            empty.update(t("tui.ports.none"))
+            summary.update("")
+            return
+        view = build_view(self.ctx.loaded, self.ctx.repo, self.ctx.clock.now())
+        ports = [p for p in device_ports(view, self.ctx.repo, self.row.device_id)
+                 if not p.virtual]
+        empty.update("" if ports else t("tui.ports.none"))
+        empty.display = not ports
+        count = totals(ports)
+        summary.update(t("tui.ports.totals", ports=count.ports, up=count.up,
+                         neighbors=count.with_neighbor))
+        for label in ("col.port", "col.description", "col.status", "col.speed", "col.vlan",
+                      "col.role", "col.macs", "col.neighbor", "col.remote_port",
+                      "col.protocol"):
+            table.add_column(t(label))
+        tone = {"up": "green", "down": "", "disabled": "dim"}
+        for p in ports:
+            first = p.neighbors[0] if p.neighbors else None
+            neighbor = Text("")
+            if first:
+                neighbor = Text(first.name, style="bold" if first.device_id else "dim")
+                if len(p.neighbors) > 1:
+                    neighbor.append(f" +{len(p.neighbors) - 1}", style="dim")
+            role = Text(t(f"port.{p.role}") if p.role else "",
+                        style="yellow" if p.role == "uplink" else "")
+            table.add_row(Text(p.name, style="bold"), p.descr,
+                          Text(t(f"port.{p.status}") if p.status else "",
+                               style=tone.get(p.status, "")),
+                          speed_text(p.speed_mbps) if p.status == UP else "",
+                          str(p.vlan or ""), role, str(p.macs or ""), neighbor,
+                          first.port if first else "", first.protocol if first else "")
+
     def load_neighbors(self) -> None:
         from snowth_my_net.merge.view import build_view
 
@@ -1280,6 +1397,7 @@ class DeviceScreen(Screen):
     def refresh_all(self) -> None:
         self.effective_type()       # first: it replaces the row (a first collect gives it an id)
         self.load_custom()
+        self.load_ports()
         self.load_neighbors()
         self.load_identity()
         self.load_form()

@@ -50,7 +50,7 @@ from snowth_my_net.names import (
 from snowth_my_net.names import template as names_template
 from snowth_my_net.state.db import StateError, open_db
 from snowth_my_net.state.repo import Repo
-from snowth_my_net.web import doctext, nodeimport, pages, snmp
+from snowth_my_net.web import doctext, nodeimport, pages, portpages, snmp, topology
 from snowth_my_net.web import scan as scanpage
 from snowth_my_net.web.accounts import (
     MIN_LENGTH,
@@ -78,7 +78,8 @@ LANGUAGES = ("en", "fr")
 LANG_COOKIE = "snowth_lang"
 
 log = get_logger("web")
-ASSETS = {"style.css": "text/css; charset=utf-8", "app.js": "text/javascript; charset=utf-8"}
+ASSETS = {"style.css": "text/css; charset=utf-8", "app.js": "text/javascript; charset=utf-8",
+          "topology.js": "text/javascript; charset=utf-8"}
 CONTENT_TYPES = {".csv": "text/csv; charset=utf-8", ".json": "application/json; charset=utf-8",
                  ".html": "text/html; charset=utf-8", ".dot": "text/plain; charset=utf-8",
                  ".mmd": "text/plain; charset=utf-8"}
@@ -96,7 +97,8 @@ class Page:
     label_key: str
 
 
-NAV = (Page("/", "tab.devices"), Page("/nodes", "tab.nodes"), Page("/links", "tab.links"),
+NAV = (Page("/", "tab.devices"), Page("/ports", "tab.ports"), Page("/nodes", "tab.nodes"),
+       Page("/links", "tab.links"), Page("/topology", "tab.topology"),
        Page("/unreachable", "web.tab.unreachable"), Page("/runs", "tab.runs"),
        Page("/files", "web.tab.files"), Page("/docs", "web.tab.docs"))
 SNMP_PAGE = Page("/snmp", "web.snmp.tab")
@@ -338,7 +340,7 @@ class Site:
     # ----------------------------------------------------------------- rendering
 
     def shell(self, active: str, title: str, body: str, subtitle: str = "",
-              logged_in: bool = True, t=None, refresh: int = 0) -> bytes:
+              logged_in: bool = True, t=None, refresh: int = 0, script: str = "") -> bytes:
         t = t or self.t
         pages_shown = (*NAV, SNMP_PAGE) if self.manageable else NAV
         nav = "".join(
@@ -378,6 +380,7 @@ class Site:
 <footer>{esc(t("web.read_only"))} · {esc(t("web.times", zone=local_zone()))}
  · snowth_my_net {esc(__version__)}</footer>
 <script src="/static/app.js"></script>
+{f'<script src="/static/{script}"></script>' if script else ""}
 </body>
 </html>
 """.encode()
@@ -388,7 +391,12 @@ class Site:
                    extra: str = "") -> bytes:
         t = t or self.t
         if not table.rows:
-            return self.shell(active, title, before + f'<p class="empty">{esc(table.empty)}</p>',
+            pills = "".join(
+                '<a class="view{}" href="{}">{}</a>'.format(" on" if on else "", href, esc(label))
+                for label, href, on in table.views)
+            bar = f'<div class="bar"><span class="views">{pills}</span></div>' if pills else ""
+            return self.shell(active, title,
+                              before + bar + f'<p class="empty">{esc(table.empty)}</p>',
                               subtitle, t=t, refresh=refresh)
         keys = table.keys or [None] * len(table.columns)
         classes = [f"{kind} col-{key}" if key else kind
@@ -411,7 +419,9 @@ class Site:
                                  f'{self.name_field(value, t)}</td>')
                     continue
                 text = esc(main)
-                if index == link_column and link_first and main:
+                if getattr(value, "href", "") and main:
+                    text = f'<a href="{esc(value.href)}">{text}</a>'
+                elif index == link_column and link_first and main:
                     text = f'<a href="{link_first}{quote(main, safe=":")}">{text}</a>'
                 if note:
                     text += f' <span class="note">{esc(note)}</span>'
@@ -842,6 +852,96 @@ class Site:
                                                     "field": field}).encode()
         return HTTPStatus.SEE_OTHER, "/node?mac=" + quote(stored, safe=":"), b""
 
+    # ------------------------------------------------------------ ports and topology
+
+    def device_chooser(self, names: list[str], chosen: str, t) -> str:
+        """Jump from one device's ports to another's. A plain GET form: it works without a
+        script, which only submits it as soon as a choice is made."""
+        options = "".join(
+            '<option value="{0}"{1}>{0}</option>'.format(
+                esc(name), " selected" if name == chosen else "") for name in names)
+        blank = ("" if chosen else
+                 f'<option value="" selected>{esc(t("web.ports.choose"))}</option>')
+        back = (f'<a class="back" href="/ports">← {esc(t("web.ports.all"))}</a>'
+                if chosen else "")
+        return (f'<form class="inline chooser" method="get" action="/ports">'
+                f'<label for="device">{esc(t("web.ports.device"))}</label>'
+                f'<select name="device" id="device">{blank}{options}</select>'
+                f'<button type="submit">{esc(t("web.ports.go"))}</button>{back}</form>')
+
+    def ports_page(self, query: dict, t) -> tuple[int, str, bytes]:
+        name = (query.get("device") or [""])[0].strip()
+        show = (query.get("show") or [""])[0]
+        now = self.clock.now()
+        html_type = "text/html; charset=utf-8"
+        status = HTTPStatus.OK
+        with closing(self.state()) as repo:
+            names = portpages.device_names(self.loaded, repo, now)
+            found = portpages.device_table(self.loaded, repo, now, t, name, show) if name else None
+            subtitle = pages.summary(self.loaded, repo, now, t)
+            if found is None:
+                table = portpages.index(self.loaded, repo, now, t)
+                title = t("tab.ports")
+                before = ""
+                if name:
+                    status = HTTPStatus.NOT_FOUND
+                    before = f'<p class="disagree">{esc(t("web.ports.unknown", device=name))}</p>'
+                    name = ""
+            else:
+                table, title = found.table, t("web.ports.title", device=found.name)
+                subtitle, before, name = found.subtitle, "", found.name
+        before += self.device_chooser(names, name, t)
+        return status, html_type, self.table_page(
+            "/ports", title, table, subtitle, t=t, before=before)
+
+    def topology_page(self, query: dict, t) -> bytes:
+        root = (query.get("root") or [""])[0].strip()
+        endpoints = bool(query.get("endpoints"))
+        with closing(self.state()) as repo:
+            top = topology.build(self.loaded, repo, self.clock.now(), t, root, endpoints)
+            subtitle = pages.summary(self.loaded, repo, self.clock.now(), t)
+        if not top.data["nodes"]:
+            return self.shell("/topology", t("tab.topology"),
+                              f'<p class="empty">{esc(t("web.no_topology"))}</p>', subtitle, t=t)
+        auto = (f'<option value=""{"" if root else " selected"}>'
+                f'{esc(t("web.topology.auto"))}</option>')
+        options = auto + "".join(
+            '<option value="{0}"{1}>{0}</option>'.format(
+                esc(name), " selected" if name.casefold() == root.casefold() else "")
+            for _id, name in top.devices)
+        extra = "" if not endpoints else '<input type="hidden" name="endpoints" value="1">'
+        toggle = (
+            f'<a class="view{" on" if endpoints else ""}" '
+            f'href="/topology?{"" if endpoints else "endpoints=1&amp;"}'
+            f'{"root=" + quote(root, safe="") if root else ""}">'
+            f'{esc(t("web.topology.endpoints", count=top.hidden_endpoints))}</a>'
+            if top.hidden_endpoints or endpoints else "")
+        counted = t("web.topology.count", links=top.links, devices=sum(
+            1 for n in top.data["nodes"] if n["kind"] == "device"))
+        bar = (
+            f'<div class="bar topobar">'
+            f'<input type="search" id="topo-q" placeholder="{esc(t("web.topology.search"))}" '
+            f'aria-label="{esc(t("web.topology.search"))}">'
+            f'<form class="inline" method="get" action="/topology">'
+            f'<label for="root">{esc(t("web.topology.root"))}</label>'
+            f'<select name="root" id="root">{options}</select>{extra}'
+            f'<button type="submit">{esc(t("web.ports.go"))}</button></form>'
+            f'<span class="count" id="topo-count">{esc(counted)}</span>'
+            f'<span class="views">{toggle}</span></div>')
+        canvas = (
+            '<div class="topo" id="topo" tabindex="0" role="application" '
+            f'aria-label="{esc(t("tab.topology"))}">'
+            f'<svg id="topo-svg" role="img" aria-label="{esc(t("tab.topology"))}"></svg>'
+            '<div class="topo-tools" id="topo-tools"></div>'
+            '<aside class="topo-panel" id="topo-panel" hidden></aside>'
+            '<div class="topo-legend" id="topo-legend"></div></div>'
+            f'<noscript><p class="empty">{esc(t("web.topology.noscript"))} '
+            f'<a href="/links">{esc(t("tab.links"))}</a></p></noscript>'
+            f'<p class="note">{esc(t("web.topology.help"))}</p>'
+            f'<script type="application/json" id="topo-data">{topology.render_data(top)}</script>')
+        return self.shell("/topology", t("tab.topology"), bar + canvas, subtitle, t=t,
+                          script="topology.js")
+
     # ----------------------------------------------------------------- routing
 
     def respond(self, path: str, query: dict, token: str | None = None,
@@ -903,6 +1003,10 @@ class Site:
                     self.shell("/docs", t("web.tab.docs"), doctext.render(t.lang), t=t))
         if path == "/runs":
             return HTTPStatus.OK, html_type, self.runs_page(t)
+        if path == "/ports":
+            return self.ports_page(query, t)
+        if path == "/topology":
+            return HTTPStatus.OK, html_type, self.topology_page(query, t)
         with closing(self.state()) as repo:
             subtitle = pages.summary(self.loaded, repo, now, t)
             if path == "/":
@@ -913,7 +1017,9 @@ class Site:
                                     live_only=bool(query.get("live")),
                                     disagreeing_only=bool(query.get("disagree")),
                                     local_macs=(query.get("local") or [""])[0],
-                                    churn_only=bool(query.get("churn")))
+                                    churn_only=bool(query.get("churn")),
+                                    switch=(query.get("switch") or [""])[0],
+                                    port=(query.get("port") or [""])[0])
                 title = t("tab.nodes")
             elif path == "/links":
                 table = pages.links(self.loaded, repo, now, t)

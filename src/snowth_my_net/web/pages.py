@@ -10,6 +10,7 @@ import calendar
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import quote
 
 from snowth_my_net.clock import iso_z, local_time
 from snowth_my_net.config.loader import LoadedConfig
@@ -30,8 +31,9 @@ class Cell:
     text: str
     note: str = ""
     title: str = ""                         # shown on hover: the exact stored value
-    tone: str = ""                          # "", "ok", "bad" or "warn": how it reads at a glance
+    tone: str = ""                          # "", "ok", "bad", "warn" or "dim": how it reads
     more: tuple[str, ...] = ()              # folded away behind a "+n": they would widen the row
+    href: str = ""                          # makes the text a link
 
 
 def When(epoch: int | None) -> Cell:
@@ -89,7 +91,8 @@ def devices(loaded: LoadedConfig, repo: Repo, now: int, t) -> Table:
         others = macs.get(device["id"], 0) - (1 if device["base_mac"] else 0)
         status = device["last_collect_status"] or ""
         rows.append([
-            name, split_host_port(device["mgmt_address"])[0], device["vendor"] or "",
+            Cell(name, href="/ports?device=" + quote(name, safe="")),
+            split_host_port(device["mgmt_address"])[0], device["vendor"] or "",
             device["model"] or "",
             f"{device['os_name'] or ''} {device['os_version'] or ''}".strip(),
             t(f"type.{device['device_type']}") if device["device_type"] else "",
@@ -99,7 +102,7 @@ def devices(loaded: LoadedConfig, repo: Repo, now: int, t) -> Table:
             When(device["last_seen"]),
         ])
     rows += _never_collected(loaded, repo, targets, {d["id"] for d in found}, t)
-    rows.sort(key=lambda row: str(row[0]).casefold())
+    rows.sort(key=lambda row: text_of(row[0]).casefold())
     columns = [(t("col.name"), "text"), (t("col.ip"), "text"), (t("col.vendor"), "text"),
                (t("col.model"), "text"), (t("col.os"), "text"), (t("col.type"), "text"),
                (t("col.mac"), "text"), (t("col.status"), "text"), (t("col.seen"), "text")]
@@ -135,7 +138,8 @@ def _devices_and_names(loaded: LoadedConfig, repo: Repo, now: int):
 
 def nodes(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int,
           live_only: bool = False, disagreeing_only: bool = False,
-          local_macs: str = "", churn_only: bool = False) -> Table:
+          local_macs: str = "", churn_only: bool = False, switch: str = "",
+          port: str = "") -> Table:
     """``local_macs``: ``hide`` or ``only`` filters the locally administered MACs; nodes are
     never grouped or merged on a guess, a rotated MAC is just another MAC."""
     view = build_view(loaded, repo, now)
@@ -164,6 +168,11 @@ def nodes(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int,
         address = Cell(current, more=tuple(others))
         dns = view.dns_name(current) if current else ""
         positions = node.positions if cfg.positions == "all" else node.positions[:1]
+        if switch:                       # only where it was heard on that device (and port)
+            positions = [p for p in positions if view.device_name(p.device_id) == switch
+                         and (not port or view.port_name(p.device_id, p.ifindex) == port)]
+            if not positions:
+                continue
         roaming = t("web.positions", count=len(positions)) if len(positions) > 1 else ""
         tone = "warn" if view.hostnames_disagree(node) else ""
         given = Editable(node.mac, view.given_name(node.mac))
@@ -207,6 +216,8 @@ def nodes(loaded: LoadedConfig, repo: Repo, now: int, t, limit: int,
         note = t("web.random.note")
     if churn_only:
         note = t("web.churn.note", days=cfg.ip_churn_days // 86400, count=cfg.ip_churn_min)
+    if switch:
+        note = t("web.nodes.on_port", switch=switch, port=port or "*")
     return Table(columns, rows[:limit], len(rows), t("web.no_nodes"),
                  help_for(t, "nodes", columns, keys,
                           extra=["hint.nodes.live", "hint.nodes.click"]), keys, views, note,
@@ -224,9 +235,14 @@ def vlan_key(value) -> tuple[int, int, str]:
 
 
 def links(loaded: LoadedConfig, repo: Repo, now: int, t) -> Table:
-    rows = build_view(loaded, repo, now).link_rows()
+    view = build_view(loaded, repo, now)
+    rows = view.link_rows()
+    polled = set(view.names.values())
     for row in rows:                       # the same local time as every other page
         row[5] = When(calendar.timegm(time.strptime(row[5], "%Y-%m-%dT%H:%M:%SZ")))
+        for end in (0, 2):                 # a polled device opens its ports
+            if row[end] in polled:
+                row[end] = Cell(row[end], href="/ports?device=" + quote(row[end], safe=""))
     columns = [(t("col.local_device"), "text"), (t("col.local_port"), "text"),
                (t("col.remote_device"), "text"), (t("col.remote_port"), "text"),
                (t("col.protocol"), "text"), (t("col.seen"), "text")]
