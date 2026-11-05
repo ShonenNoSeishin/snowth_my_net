@@ -212,7 +212,7 @@ ligne à nommer, la réponse vient d'autre chose et le nom est écarté.
 
 | Clé | Défaut | Description |
 |---|---|---|
-| `export.files` | tous | `devices`, `nodes`, `links`, `snapshot`, `map`. |
+| `export.files` | tous sauf `ports` | `devices`, `nodes`, `links`, `ports`, `snapshot`, `map`. `ports` (`ports.csv`, une ligne par port) n'est écrit que s'il est listé. |
 | `export.allow_empty` | `[]` | Fichiers CSV autorisés à n'avoir aucune ligne de données. Sinon un CSV vide n'écrase pas le précédent, n'est pas poussé, et la commande sort avec le code 1. |
 | `export.csv.line_terminator` | `crlf` | `crlf` (RFC 4180) ou `lf`. |
 | `export.csv.formula_safe` | `true` | Une cellule de texte qui commence par `=`, `+`, `-` ou `@` (un nom annoncé par un hôte) reçoit une apostrophe devant, pour qu'un tableur ne l'exécute jamais. `false` pour un importeur qui ne la supporte pas. |

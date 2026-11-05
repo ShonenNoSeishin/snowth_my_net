@@ -71,6 +71,26 @@ extrémités sont des équipements interrogés, `Local Device` est celui dont le
 dans l'ordre de tri. `Protocol` vaut `LLDP`, `CDP` ou `LLDP+CDP`. Téléphones et stations sont
 exclus, sauf avec `export.links.include_endpoints`.
 
+## `ports.csv`
+
+Désactivé par défaut : les trois fichiers ci-dessus gardent leur forme, et celui-ci n'est écrit
+que si `ports` figure dans `export.files` (et envoyé que si une cible de push le liste).
+
+```
+Device Name,Port,Description,Status,Speed,VLAN,Aggregate,Role,MACs,Neighbor,"Remote Port",Protocol
+```
+
+Une ligne par port : `(Device Name, Port)` est donc une clé ; `Device Name` est la même clé de
+jointure que dans les autres fichiers. Les lignes sont celles de la page Ports. `Status` vaut
+`up`, `down` ou `disabled`, vide quand l'équipement ne l'a pas indiqué. `Speed` est en Mb/s,
+seulement pour un port actif. `VLAN` est le PVID du port, `Aggregate` le nom de l'agrégat auquel
+il appartient, `Role` vaut `uplink` ou `access` quand la fusion l'a décidé, `MACs` le nombre de
+MAC que la table de l'équipement porte sur ce port. `Neighbor`, `Remote Port` et `Protocol` sont
+ce que l'équipement a annoncé par LLDP ou CDP ; un port à plusieurs voisins porte le premier, et
+`snapshot.json` les a tous. Téléphones et stations sont exclus, sauf avec
+`export.links.include_endpoints`. Les interfaces virtuelles (loopback, interfaces VLAN, tunnels)
+sans voisin ni MAC, et les voisins dont le port local est inconnu, n'ont pas de ligne.
+
 ## `snapshot.json`
 
 Tout ce qui est connu, pour les scripts. `schema` est versionné (`snowth_my_net/snapshot/1`) ; au
@@ -89,8 +109,9 @@ sein d'une version, des champs peuvent seulement être ajoutés.
     "device_type": "…", "type_rule": "…", "type_reason": "…", "detected_type": "…",
     "credential": "v3-main", "driver": "sophos", "first_seen": "…", "last_seen": "…", "last_collect_status": "ok",
     "chassis": [], "addresses": [], "vlans": [],
+    "ports": {"ports": 48, "up": 31, "with_neighbor": 3, "uplinks": 2},
     "interfaces": [{"ifindex": 8, "name": "Gi1/0/1", "role": "access", "role_reasons": [],
-                    "mac_count": 1, "…": "…"}],
+                    "mac_count": 1, "status": "up", "virtual": false, "lag": null, "…": "…"}],
     "neighbors": [{"protocol": "lldp", "local_port": "…", "remote_device": "…",
                    "remote_port": "…", "remote_polled": true, "capabilities": ["bridge"]}],
     "custom": {"collector": {"status": "ok", "values": {}, "table": []}},

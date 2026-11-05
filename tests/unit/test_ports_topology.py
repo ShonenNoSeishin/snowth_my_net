@@ -294,3 +294,65 @@ def test_the_topology_with_no_device_says_so(tmp_path):
     status, _type, body = Site(make_loaded(tmp_path), FixedClock(NOW)).respond("/topology", {})
     assert status == 200
     assert b"No device yet" in body or "Aucun équipement".encode() in body
+
+
+# ------------------------------------------------------------------ ports.csv
+
+
+def exported(tmp_path, only, **cfg):
+    from snowth_my_net.export.run import export
+
+    repo = build_state(tmp_path)
+    loaded = make_loaded(tmp_path)
+    loaded.cfg.export.links.include_endpoints = cfg.get("endpoints", False)
+    result = export(loaded, repo, FixedClock(NOW), only=only)
+    assert not result.failed
+    return loaded, result
+
+
+def test_ports_csv_is_opt_in_and_the_default_files_are_untouched(tmp_path):
+    from snowth_my_net.config.schema import ExportCfg
+
+    assert "ports" not in ExportCfg().files
+    loaded, _ = exported(tmp_path, ["devices", "nodes", "links"])
+    assert not (loaded.paths.output_dir / "ports.csv").exists()
+
+
+def test_ports_csv_has_a_row_per_port_with_its_infrastructure_neighbour(tmp_path):
+    import csv
+
+    loaded, _ = exported(tmp_path, ["ports"])
+    text = (loaded.paths.output_dir / "ports.csv").read_text(encoding="utf-8")
+    assert text.splitlines()[0] == (
+        'Device Name,Port,Description,Status,Speed,VLAN,Aggregate,Role,MACs,Neighbor,'
+        '"Remote Port",Protocol')
+    rows = [r for r in csv.DictReader(text.splitlines()) if r["Device Name"] == "sw1"]
+    by_port = {r["Port"]: r for r in rows}
+    up = by_port["Gi1/0/24"]
+    assert (up["Status"], up["Speed"], up["Role"]) == ("up", "1000", "uplink")
+    assert (up["Neighbor"], up["Remote Port"], up["Protocol"]) == ("sw2", "Gi0/5", "LLDP+CDP")
+    assert by_port["Gi1/0/2"]["Neighbor"] == ""              # a phone is not infrastructure
+    assert by_port["Gi1/0/1"]["Description"] == "users"
+    assert all(r["Port"] != "?" for r in rows)               # no row for an unplaced neighbour
+    assert len({(r["Device Name"], r["Port"]) for r in csv.DictReader(text.splitlines())}) == len(
+        list(csv.DictReader(text.splitlines())))             # (device, port) is a key
+
+
+def test_ports_csv_shows_the_phone_when_endpoints_are_asked_for(tmp_path):
+    import csv
+
+    loaded, _ = exported(tmp_path, ["ports"], endpoints=True)
+    text = (loaded.paths.output_dir / "ports.csv").read_text(encoding="utf-8")
+    rows = {r["Port"]: r for r in csv.DictReader(text.splitlines())
+            if r["Device Name"] == "sw1"}
+    assert rows["Gi1/0/2"]["Neighbor"] != ""
+
+
+def test_the_snapshot_says_what_a_port_is_without_changing_the_rest(tmp_path):
+    loaded, _ = exported(tmp_path, ["snapshot"])
+    data = json.loads((loaded.paths.output_dir / "snapshot.json").read_text(encoding="utf-8"))
+    assert data["schema"] == "snowth_my_net/snapshot/1"
+    sw1 = next(d for d in data["devices"] if d["name"] == "sw1")
+    assert sw1["ports"] == {"ports": 3, "up": 1, "with_neighbor": 2, "uplinks": 1}
+    gi24 = next(i for i in sw1["interfaces"] if i["name"] == "Gi1/0/24")
+    assert gi24["status"] == "up" and gi24["virtual"] is False and gi24["role"] == "uplink"

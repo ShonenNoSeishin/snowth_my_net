@@ -208,7 +208,7 @@ being named, the answer came from something else and the name is dropped.
 
 | Key | Default | Description |
 |---|---|---|
-| `export.files` | all | `devices`, `nodes`, `links`, `snapshot`, `map`. |
+| `export.files` | all but `ports` | `devices`, `nodes`, `links`, `ports`, `snapshot`, `map`. `ports` (`ports.csv`, one row per port) is written only when listed. |
 | `export.allow_empty` | `[]` | CSV files allowed to have no data row. Otherwise an empty CSV is neither written over the previous one nor pushed, and the command exits 1. |
 | `export.csv.line_terminator` | `crlf` | `crlf` (RFC 4180) or `lf`. |
 | `export.csv.formula_safe` | `true` | A text cell starting with `=`, `+`, `-` or `@` (a name a host announced) gets a leading apostrophe, so a spreadsheet never runs it. `false` for an importer that cannot take it. |

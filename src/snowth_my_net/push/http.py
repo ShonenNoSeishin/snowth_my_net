@@ -34,7 +34,7 @@ from snowth_my_net.logs import get_logger
 log = get_logger("push")
 
 FILE_NAMES = {"devices": "devices.csv", "nodes": "nodes.csv", "links": "links.csv",
-              "snapshot": "snapshot.json"}
+              "ports": "ports.csv", "snapshot": "snapshot.json"}
 CONTENT_TYPES = {".csv": "text/csv", ".json": "application/json", ".md": "text/markdown",
                  ".html": "text/html"}
 RETRY_STATUSES = frozenset({429, 502, 503, 504})

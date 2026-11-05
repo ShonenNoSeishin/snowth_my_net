@@ -12,6 +12,7 @@ importer without importing the past. The column-by-column reference is in
 | `devices.csv` | one row per polled device | an importer, as assets |
 | `nodes.csv` | one row per MAC address and position | an importer, as hosts and where they are |
 | `links.csv` | one row per physical link | a mapping tool |
+| `ports.csv` | one row per port, with its neighbour (off by default: list `ports` in `export.files`) | an importer that models ports |
 | `snapshot.json` | everything, with a versioned schema and the reasons behind each value | scripts |
 | `map.html`, `map.dot`, `map.mmd` | an interactive page that works offline, Graphviz, Mermaid | people |
 

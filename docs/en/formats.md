@@ -67,6 +67,26 @@ One physical link per line, even when seen from both ends and by both protocols.
 are polled devices, `Local Device` is the one whose name sorts first. `Protocol` is `LLDP`, `CDP`
 or `LLDP+CDP`. Phones and stations are excluded unless `export.links.include_endpoints`.
 
+## `ports.csv`
+
+Off by default: the three files above keep their shape, and this one is written only when
+`ports` is in `export.files` (and sent only when a push target lists it).
+
+```
+Device Name,Port,Description,Status,Speed,VLAN,Aggregate,Role,MACs,Neighbor,"Remote Port",Protocol
+```
+
+One row per port, so `(Device Name, Port)` is a key; `Device Name` is the same join key as in the
+other files. The rows are those of the Ports page. `Status` is `up`, `down` or `disabled`, empty
+when the device did not report it. `Speed` is in Mb/s, only for a port that is up. `VLAN` is the
+port's PVID, `Aggregate` the name of the link aggregation it belongs to, `Role` is `uplink` or
+`access` when the merge decided it, `MACs` the number of MACs the device's own table holds on the
+port. `Neighbor`, `Remote Port` and `Protocol` are what the device announced by LLDP or CDP; a
+port with several neighbours carries the first, and `snapshot.json` has them all. Phones and
+stations are excluded unless `export.links.include_endpoints`. Virtual interfaces (loopbacks,
+VLAN interfaces, tunnels) without a neighbour or a MAC, and neighbours whose local port is not
+known, have no row.
+
 ## `snapshot.json`
 
 Everything known, for scripts. `schema` is versioned (`snowth_my_net/snapshot/1`); fields are only
@@ -85,8 +105,9 @@ added within a version.
     "device_type": "…", "type_rule": "…", "type_reason": "…", "detected_type": "…",
     "credential": "v3-main", "driver": "sophos", "first_seen": "…", "last_seen": "…", "last_collect_status": "ok",
     "chassis": [], "addresses": [], "vlans": [],
+    "ports": {"ports": 48, "up": 31, "with_neighbor": 3, "uplinks": 2},
     "interfaces": [{"ifindex": 8, "name": "Gi1/0/1", "role": "access", "role_reasons": [],
-                    "mac_count": 1, "…": "…"}],
+                    "mac_count": 1, "status": "up", "virtual": false, "lag": null, "…": "…"}],
     "neighbors": [{"protocol": "lldp", "local_port": "…", "remote_device": "…",
                    "remote_port": "…", "remote_polled": true, "capabilities": ["bridge"]}],
     "custom": {"collector": {"status": "ok", "values": {}, "table": []}},

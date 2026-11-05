@@ -13,6 +13,7 @@ configuration](config.md).
 | `devices.csv` | une ligne par équipement interrogé | un importateur, comme actifs |
 | `nodes.csv` | une ligne par adresse MAC et par position | un importateur, comme hôtes et leur emplacement |
 | `links.csv` | une ligne par lien physique | un outil de cartographie |
+| `ports.csv` | une ligne par port, avec son voisin (désactivé par défaut : listez `ports` dans `export.files`) | un importeur qui modélise les ports |
 | `snapshot.json` | tout, avec un schéma versionné et les raisons derrière chaque valeur | des scripts |
 | `map.html`, `map.dot`, `map.mmd` | une page interactive qui marche hors ligne, Graphviz, Mermaid | des personnes |
 

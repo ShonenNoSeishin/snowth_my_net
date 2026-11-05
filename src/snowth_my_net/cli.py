@@ -1645,7 +1645,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("push", parents=[common], help="send exported files to the push targets")
     p.add_argument("--target", help="only this target")
-    p.add_argument("--file", action="append", choices=["devices", "nodes", "links", "snapshot"],
+    p.add_argument("--file", action="append",
+                   choices=["devices", "nodes", "links", "ports", "snapshot"],
                    help="only this file (repeatable)")
     p.add_argument("--wait", action="store_true", default=None,
                    help="wait for 202 jobs to finish (poll:)")

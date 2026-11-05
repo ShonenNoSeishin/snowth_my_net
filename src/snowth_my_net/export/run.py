@@ -20,6 +20,7 @@ from snowth_my_net.export.csvout import (
     render_csv,
 )
 from snowth_my_net.export.naming import NameInput, assign_names
+from snowth_my_net.export.portscsv import PORTS_HEADER, port_rows
 from snowth_my_net.logs import get_logger
 from snowth_my_net.snmp.target import split_host_port
 from snowth_my_net.state.repo import DAY, Repo
@@ -27,7 +28,7 @@ from snowth_my_net.state.repo import DAY, Repo
 log = get_logger("export")
 
 # Outputs implemented so far; the others arrive with their phase.
-IMPLEMENTED = {"devices", "nodes", "links", "snapshot", "map"}
+IMPLEMENTED = {"devices", "nodes", "links", "ports", "snapshot", "map"}
 
 
 @dataclass
@@ -158,6 +159,15 @@ def links_csv(loaded: LoadedConfig, views: ViewCache) -> bytes:
                       cfg.export.csv.formula_safe)
 
 
+def ports_csv(loaded: LoadedConfig, repo: Repo, views: ViewCache, devices: list) -> bytes:
+    cfg = loaded.cfg
+    rows = port_rows(views.get(), repo, devices, cfg.export.links.include_endpoints)
+    if not rows and "ports" not in cfg.export.allow_empty:
+        raise EmptyExport("ports.csv would have no data row")
+    return render_csv(PORTS_HEADER, rows, cfg.export.csv.line_terminator,
+                      cfg.export.csv.formula_safe)
+
+
 def export(loaded: LoadedConfig, repo: Repo, clock: Clock,
            only: list[str] | None = None, ptr_lookup=None) -> ExportResult:
     from snowth_my_net.export import maps
@@ -186,6 +196,8 @@ def export(loaded: LoadedConfig, repo: Repo, clock: Clock,
                                 nodes_csv(loaded, repo, now, ptr_lookup, views)))
             elif name == "links":
                 outputs.append((out_dir / "links.csv", links_csv(loaded, views)))
+            elif name == "ports":
+                outputs.append((out_dir / "ports.csv", ports_csv(loaded, repo, views, devices)))
             elif name == "snapshot":
                 snapshot = build_snapshot(loaded, repo, views.get(), devices, now)
                 outputs.append((out_dir / "snapshot.json", (json.dumps(

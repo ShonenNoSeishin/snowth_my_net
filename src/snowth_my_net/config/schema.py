@@ -421,7 +421,7 @@ class MapCfg:
     endpoints: Literal["none", "grouped", "all"] = "none"
 
 
-ExportFile = Literal["devices", "nodes", "links", "snapshot", "map"]
+ExportFile = Literal["devices", "nodes", "links", "ports", "snapshot", "map"]
 
 
 @dataclass
@@ -429,7 +429,7 @@ class ExportCfg:
     files: list[ExportFile] = field(
         default_factory=lambda: ["devices", "nodes", "links", "snapshot", "map"]
     )
-    allow_empty: list[Literal["devices", "nodes", "links"]] = field(default_factory=list)
+    allow_empty: list[Literal["devices", "nodes", "links", "ports"]] = field(default_factory=list)
     csv: CsvCfg = field(default_factory=CsvCfg)
     devices: DevicesExportCfg = field(default_factory=DevicesExportCfg)
     nodes: NodesExportCfg = field(default_factory=NodesExportCfg)
@@ -498,7 +498,7 @@ class PollCfg:
         return [] if "{id}" in self.url else ["poll.url must contain the {id} placeholder"]
 
 
-PushFile = Literal["devices", "nodes", "links", "snapshot"]
+PushFile = Literal["devices", "nodes", "links", "ports", "snapshot"]
 
 
 @dataclass

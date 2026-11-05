@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 
 from snowth_my_net import __version__
@@ -14,6 +15,8 @@ SCHEMA = "snowth_my_net/snapshot/1"
 
 
 def build_snapshot(loaded, repo, view, devices: list[dict], now: int) -> dict:
+    from snowth_my_net.merge.ports import device_ports, totals
+
     conn = repo.conn
     ids = [d["id"] for d in devices]
     by_device: dict[str, dict[int, list]] = {k: {i: [] for i in ids} for k in (
@@ -48,6 +51,8 @@ def build_snapshot(loaded, repo, view, devices: list[dict], now: int) -> dict:
     out_devices, errors = [], []
     for d in sorted(devices, key=lambda x: view.names[x["id"]].casefold()):
         name = view.names[d["id"]]
+        shown = device_ports(view, repo, d["id"])
+        by_ifindex = {p.ifindex: p for p in shown if p.ifindex is not None}
         interfaces = []
         for itf in by_device["interfaces"][d["id"]]:
             role = ctx.role(d["id"], itf["ifindex"]) if d["id"] in ctx.inputs.devices else None
@@ -58,7 +63,10 @@ def build_snapshot(loaded, repo, view, devices: list[dict], now: int) -> dict:
                 "mac": itf["phys_mac"], "pvid": itf["pvid"], "lag_ifindex": itf["lag_ifindex"],
                 "role": role.role if role else None,
                 "role_reasons": [code for code, _d in role.reasons] if role else [],
-                "mac_count": ctx.mac_count.get((d["id"], itf["ifindex"]), 0)})
+                "mac_count": ctx.mac_count.get((d["id"], itf["ifindex"]), 0),
+                "status": by_ifindex[itf["ifindex"]].status or None,
+                "virtual": by_ifindex[itf["ifindex"]].virtual,
+                "lag": by_ifindex[itf["ifindex"]].lag or None})
         functions = {o["function"]: {"status": o["status"], "rows": o["rows"],
                                      "duration_ms": o["duration_ms"], "detail": o["detail"]}
                      for o in by_device["outcomes"][d["id"]]}
@@ -82,6 +90,7 @@ def build_snapshot(loaded, repo, view, devices: list[dict], now: int) -> dict:
             "addresses": [{"address": a["address"], "ifindex": a["ifindex"],
                            "prefix_len": a["prefix_len"]} for a in by_device["addresses"][d["id"]]],
             "interfaces": interfaces,
+            "ports": dataclasses.asdict(totals(shown)),
             "vlans": [{"id": v["vlan_id"], "name": v["name"]} for v in by_device["vlans"][d["id"]]],
             "neighbors": neighbors[d["id"]],
             "custom": {name: {"status": entry["status"], "run_at": iso_z(entry["run_at"]),
