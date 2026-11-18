@@ -366,6 +366,7 @@ thead th { box-shadow: 0 1px 0 var(--line); border-bottom: 0; }
 
 /* The table scrolls inside its card and keeps its column heads in view. */
 .wrap { max-height: calc(100vh - 170px); overflow: auto; border-radius: 8px; }
+.wrap.short { max-height: 55vh; }      /* two lists on one page: each scrolls in its own card */
 thead th { position: sticky; top: 0; z-index: 1; background: var(--panel); }
 th button { font-size: 12px; letter-spacing: 0; font-weight: 600; }
 
@@ -387,7 +388,7 @@ main { padding-top: 26px; }
   header { gap: 8px 14px; padding: 8px 14px; }
   .brand::before { display: none; }
   main { padding: 18px 14px 32px; }
-  .wrap { max-height: none; }
+  .wrap, .wrap.short { max-height: none; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
 

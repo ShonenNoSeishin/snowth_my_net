@@ -689,7 +689,7 @@ class Site:
                 f'<input type="hidden" name="do" value="remove">'
                 f'<input type="hidden" name="address" value="{esc(row.host)}">'
                 f'<button type="submit">{esc(t("web.snmp.remove"))}</button></form></td></tr>')
-        body.append(f'<div class="wrap"><table class="plain"><thead><tr>{head}</tr></thead>'
+        body.append(f'<div class="wrap short"><table class="plain"><thead><tr>{head}</tr></thead>'
                     f'<tbody>{"".join(lines)}</tbody></table></div>')
         body.append(
             f'<details class="danger"><summary>{esc(t("web.snmp.forget"))}</summary>'
@@ -730,7 +730,8 @@ class Site:
             f"<tr><td>{esc(str(e.get('address', '')))}</td><td>{esc(str(e.get('name', '')))}</td>"
             f'<td class="text bad">{esc(", ".join(map(str, e.get("answers") or [])))}</td></tr>'
             for e in exposed)
-        parts.append(f"<table><thead><tr>{head}</tr></thead><tbody>{lines}</tbody></table>")
+        parts.append(f'<div class="wrap short"><table class="plain"><thead><tr>{head}</tr>'
+                     f"</thead><tbody>{lines}</tbody></table></div>")
         return "".join(parts)
 
     def confirm(self, user: str, password: str, token: str | None, address: str, t=None
