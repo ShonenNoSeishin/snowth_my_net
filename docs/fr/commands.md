@@ -73,6 +73,7 @@ quand la commande a été interrompue. Une commande qui écrit attend le verrou 
 | Commande | Ce qu'elle fait | Options |
 |---|---|---|
 | `probe` | teste des OID à la main sur un équipement : des préréglages, ou des OID numériques | `--get`, `--walk`, `--limit`, `--all` |
+| `audit` | liste les équipements interrogés qui répondent à une communauté SNMP connue de tous (`general.weak_communities`, `public` par défaut), pour que le gestionnaire la change ; le résultat s'affiche sur la page SNMP ; code 1 si certains répondent | aucune |
 | `scan` | scanne des adresses avec `nmap` et garde les ports ouverts de chacune ; un réseau d'au plus 1024 hôtes est accepté | `--profile` (`quick`, `common`, `all`), des adresses ou des réseaux |
 | `dns check` | demande une résolution inverse aux résolveurs configurés et dit lequel a répondu | des adresses |
 | `dns probe` | demande son nom à un hôte, en NetBIOS, LLMNR et mDNS, et montre chaque réponse | des adresses |

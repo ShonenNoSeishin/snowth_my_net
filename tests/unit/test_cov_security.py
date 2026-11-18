@@ -291,3 +291,39 @@ def test_a_credential_pinned_by_hand_lifts_the_neighbour_rule_for_an_unscoped_on
     assert no_candidate_message([anywhere, lan], True) == NEIGHBOR_ONLY_SCOPED
     assert no_candidate_message([lan], True) == NO_CREDENTIAL
     assert no_candidate_message([anywhere, lan], False) == NO_CREDENTIAL
+
+
+def test_the_audit_names_the_devices_that_answer_to_a_well_known_community(tmp_path):
+    import asyncio
+
+    from snowth_my_net.snmp import audit, credentials
+    from snowth_my_net.snmp.client import SnmpParams
+    from snowth_my_net.snmp.target import Target
+
+    asked = []
+
+    async def fake_probe(pool, target, candidates, params, probe_timeout, oids):
+        word = candidates[0].community.reveal()
+        asked.append((target.host, word))
+        result = credentials.ProbeResult()
+        if target.host == "192.0.2.1" and word == "public":
+            result.credential = candidates[0]
+        return result
+
+    original = audit.probe
+    audit.probe = fake_probe
+    try:
+        found = asyncio.run(audit.audit(
+            [Target("192.0.2.1"), Target("192.0.2.2")], ["public", "private"],
+            SnmpParams(), 1.0, ()))
+    finally:
+        audit.probe = original
+    assert {(f.address, f.answers) for f in found} == {("192.0.2.1", ("public",)),
+                                                       ("192.0.2.2", ())}
+    assert len(asked) == 4                       # every address asked with every community
+    path = tmp_path / "weak.json"
+    assert audit.load(path) is None
+    audit.save(path, {"checked": 2, "exposed": [{"address": "192.0.2.1", "answers": ["public"]}]})
+    assert audit.load(path)["exposed"][0]["address"] == "192.0.2.1"
+    path.write_text("[1]")
+    assert audit.load(path) is None

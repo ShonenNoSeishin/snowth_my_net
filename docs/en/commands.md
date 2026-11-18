@@ -72,6 +72,7 @@ writes waits for the state lock, up to `general.lock_wait`.
 | Command | What it does | Options |
 |---|---|---|
 | `probe` | test OIDs by hand on one device: presets, or numeric OIDs | `--get`, `--walk`, `--limit`, `--all` |
+| `audit` | list the polled devices that answer to a well-known SNMP community (`general.weak_communities`, `public` by default), so the manager can change it; the result is shown on the SNMP page; exit 1 when some answer | none |
 | `scan` | scan addresses with `nmap` and keep the open ports of each; a network of at most 1024 hosts is accepted | `--profile` (`quick`, `common`, `all`), addresses or networks |
 | `dns check` | ask the configured resolvers for a reverse lookup and say which one answered | addresses |
 | `dns probe` | ask a host its own name, over NetBIOS, LLMNR and mDNS, and show each answer | addresses |

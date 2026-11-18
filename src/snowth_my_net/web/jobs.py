@@ -23,7 +23,7 @@ from snowth_my_net.logs import get_logger
 log = get_logger("web")
 
 ACTIONS = ("collect", "discover", "export", "push", "names")
-JOBS = (*ACTIONS, "scan")                        # a scan is asked on a page, not by a button
+JOBS = (*ACTIONS, "scan", "audit")       # asked on a page (a scan, the SNMP audit), not by a button
 GRACE = 30                                       # seconds added to the run timeout, to kill it
 
 
@@ -133,6 +133,9 @@ def _summary(what: str, done: subprocess.CompletedProcess) -> str:
         hosts = payload.get("hosts") or []
         return (f"{payload.get('open_ports', '?')} open port(s) on "
                 f"{hosts[0]['address'] if len(hosts) == 1 else str(len(hosts)) + ' addresses'}")
+    if what == "audit":
+        return (f"{len(payload.get('exposed') or [])}/{payload.get('checked', '?')} "
+                "device(s) answer to a well-known community")
     if what == "export":
         written = payload.get("written") or []
         return f"{len(written)} file(s) written"

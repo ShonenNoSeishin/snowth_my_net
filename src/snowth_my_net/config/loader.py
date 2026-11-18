@@ -41,6 +41,10 @@ class Paths:
         return self.state_dir / "state.lock"
 
     @property
+    def audit_file(self) -> Path:
+        return self.state_dir / "weak_communities.json"
+
+    @property
     def oui_file(self) -> Path:
         return self.state_dir / "oui.tsv.gz"
 

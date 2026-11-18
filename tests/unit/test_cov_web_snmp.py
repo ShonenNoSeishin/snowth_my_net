@@ -374,3 +374,34 @@ def test_the_page_does_not_write_the_state_while_a_collect_holds_the_lock(tmp_pa
     finally:
         repo.conn.close()
 
+
+
+def test_the_audit_is_started_from_the_page_and_its_findings_are_listed(tmp_path):
+    from snowth_my_net.snmp import audit
+
+    site = managed(tmp_path)
+    site.jobs = FakeRunner()
+    first = site.snmp_page(Translator("en")).decode()
+    assert "Well-known communities" in first and "No audit yet." in first
+    status, _type, body = site.manage_snmp({"do": ["audit"]}, "alice", Translator("en"))
+    assert status == HTTPStatus.OK and "Audit started" in body.decode()
+    wait_for(lambda: site.jobs.last is not None)
+    assert site.jobs.last.what == "audit"
+    audit.save(site.loaded.paths.audit_file, {
+        "checked": 5, "communities": ["public"], "at": NOW,
+        "exposed": [{"address": "192.0.2.9", "name": "sw<9>", "answers": ["public"]}]})
+    page = site.snmp_page(Translator("en")).decode()
+    assert "1 of 5 device(s) answer to public" in page
+    assert "192.0.2.9" in page and "sw&lt;9&gt;" in page      # escaped, never raw
+    audit.save(site.loaded.paths.audit_file,
+               {"checked": 5, "communities": ["public"], "at": NOW, "exposed": []})
+    assert "None answers" in site.snmp_page(Translator("en")).decode()
+
+
+def test_the_audit_waits_for_whatever_is_running(tmp_path):
+    site = managed(tmp_path)
+    site.jobs = FakeRunner(seconds=0.4)
+    site.jobs.start("collect", "alice")
+    status, _type, body = site.manage_snmp({"do": ["audit"]}, "alice", Translator("en"))
+    assert status == HTTPStatus.BAD_REQUEST and "already running" in body.decode()
+    wait_for(lambda: site.jobs.current is None)

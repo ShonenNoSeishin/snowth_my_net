@@ -910,6 +910,27 @@ WEB = {
     "web.do.push": ("Push", "Envoyer"),
     "web.do.names": ("Ask names", "Demander les noms"),
     "web.do.scan": ("Port scan", "Scan de ports"),
+    "web.do.audit": ("SNMP audit", "Audit SNMP"),
+    "web.snmp.audit": ("Well-known communities", "Communautés connues"),
+    "web.snmp.audit_why": (
+        "Asks every polled address, one by one, whether it answers to a community everybody "
+        "knows ({words}), whatever credential collects it. A device that answers is open to "
+        "anyone on the network: ask its manager to change the community. These words are only "
+        "tried here, never used to collect.",
+        "Demande à chaque adresse interrogée, une par une, si elle répond à une communauté que "
+        "tout le monde connaît ({words}), quel que soit l'identifiant qui la collecte. Un "
+        "équipement qui répond est ouvert à tout le réseau : demandez à son gestionnaire de "
+        "changer la communauté. Ces mots ne sont essayés qu'ici, jamais utilisés pour collecter."),
+    "web.snmp.audit_do": ("Run the audit", "Lancer l'audit"),
+    "web.snmp.auditing": ("Audit started: reload this page in a moment.",
+                          "Audit lancé : rechargez cette page dans un instant."),
+    "web.snmp.audit_none": ("No audit yet.", "Pas encore d'audit."),
+    "web.snmp.audit_last": (
+        "Last audit {when}: {exposed} of {checked} device(s) answer to {words}.",
+        "Dernier audit {when} : {exposed} équipement(s) sur {checked} répondent à {words}."),
+    "web.snmp.audit_clean": ("None answers: nothing to change.",
+                             "Aucun ne répond : rien à changer."),
+    "web.snmp.audit_answers": ("Answers to", "Répond à"),
     "web.scan.title": ("Scan {address}", "Scan de {address}"),
     "web.scan.title.none": ("Port scan", "Scan de ports"),
     "web.scan.address": ("IP address to scan", "Adresse IP à scanner"),

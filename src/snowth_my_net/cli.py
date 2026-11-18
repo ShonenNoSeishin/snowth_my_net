@@ -16,6 +16,7 @@ import sys
 import tempfile
 from importlib import resources
 from pathlib import Path
+from types import SimpleNamespace
 
 from snowth_my_net import __version__
 from snowth_my_net.clock import Clock, iso_z
@@ -1431,6 +1432,55 @@ def _port_line(ports: list[dict]) -> str:
             if p["product"] or p["version"] else "") for p in ports)
 
 
+def cmd_audit(args: argparse.Namespace) -> int:
+    """List the devices that still answer to a well-known SNMP community ("public").
+
+    Asked of every polled address that ``discovery`` allows, whatever credential collects it:
+    the point is to tell the manager which devices to change. The communities are
+    ``general.weak_communities``; they are never used to collect. Exit 1 when some answer.
+    """
+    from snowth_my_net.collect.engine import snmp_params
+    from snowth_my_net.collect.tables.system import IDENTITY_OIDS
+    from snowth_my_net.enrich import scan
+    from snowth_my_net.snmp import audit
+
+    loaded = load(args)
+    communities = list(dict.fromkeys(c.strip() for c in loaded.cfg.general.weak_communities))
+    if not communities:
+        raise ManualError("general.weak_communities is empty: nothing to try")
+    repo = _state_readonly(loaded)
+    rows = [r for r in (repo.targets() if repo else []) if not r["is_alias"]]
+    names = {d["id"]: d["sys_name"] or "" for d in repo.devices()} if repo else {}
+    if repo:
+        repo.conn.close()
+    port = loaded.cfg.general.snmp.port
+    wanted: dict[str, tuple] = {}
+    for r in rows:
+        target = parse_target(r["address"], port)
+        wanted.setdefault(str(target), (target, names.get(r["device_id"], "")))
+    allowed, _skipped = scan.in_scope(loaded.cfg, [t.host for t, _n in wanted.values()])
+    chosen = [(t, n) for t, n in wanted.values() if t.host in set(allowed)]
+    snmp = loaded.cfg.general.snmp
+    params = snmp_params(SimpleNamespace(snmp=snmp))   # type: ignore[arg-type]
+    found = asyncio.run(audit.audit([t for t, _n in chosen], communities, params,
+                                    snmp.probe_timeout, IDENTITY_OIDS, snmp.concurrency))
+    name_of = {str(t): n for t, n in chosen}
+    exposed = [{"address": f.address, "name": name_of.get(f.address, ""),
+                "answers": list(f.answers)} for f in found if f.answers]
+    exposed.sort(key=lambda e: e["address"])
+    payload = {"checked": len(found), "communities": communities, "exposed": exposed,
+               "at": Clock().now()}
+    audit.save(loaded.paths.audit_file, payload)
+    if args.json:
+        out_json(payload)
+    else:
+        for e in exposed:
+            out(f"{e['address']}  {e['name'] or '-'}  answers to: {', '.join(e['answers'])}")
+        out(f"{len(exposed)}/{len(found)} device(s) answer to a well-known community "
+            f"({', '.join(communities)}); change it on them.")
+    return EXIT_PARTIAL if exposed else EXIT_OK
+
+
 def cmd_scan(args: argparse.Namespace) -> int:
     """Scan addresses with nmap, without privilege, and keep what was found for each.
 
@@ -1811,6 +1861,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--profile", choices=["quick", "common", "all"], default="common",
                    help="quick: 100 ports; common: 1000 ports and versions; all: 65535 ports")
     p.set_defaults(func=cmd_scan)
+
+    p = sub.add_parser("audit", parents=[common],
+                       help="list the devices that answer to a well-known SNMP community "
+                            "(general.weak_communities, \"public\" by default)")
+    p.set_defaults(func=cmd_audit)
 
     p = sub.add_parser("node", parents=[common],
                        help="name a MAC address by hand (kept across collects), or list names")

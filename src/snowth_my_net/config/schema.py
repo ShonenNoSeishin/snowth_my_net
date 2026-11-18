@@ -120,11 +120,15 @@ class GeneralCfg:
     run_timeout: Duration = 3000
     retention_days: int = 90
     snmp: SnmpCfg = field(default_factory=SnmpCfg)
+    weak_communities: list[str] = field(default_factory=lambda: ["public"])  # the SNMP audit
 
     def check(self) -> list[str]:
-        return _positive("retention_days", self.retention_days) + _positive(
+        errs = _positive("retention_days", self.retention_days) + _positive(
             "run_timeout", self.run_timeout
         )
+        if any(not isinstance(c, str) or not c.strip() for c in self.weak_communities):
+            errs.append("weak_communities must be a list of non-empty community names")
+        return errs
 
 
 # --------------------------------------------------------------------------- credentials

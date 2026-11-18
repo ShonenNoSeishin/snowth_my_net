@@ -50,6 +50,7 @@ priment sur les entrées `devices:`, clé par clé (voir `devices`).
 | `general.lock_wait.collect` | `60` | Temps pendant lequel un `collect` attend une autre exécution avant de sortir avec le code 3. |
 | `general.lock_wait.default` | `900` | Idem pour `export`, `push`, `run`, `discover` (ils démarrent souvent à la même minute qu'une collecte). |
 | `general.run_timeout` | `3000` | Budget d'une collecte complète. |
+| `general.weak_communities` | `[public]` | Communautés que l'audit SNMP (`audit`, ou le bouton de la page SNMP) essaie sur chaque adresse interrogée, pour nommer les équipements qui y répondent encore. Elles ne servent jamais à collecter. |
 | `general.retention_days` | `90` | Équipements, voisins, valeurs personnalisées et exécutions non vus depuis cette durée sont oubliés. |
 | `general.snmp.port` | `161` | Port UDP des points de départ sans port, des voisins explorés et des balayages. |
 | `general.snmp.timeout` | `3` | Par requête, en secondes. |

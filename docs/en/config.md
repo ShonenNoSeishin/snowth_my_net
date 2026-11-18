@@ -46,6 +46,7 @@ precedence over `devices:` entries, key by key (see `devices`).
 | `general.lock_wait.collect` | `60` | How long a `collect` waits for another run before exiting with code 3. |
 | `general.lock_wait.default` | `900` | Same for `export`, `push`, `run`, `discover` (they often start at the same minute as a collect). |
 | `general.run_timeout` | `3000` | Budget of a whole collect. |
+| `general.weak_communities` | `[public]` | Communities the SNMP audit (`audit`, or the button on the SNMP page) tries on every polled address, to name the devices that still answer to them. They are never used to collect. |
 | `general.retention_days` | `90` | Devices, neighbours, custom values and runs not seen for that long are forgotten. |
 | `general.snmp.port` | `161` | UDP port for seeds without a port, explored neighbours and sweeps. |
 | `general.snmp.timeout` | `3` | Per request, seconds. |

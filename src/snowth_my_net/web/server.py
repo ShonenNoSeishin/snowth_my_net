@@ -29,7 +29,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 from snowth_my_net import __version__
-from snowth_my_net.clock import Clock, local_zone
+from snowth_my_net.clock import Clock, local_time, local_zone
 from snowth_my_net.config.loader import LoadedConfig
 from snowth_my_net.config.manual import ManualError, normalize_address
 from snowth_my_net.config.schema import LOOPBACK
@@ -48,6 +48,7 @@ from snowth_my_net.names import (
     store_for,
 )
 from snowth_my_net.names import template as names_template
+from snowth_my_net.snmp import audit
 from snowth_my_net.state.db import StateError, open_db
 from snowth_my_net.state.repo import Repo
 from snowth_my_net.web import doctext, nodeimport, pages, portpages, snmp, topology
@@ -696,7 +697,41 @@ class Site:
             f'<form method="post" action="/snmp">'
             f'<input type="hidden" name="do" value="forget">'
             f'<button type="submit">{esc(t("web.snmp.forget_do"))}</button></form></details>')
+        body.append(self.audit_section(t))
         return self.shell("/snmp", t("web.snmp.title"), "".join(body), t=t)
+
+    def audit_section(self, t) -> str:
+        """The devices that answered to a well-known community at the last audit."""
+        words = ", ".join(self.loaded.cfg.general.weak_communities)
+        last = audit.load(self.loaded.paths.audit_file)
+        running = self.jobs.current is not None and self.jobs.current.what == "audit"
+        parts = [f'<h2>{esc(t("web.snmp.audit"))}</h2>',
+                 f'<p class="note">{esc(t("web.snmp.audit_why", words=words))}</p>',
+                 f'<form class="actions" method="post" action="/snmp">'
+                 f'<input type="hidden" name="do" value="audit">'
+                 f'<button type="submit"{" disabled" if running else ""}>'
+                 f'{esc(t("web.snmp.audit_do"))}</button></form>']
+        if running:
+            parts.append(f'<p class="state">{esc(t("web.snmp.auditing"))}</p>')
+        if last is None:
+            parts.append(f'<p class="note">{esc(t("web.snmp.audit_none"))}</p>')
+            return "".join(parts)
+        exposed = last["exposed"]
+        said = t("web.snmp.audit_last", when=local_time(last.get("at")),
+                 exposed=len(exposed), checked=last.get("checked", 0),
+                 words=", ".join(last.get("communities") or []))
+        parts.append(f'<p class="state {"bad" if exposed else "ok"}">{esc(said)}</p>')
+        if not exposed:
+            parts.append(f'<p class="note">{esc(t("web.snmp.audit_clean"))}</p>')
+            return "".join(parts)
+        head = "".join(f"<th>{esc(t(k))}</th>" for k in
+                       ("col.address", "col.name", "web.snmp.audit_answers"))
+        lines = "".join(
+            f"<tr><td>{esc(str(e.get('address', '')))}</td><td>{esc(str(e.get('name', '')))}</td>"
+            f'<td class="text bad">{esc(", ".join(map(str, e.get("answers") or [])))}</td></tr>'
+            for e in exposed)
+        parts.append(f"<table><thead><tr>{head}</tr></thead><tbody>{lines}</tbody></table>")
+        return "".join(parts)
 
     def confirm(self, user: str, password: str, token: str | None, address: str, t=None
                 ) -> tuple[int, str, bytes]:
@@ -732,6 +767,10 @@ class Site:
                 if reason:
                     return self._snmp_answer(t, t("web.snmp.refused", address=wanted,
                                                   reason=reason), "failed")
+            if what == "audit":
+                if self.jobs.start("audit", user) is None:
+                    return self._snmp_answer(t, t("web.do.busy"), "failed")
+                return self._snmp_answer(t, t("web.snmp.auditing"))
             if what == "test":
                 host = normalize_address(address)
                 if self.jobs.start("collect", user, extra=("--device", host)) is None:

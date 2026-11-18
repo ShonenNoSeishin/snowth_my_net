@@ -485,3 +485,33 @@ def test_a_down_from_the_discovery_never_replaces_a_scan_that_found_the_host(tmp
     repo.save_scans([{"address": "192.0.2.31", "profile": "common", "status": "down"}], NOW)
     assert repo.scans("192.0.2.31")["192.0.2.31"]["status"] == "down"      # nothing to protect
     repo.conn.close()
+
+
+def test_the_audit_command_asks_only_what_discovery_permits_and_keeps_the_answer(
+        tmp_path, monkeypatch, capsys):
+    from snowth_my_net.snmp import audit
+
+    loaded = loaded_for(tmp_path)
+    loaded.cfg.general.weak_communities = ["public", "private"]
+    monkeypatch.setattr(cli, "load", lambda args: loaded)
+    monkeypatch.setattr(cli.Clock, "now", lambda self: NOW)
+    seen = {}
+
+    async def fake(targets, communities, params, probe_timeout, oids, concurrency):
+        seen["hosts"] = sorted(t.host for t in targets)
+        seen["communities"] = communities
+        return [audit.Finding(str(t), ("public",) if i == 0 else ())
+                for i, t in enumerate(targets)]
+
+    monkeypatch.setattr(audit, "audit", fake)
+    assert cli.cmd_audit(SimpleNamespace(json=False)) == cli.EXIT_PARTIAL
+    said = capsys.readouterr().out
+    assert "answers to: public" in said and "answer to a well-known community" in said
+    assert seen["communities"] == ["public", "private"]
+    assert all(host.startswith("192.0.2.") for host in seen["hosts"])
+    kept = audit.load(loaded.paths.audit_file)
+    assert kept["checked"] == len(seen["hosts"]) and len(kept["exposed"]) == 1
+
+    loaded.cfg.general.weak_communities = []
+    with pytest.raises(cli.ManualError):
+        cli.cmd_audit(SimpleNamespace(json=False))
