@@ -12,6 +12,7 @@ answer and how many rows), then `snowth_my_net probe <address>` to test OIDs by 
 * `unknown user` / `wrong digest`: SNMPv3 user or key mismatch (reported immediately).
 * AES-192/256 on Cisco: use `aes192c` / `aes256c` (Cisco key extension).
 * `no credential in scope for this address`: no credential's `scope` contains the address.
+* `address learned from a neighbour: only credentials with a scope are tried`: the address was only announced by a neighbour, so credentials without a `scope` are never sent to it. Add its network to a credential's `scope`, declare the device in `devices:`, or pin a credential to it on the SNMP page (a pinned unscoped credential is tried; a scoped one still stays in its networks).
 
 ## The type is empty
 

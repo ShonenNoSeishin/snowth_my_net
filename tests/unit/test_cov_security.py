@@ -271,3 +271,23 @@ def test_with_no_account_the_site_is_read_only_and_every_write_is_refused(tmp_pa
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_a_credential_pinned_by_hand_lifts_the_neighbour_rule_for_an_unscoped_one_only():
+    import ipaddress
+
+    from snowth_my_net.snmp.credentials import (
+        NEIGHBOR_ONLY_SCOPED,
+        NO_CREDENTIAL,
+        candidates_for,
+        no_candidate_message,
+    )
+    from tests.unit.test_cov_snmp import v2c
+    anywhere, lan = v2c("anywhere"), v2c("lan", scope=["10.9.0.0/24"])
+    ip = ipaddress.ip_address("10.1.0.5")
+    pinned = candidates_for(ip, [anywhere, lan], forced="anywhere", scoped_only=True)
+    assert [c.name for c in pinned] == ["anywhere"]
+    assert candidates_for(ip, [anywhere, lan], forced="lan", scoped_only=True) == []
+    assert no_candidate_message([anywhere, lan], True) == NEIGHBOR_ONLY_SCOPED
+    assert no_candidate_message([lan], True) == NO_CREDENTIAL
+    assert no_candidate_message([anywhere, lan], False) == NO_CREDENTIAL

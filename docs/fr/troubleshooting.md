@@ -12,6 +12,7 @@ tester des OID à la main, et `snowth_my_net explain <mac|ip>` pour les position
 * `unknown user` / `wrong digest` : utilisateur ou clé SNMPv3 incorrects (signalé immédiatement).
 * AES-192/256 sur Cisco : utilisez `aes192c` / `aes256c` (extension de clé Cisco).
 * `no credential in scope for this address` : aucun `scope` d'identifiant ne contient l'adresse.
+* `address learned from a neighbour: only credentials with a scope are tried` : l'adresse n'a été annoncée que par un voisin, donc les identifiants sans `scope` ne lui sont jamais envoyés. Ajoute son réseau au `scope` d'un identifiant, déclare l'équipement dans `devices:`, ou fixe-lui un identifiant sur la page SNMP (un identifiant sans scope fixé à la main est essayé ; un identifiant avec scope reste dans ses réseaux).
 
 ## Le type est vide
 

@@ -48,7 +48,7 @@ from snowth_my_net.drivers.base import fill_identity
 from snowth_my_net.logs import get_logger
 from snowth_my_net.snmp import oids
 from snowth_my_net.snmp.client import EnginePool, SnmpClient, SnmpError, SnmpParams
-from snowth_my_net.snmp.credentials import candidates_for, probe
+from snowth_my_net.snmp.credentials import candidates_for, no_candidate_message, probe
 from snowth_my_net.state.repo import Repo
 
 log = get_logger("collect")
@@ -411,10 +411,12 @@ class Collector:
                               deadline: float) -> None:
         settings = r.settings
         params = snmp_params(settings)
+        from_neighbor = planned.origin == "neighbor"
         cands = candidates_for(r.target.ip, self.credentials, planned.remembered_credential,
-                               settings.credential, scoped_only=planned.origin == "neighbor")
+                               settings.credential, scoped_only=from_neighbor)
         if not cands:
-            r.error = "no credential in scope for this address"
+            r.error = no_candidate_message(
+                self.credentials, from_neighbor and not settings.credential)
             return
         result = await probe(self.pool, r.target, cands, params, settings.snmp.probe_timeout,
                              IDENTITY_OIDS)

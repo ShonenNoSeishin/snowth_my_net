@@ -4,7 +4,9 @@ Order of attempts for an address: the credential forced by ``devices[].credentia
 that one), else the credential remembered in the state for this address, then every credential
 whose ``scope`` contains the address, in configuration order. An address that only a
 neighbour announced (``scoped_only``) is tried with the credentials that name a scope, never
-with the unscoped ones: a device cannot make us send a secret where nobody chose to.
+with the unscoped ones: a device cannot make us send a secret where nobody chose to. A
+credential pinned by hand (``forced``) is a choice made by a person, so it lifts that rule for
+an unscoped credential; a scoped one still never leaves its networks.
 A wrong SNMPv3 user or key is reported immediately by the agent; a wrong v2c community is
 silence, i.e. a timeout — hence the short ``probe_timeout`` and the value of narrow scopes.
 """
@@ -32,7 +34,7 @@ def candidates_for(
         ip = ip.ipv4_mapped
     def covers(c: ResolvedCredential) -> bool:
         if not c.cfg.scope:
-            return not scoped_only
+            return not scoped_only or bool(forced)
         return any(n and ip.version == n.version and ip in n for n in c.cfg.scope)
 
     in_scope = [c for c in credentials if covers(c)]
@@ -43,6 +45,19 @@ def candidates_for(
     ordered = [c for c in in_scope if c.name == remembered]
     ordered += [c for c in in_scope if c.name != remembered]
     return ordered
+
+
+NO_CREDENTIAL = "no credential in scope for this address"
+NEIGHBOR_ONLY_SCOPED = (
+    "address learned from a neighbour: only credentials with a scope are tried; add its network "
+    "to a credential's scope, declare the device, or pin a credential to it by hand")
+
+
+def no_candidate_message(credentials: list[ResolvedCredential], scoped_only: bool) -> str:
+    """Why nothing was tried: say so when the unscoped credentials were held back on purpose."""
+    if scoped_only and any(not c.cfg.scope for c in credentials):
+        return NEIGHBOR_ONLY_SCOPED
+    return NO_CREDENTIAL
 
 
 @dataclass
